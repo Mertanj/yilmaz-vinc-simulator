@@ -93,25 +93,56 @@ Anti-sway tekniği: **tam bir periyot boyunca ivmelen** → salınım kendini yo
 eder. Alternatif: hareket et → yarım periyot bekle → ters hareket. Oyunun
 oyuncuya öğrettiği şey tam olarak budur.
 
-### 5.5 Mimari kararı: hibrit fizik
+### 5.5 Mimari kararı: her şey tek solverda
 
-| Tam dinamik rigid body | Pozisyon kontrollü aktüatör |
+> Bu bölüm, çalışan bir fizik spike'ı sonrası revize edildi. İlk taslakta bom
+> açısını ve boyunu fizik motorunun *dışında* kinematik olarak sürmeyi
+> planlamıştım. Spike gösterdi ki buna gerek yok — ve dışarıda sürmek aslında
+> daha kötü olurdu.
+
+| Bileşen | Nasıl modellenir |
 |---|---|
-| Kamyon şasisi ve tekerlekler | Bom açısı (luff) |
-| Kanca bloğu | Bom boyu (teleskop) |
-| **Yük** | Halat boyu (vinç) |
-| Çevredeki objeler | Outrigger ayakları |
+| Kamyon şasisi + tekerlekler | `WheelJoint` (süspansiyon + tahrik + fren tek joint'te) |
+| Döner tabla (slew) | `RevoluteJoint` + motor |
+| Bom açısı (luff) | `RevoluteJoint` + motor + açı limiti |
+| Bom boyu (teleskop) | `PrismaticJoint` + motor + strok limiti |
+| Halat (vinç) | `DistanceJoint`, **rijit**, `setLength()` ile boy değişir |
+| Kanca + yük | Dinamik gövde, `RevoluteJoint` ile kancaya bağlı |
+| Outrigger ayakları | `PrismaticJoint`, eksen aşağı, yüksek motor kuvveti |
 
-**Gerekçe:** Gerçek hidrolik silindir zaten pozisyon/hız kontrollüdür ve çok
-serttir. Bomu yaylı bir joint motoruyla sürmek hem gerçek dışı olur hem de
-sayısal olarak patlar (yüksek sertlik + düşük iterasyon = titreme). Hibrit
-yaklaşım aynı anda **daha gerçekçi ve daha stabil.** Oyunun fizik çekirdeği olan
-sarkaç ile devrilme tamamen dinamik kalır.
+**Gerekçe:** Motorlu bir joint zaten hız kontrollüdür, yaylı değil. Yani
+hidroliğin sertliğini solverın *içinde* elde ediyoruz. Dışarıda kinematik
+sürmenin bedeli ağır olurdu: yükün ağırlığı boma ve kamyona geri tepmez, o
+zaman devrilmeyi ve yük momentini elle hesaplamak zorunda kalırdık. İçeride
+tutunca ikisi de kendiliğinden çıkıyor.
 
-Hidrolik hissi için her aktüatörde: hız rampası (0.4 s açılış / 0.25 s kapanış),
-ölü bant, ve yük altında hız düşüşü.
+**Kritik ayar — halat yumuşak olmamalı.** İlk spike'ta halatı `frequencyHz: 6`
+ile yumuşak yay yaptım; 3.45 tonluk yük altında halat esnedi, yükü emniyet
+halatı (`RopeJoint`) taşımaya başladı ve `getReactionForce()` gerçek kuvvetin
+yarısını okudu. `frequencyHz` vermeyip rijit bırakınca sapma %0.00'a indi.
 
----
+### 5.6 LMI statik yükten değil, anlık halat kuvvetinden okunmalı
+
+Yük momentini kendi defterimizden hesaplamıyoruz; solverdan okuyoruz:
+
+```ts
+const F = cable.getReactionForce(1 / dt);   // Newton, gerçek
+const anlikYukTon = Math.hypot(F.x, F.y) / 9810;
+```
+
+Neden önemli: sarkaç salınırken halat gerilimi statik ağırlığın üstüne çıkar.
+Doğrulanmış ölçüm — teori `T = m·g·(3 − 2·cosθ)` ile %0.2 uyum:
+
+| Salınım açısı | Halat gerilimi | Statiğe göre |
+|---|---|---|
+| 10° | 34.9 kN | +%3 |
+| 20° | 37.9 kN | +%12 |
+| 30° | 42.9 kN | +%27 |
+| 40° | 49.7 kN | +%46 |
+
+Yani **statik LMI yalan söyler.** Dikkatsiz salınan bir oyuncu, tabloya göre
+güvenli görünen bir konfigürasyonda devrilebilmeli. Salınım söndürme becerisinin
+neden oyunun merkezinde olduğunun cevabı da bu.
 
 ## 6. Serbestlik dereceleri (2D yan görünüm)
 
