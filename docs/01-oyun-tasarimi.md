@@ -221,3 +221,66 @@ LMI hiç sarıya girmeden).
 
 **v1.1 için tehlike:** trafo direği + havai hat. Gerçek vinç kazalarının önemli
 bir kısmı buradan çıkar; bomun hatta yaklaşması alarm verir.
+
+---
+
+## 11. Araç giydirmesi — "YILMAZ VİNÇ" vinili
+
+Demo'nun asıl işi bu: firma adı araçta okunacak. Ama üç teknik kısıt var ve
+giydirmeyi bunlar şekillendiriyor.
+
+### 11.1 Vinil teleskop yapan kesite konamaz
+
+Bom üç dilimli çiziliyor: `ayak_kapağı` + `orta` (bom ekseninde uzar) +
+`uç_kapağı`. **Orta kesit gerildiği için üstündeki her şey de gerilir.** Oraya
+yazı koyarsak bom açıldıkça yazı sünerek okunmaz hale gelir.
+
+Yazı sadece **uzamayan** yüzeylere gider:
+
+| Yüzey | Uzar mı | İçerik |
+|---|---|---|
+| Şasi yan paneli | hayır | **Ana logo** (en büyük düz yüzey) |
+| Kabin kapısı | hayır | Küçük logo |
+| Bom dibi kesiti | hayır (sadece döner) | Dikey "YILMAZ VİNÇ" |
+| Karşı ağırlık arkası | hayır | Logo + telefon |
+| Outrigger pabuçları | hayır | Sarı-siyah tehlike şeridi |
+| Bom orta/uç kesiti | **EVET** | Yazı yok — sadece düz renk + şerit |
+
+Teknik olarak: giydirme, gerilen sprite'a *pişirilmez*. Ebeveyn dönüşümüne
+bağlı ayrı bir katman olarak çizilir, kendi ölçeğini korur.
+
+### 11.2 Okunabilirlik — hesaplanmış, tahmin değil
+
+Kamera genişliği 35 m (kamyon + hedef bina aynı karede olmalı), 1280 px
+tuvalde 36.6 px/m. Kamyon 10 m → ekranda 366 px. 1:4 upscale ile kaynak
+sprite 91 px boyunda; şasi yan paneli bunun ~%45'i, yani **41 × 8 kaynak px.**
+
+| Yerleşim | Gereken genişlik | Sonuç |
+|---|---|---|
+| Tek satır `YILMAZ VİNÇ`, 3×5 font | 44 px | **sığmıyor** |
+| Tek satır, 4×6 font | 55 px | **sığmıyor** |
+| **İki satır: `YILMAZ` / `VİNÇ`, 3×5 font** | 24 / 16 px | **sığıyor** |
+
+→ **Logo iki satır istiflenmiş olacak.** Gerçek kamyon giydirmelerinde de en
+yaygın düzen bu, yani kısıt bizi zaten doğru yere itiyor.
+
+### 11.3 Türkçe karakter uyarısı
+
+`İ` ve `Ç` piksel fontta ayrıca çizilmeli. Hazır 3×5 piksel fontların çoğunda
+Türkçe glif yok; `VINC` diye yazmak yerine `İ`'nin noktasını ve `Ç`'nin
+kuyruğunu elle ekleyeceğiz. 5 piksel yükseklikte `İ`'nin noktası için üstte
+1 px boşluk gerekir — font efektif 6 px olur, panel 8 px olduğu için sorun yok.
+
+### 11.4 Renk
+
+Giydirme, oyunun aksan rengini taşır: koyu şasi üzerine **hidrolik amber**
+(`#D98A0B`) yazı. Bu renk aynı zamanda LMI göstergesinin uyarı rengi olduğu
+için palet tek parça kalıyor. Tehlike şeritleri standart sarı-siyah.
+
+### 11.5 Nerede görünür
+
+- Oyun içinde: kamyon soldan girerken yan panel tam profilde, en okunaklı an
+- Sonuç ekranında: kamyon sahadan çıkarken
+- **Paylaşım kartında (`og:image`):** WhatsApp önizlemesinde görünecek kare
+  bu, ve orada logo piksel sanat değil vektör olarak basılmalı — kart 1200×630,
+  oyun çözünürlüğü değil

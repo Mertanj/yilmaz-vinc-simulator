@@ -127,7 +127,9 @@ Industrial Expansion'daki kritik parçalar (18×18 px, karo numarasıyla):
 | `0009`, `0010`, `0103`–`0106` | Variller, tehlike şeritli kasalar | **Yük** |
 
 Kendimiz çizeceklerimiz: kabin/şasi, platform, döner tabla, outrigger ayakları.
-**Toplam ~5 sprite** — 40 değil.
+**Toplam ~5 sprite** — 40 değil. Bu beşi zaten elle çizdiğimiz için "YILMAZ VİNÇ"
+giydirmesi ek iş değil; doğrudan o sprite'lara işleniyor
+(bkz. [tasarım §11](01-oyun-tasarimi.md#11-araç-giydirmesi--yılmaz-vinç-vinili)).
 
 ### Bomu nasıl çizeceğiz
 
@@ -403,5 +405,7 @@ Sprint 4 sonunda paylaşılabilir bir şey var. Sprint 5 ve 6 cila.
 2. **Piksel sanat mı düz vektör mü?** Kenney Industrial Expansion (18×18 piksel)
    ile Platformer Pack Industrial (70×70 düz vektör) birbirine karışmaz. Vinç
    parçaları sadece piksel pakette olduğu için **piksel sanat öneriyorum.**
+   Not: bu seçim giydirmeyi de bağlar — piksel sanatta logo iki satır istiflenmek
+   zorunda (tasarım §11.2'de hesaplandı), düz vektörde tek satır sığardı.
 3. **Alan adı var mı?** `oyun.yilmazvinc.com` gibi bir subdomain, hem WhatsApp
    kartını hem kurumsal algıyı belirgin şekilde iyileştirir.
