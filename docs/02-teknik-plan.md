@@ -398,14 +398,49 @@ gerçek üretim linkini test edin.**
 
 Sprint 4 sonunda paylaşılabilir bir şey var. Sprint 5 ve 6 cila.
 
-## 5. Açık kararlar
+## 5. Kararlar
 
-1. **Slew hangi yöntem?** (sadece çevirme / sahte 3B / hiç yok) — sanatı
-   etkilediği için Sprint 3'ten önce.
-2. **Piksel sanat mı düz vektör mü?** Kenney Industrial Expansion (18×18 piksel)
-   ile Platformer Pack Industrial (70×70 düz vektör) birbirine karışmaz. Vinç
-   parçaları sadece piksel pakette olduğu için **piksel sanat öneriyorum.**
-   Not: bu seçim giydirmeyi de bağlar — piksel sanatta logo iki satır istiflenmek
-   zorunda (tasarım §11.2'de hesaplandı), düz vektörde tek satır sığardı.
-3. **Alan adı var mı?** `oyun.yilmazvinc.com` gibi bir subdomain, hem WhatsApp
-   kartını hem kurumsal algıyı belirgin şekilde iyileştirir.
+### Kesinleşenler
+
+**Slew: ayrık 180° çevirme.** Yandan görünümde dikey eksen dönüşü dejenere olduğu
+için bom "yatak konumundan çalışma konumuna" çevriliyor; 0.5 sn'lik bir geçiş
+animasyonu. Oyuna gerçek bir hazırlık adımı katıyor.
+
+**Yayınlama: GitHub Pages, özel alan adı yok.** Demo aile içinde kullanılacak,
+pazarlama atağı yok. Bu, teknik planın 3. bölümündeki Cloudflare'e taşıma
+gerekçesini şimdilik geçersiz kılıyor — bant genişliği ve ticari kullanım şartı
+kaygıları bu ölçekte devreye girmiyor. Link:
+`mertanj.github.io/yilmaz-vinc-simulator/`
+
+> Not: repo public olduğu için linke sahip herkes oynayabilir. Aile içi kullanım
+> için sorun değil; gerçekten kapalı olması istenirse private repo + Pages
+> GitHub Pro gerektirir.
+
+### Yeniden açılan karar: sanat yönü
+
+**Piksel sanat tercih edilmiyor.** Gerekçe isabetli: simülasyonda gerçek yük
+tablosu, LMI, sarkaç ve emergent devrilme var; kaba piksel sanat bu işi görsel
+olarak boşa çıkarır.
+
+Piksel zaten bir zorunluluk değildi. Vinci hazır sprite'la çizemiyoruz — bom
+teleskop yaptığı için her açı/uzunluk kombinasyonu ayrı kare gerektirirdi. Yani
+vinç her hâlükârda bizim çizdiğimiz bir şey; sorun sadece "hangi teknikle".
+
+Araştırılan seçenekler: PixiJS Graphics ile prosedürel vektör · runtime'da
+dönüştürülen SVG · 3B modelden ön-render sprite · düz vektör sprite paketleri
+(Kenney Platformer Pack Industrial 70×70 düz vektör, piksel değil).
+
+**Ön eğilim: prosedürel vektör.** Çözdüğü sorunlar: çözünürlük bağımsız, anında
+renk değişimi, tam pivot kontrolü, teleskop kusursuz render olur — ve §11.2'deki
+41×8 piksel giydirme kısıtı tamamen ortadan kalkar, logo tek satır sığar.
+
+**Bilinen risk:** prosedürel vektörde kalite tamamen çizimin ne kadar iyi
+kodlandığına bağlı. Temiz, okunaklı, teknik-illüstrasyon kalitesinde bir vinç
+çıkar; fotogerçekçi bir vinç çıkmaz. Beklenti buna göre kurulmalı.
+
+### Kapsam uyarısı
+
+İlk brief "tek aşama, çok basit bir demo" idi. Fabrika + çok katlı hedefler +
+yükseltilmiş görsel kalite, işi kabaca iki-üç katına çıkarıyor. Yapılamaz değil,
+ama Sprint 4'teki "oynanabilir demo" kilometre taşı buna göre kayar. Tek katlı
+sürümü önce çıkarıp üstüne kat eklemek en düşük riskli yol.

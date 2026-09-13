@@ -152,9 +152,13 @@ Yan görünümde anlamlı olanlar:
 2. **Bom boyu** (teleskop) — içeri/dışarı
 3. **Halat** (vinç) — kanca yukarı/aşağı
 
-Bu üçü kancayı düzlemde tam konumlandırır. Döner tabla (slew) yan görünümde
-**yatak konumundan çalışma konumuna çevirme** olarak kalır — hem gerçekçi hem
-işlevsel, üstelik oyuna gerçek bir hazırlık adımı ekler.
+Bu üçü kancayı düzlemde tam konumlandırır.
+
+**Slew kararı (kesinleşti): ayrık 180° çevirme.** Döner tabla gerçekte 360° döner,
+ama yandan görünümde dikey eksen etrafındaki dönüş dejenere olur — bom kısalıp
+kaybolur. Bunun yerine slew, bomu **yatak konumundan çalışma konumuna** çeviren
+ayrık bir adım: 0.5 sn'lik bir geçiş animasyonu. Hem gerçekçi (gerçek operatör de
+sahaya varınca bunu yapar) hem de oyuna somut bir hazırlık adımı ekliyor.
 
 ---
 
