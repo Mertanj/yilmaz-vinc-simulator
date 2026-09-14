@@ -29,12 +29,19 @@ async function boot(): Promise<void> {
   const props = scatterProps(world, snaps);
 
   // --- sabit dekor ---
-  stage.far.addChild(drawFarSkyline());
-  stage.world.addChild(
+  // Zemin, siluet ve bina yüzlerce şekilden oluşuyor ama hiç değişmiyor.
+  // cacheAsTexture ile bir kez dokuya pişiriliyor: her karede yeniden
+  // üçgenlenmiyor, ve ileride bu parçalara çok daha fazla detay eklemenin
+  // maliyeti sıfıra iniyor.
+  const skyline = drawFarSkyline();
+  stage.far.addChild(skyline);
+  const decor = new Container();
+  decor.addChild(
     drawGround(SIM.groundLeft, SIM.groundRight),
     drawFactory(FACTORY_X),
     drawEntranceSign(-14),
   );
+  stage.world.addChild(decor);
 
   // --- hareketli görünümler ---
   const shadow = drawContactShadow(TRUCK.chassisHalfLength * 0.92);
@@ -130,6 +137,10 @@ async function boot(): Promise<void> {
     stage.backdrop.addChild(sky);
   };
   stage.app.renderer.on('resize', relayout);
+
+  // Dokuya pişirme, sahne bir kez çizildikten sonra yapılmalı.
+  skyline.cacheAsTexture(true);
+  decor.cacheAsTexture(true);
 
   new FixedLoop(step, render).start();
 }
