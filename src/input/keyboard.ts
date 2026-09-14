@@ -16,6 +16,8 @@ export class Keyboard {
   private readonly down = new Set<string>();
   /** R'ye basıldığı karede bir kez true olur. */
   resetRequested = false;
+  /** Q'ya basıldığı karede bir kez true olur. */
+  outriggerToggled = false;
 
   constructor(target: EventTarget = window) {
     target.addEventListener('keydown', (e) => {
@@ -23,6 +25,7 @@ export class Keyboard {
       if (ev.repeat) return;
       this.down.add(ev.code);
       if (ev.code === 'KeyR') this.resetRequested = true;
+      if (ev.code === 'KeyQ') this.outriggerToggled = true;
       // Boşluk ve ok tuşları sayfayı kaydırmasın.
       if (ev.code === 'Space' || ev.code.startsWith('Arrow')) ev.preventDefault();
     });
@@ -41,6 +44,12 @@ export class Keyboard {
   consumeReset(): boolean {
     const r = this.resetRequested;
     this.resetRequested = false;
+    return r;
+  }
+
+  consumeOutriggerToggle(): boolean {
+    const r = this.outriggerToggled;
+    this.outriggerToggled = false;
     return r;
   }
 }

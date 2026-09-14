@@ -5,6 +5,9 @@ import { Camera } from './core/camera';
 import { Keyboard } from './input/keyboard';
 import { createWorld, createGround, scatterProps, Snapshotter, SIM } from './sim/world';
 import { Truck, TRUCK } from './sim/truck';
+import { Outriggers } from './sim/outriggers';
+import { OutriggerState } from './sim/loadChart';
+import { OutriggerView } from './render/outriggerView';
 import { TruckView, drawWheel, drawContactShadow } from './render/truckView';
 import {
   drawSky, drawGround, drawFactory, drawFarSkyline, drawEntranceSign, drawPropBox,
@@ -22,6 +25,7 @@ async function boot(): Promise<void> {
   const snaps = new Snapshotter();
   createGround(world);
   const truck = new Truck(world, snaps);
+  const outriggers = new Outriggers(world, truck.chassis, snaps);
   const props = scatterProps(world, snaps);
 
   // --- sabit dekor ---
@@ -38,8 +42,10 @@ async function boot(): Promise<void> {
   const wheelViews = truck.wheels.map(() => drawWheel(TRUCK.wheelRadius));
   const propViews = props.map((p) => drawPropBox(p.hw, p.hh));
 
+  const outriggerView = new OutriggerView();
+
   const actors = new Container();
-  actors.addChild(shadow, ...propViews, ...wheelViews, truckView);
+  actors.addChild(shadow, ...propViews, ...wheelViews, outriggerView, truckView);
   stage.world.addChild(actors);
 
   // --- girdi ve kamera ---
@@ -48,14 +54,23 @@ async function boot(): Promise<void> {
   camera.snapTo(truck.position.x, truck.position.y + 3);
 
   const speedEl = document.getElementById('speed');
+  const rigEl = document.getElementById('rig');
+  const tiltEl = document.getElementById('tilt');
 
   const step = (dt: number): void => {
     if (keys.consumeReset()) {
       truck.reset();
+      outriggers.reset(truck.chassis);
       camera.snapTo(TRUCK.spawnX, 6);
     }
+    if (keys.consumeOutriggerToggle()) outriggers.toggle();
+
     snaps.capture();
-    truck.drive(keys.readDrive());
+    // Ayaklar yerdeyken sürüş kilitli — gerçekte de öyle, ve oyuncunun
+    // ayakları toplamayı unutup çekmesini engelliyor.
+    const grounded = outriggers.fraction > 0.15;
+    truck.drive(grounded ? { throttle: 0, handbrake: true } : keys.readDrive());
+    outriggers.update();
     world.step(dt, SIM.velocityIterations, SIM.positionIterations);
     world.clearForces();
   };
@@ -88,7 +103,22 @@ async function boot(): Promise<void> {
     camera.follow(c.x, c.y + 3, truck.chassis.getLinearVelocity().x, frameDt);
     camera.apply(stage.world, stage.far, stage.app.screen.width, stage.app.screen.height);
 
+    outriggerView.update(outriggers.geometry(truck.chassis));
+
     if (speedEl) speedEl.textContent = `${truck.speedKmh.toFixed(0)} km/sa`;
+    if (rigEl) {
+      const label = { [OutriggerState.Stowed]: 'TOPLU',
+                      [OutriggerState.Half]: 'YARI AÇIK',
+                      [OutriggerState.Full]: 'TAM AÇIK' }[outriggers.state];
+      const pct = (outriggers.fraction * 100).toFixed(0);
+      rigEl.textContent = `ayak: ${label} %${pct}`;
+      rigEl.dataset['state'] = outriggers.state;
+    }
+    if (tiltEl) {
+      const deg = (-c.a * 180) / Math.PI;
+      tiltEl.textContent = `eğim: ${deg >= 0 ? '+' : ''}${deg.toFixed(1)}°`;
+      tiltEl.dataset['warn'] = Math.abs(deg) > 3 ? 'yes' : 'no';
+    }
   };
 
   // --- gökyüzü, ekran boyutuna bağlı ---

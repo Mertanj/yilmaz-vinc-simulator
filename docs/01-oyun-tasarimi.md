@@ -73,6 +73,26 @@ LMI %  = M_yük / M_izin × 100
 | %80–100 | sarı | kesikli bip, aktüatör hızı %60'a iner |
 | > %100 | kırmızı | sürekli korna, yarıçapı artıran hareketler kilitlenir |
 
+### 5.2b Outrigger yan görünümde ne yapar — dürüst not
+
+Gerçek bir vinçte ayaklar **yanlara**, yani ekrana doğru açılır ve devrilme de
+o yönde olur. Yandan bakan bir oyunda bu hareket görünmez, üstelik önden-arkadan
+açıklık zaten dingil mesafesi kadar geniştir. Yani "ayak açınca devrilme kolu
+uzar" ifadesi bu izdüşümde geometrik olarak doğru değil.
+
+Ayaklar bu oyunda iki gerçek iş yapıyor:
+
+1. **Şasiyi süspansiyondan kesip rijit destekliyor.** Ölçülen: araç 0.379 m
+   kalkıyor, tekerlekler yerden 9 cm kesiliyor. Lastik üstündeyken salınan bir
+   yük aracı sallar; ayak üstündeyken sallamaz. Bu tamamen fiziksel ve
+   emergent.
+2. **Yük tablosunu değiştiriyor** (×1.00 / ×0.60 / ×0.25). Bu bir kısaltma
+   değil — gerçek LMI sistemleri tam olarak böyle çalışır: operatör ayak
+   konfigürasyonunu bilgisayara girer, cihaz farklı bir tablo seçer.
+
+Yani kaldırma fiziksel, kapasite kısıtı kurallı. İkisinin birleşimi oyuncuya
+doğru dersi veriyor, ve hiçbir yerde yalan söylemiyoruz.
+
 ### 5.3 Devrilme — scripted değil, emergent
 Devrilme dayanağı, yük tarafındaki outrigger ayağının yere bastığı nokta.
 Devirici moment karşı momenti (araç ağırlığı × ağırlık merkezi kolu) aşınca
