@@ -86,8 +86,8 @@ export class BoomView extends Container {
     const stroke = 0.35 + (angleDeg / 78) * 1.5;
     const barrelLen = 2.6;
     const y = -0.78;
-    g.roundRect(0.5, y - 0.19, barrelLen, 0.38, 0.12).fill(C.amberDark);
-    g.roundRect(0.5, y - 0.19, barrelLen, 0.13, 0.06).fill({ color: C.amberLight, alpha: 0.5 });
+    g.roundRect(0.5, y - 0.19, barrelLen, 0.38, 0.12).fill(C.hydraulic);
+    g.roundRect(0.5, y - 0.19, barrelLen, 0.13, 0.06).fill({ color: C.hydraulicL, alpha: 0.9 });
     g.roundRect(0.5 + barrelLen, y - 0.085, stroke, 0.17, 0.06).fill(C.chrome);
     g.circle(0.5, y, 0.17).fill(C.frame);
   }

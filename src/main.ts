@@ -29,10 +29,12 @@ async function boot(): Promise<void> {
   const props = scatterProps(world, snaps);
 
   // --- sabit dekor ---
-  // Zemin, siluet ve bina yüzlerce şekilden oluşuyor ama hiç değişmiyor.
-  // cacheAsTexture ile bir kez dokuya pişiriliyor: her karede yeniden
-  // üçgenlenmiyor, ve ileride bu parçalara çok daha fazla detay eklemenin
-  // maliyeti sıfıra iniyor.
+  // NOT: burada cacheAsTexture DENENDİ ve geri alındı. Dekor metre biriminde
+  // çiziliyor, dünya katmanı ise 34 kat ölçekleniyor; doku 1:1 pişip sonra
+  // büyütülünce tüm arka plan bulanıklaştı. Doğru çözünürlükte pişirmek için
+  // 220 m x 34 px/m = ~15000 px genişliğinde bir doku gerekirdi, ki makul değil.
+  // Pişirme ancak dekoru piksel biriminde çizecek şekilde yeniden
+  // yapılandırılırsa anlamlı olur — şimdilik gerek yok.
   const skyline = drawFarSkyline();
   stage.far.addChild(skyline);
   const decor = new Container();
@@ -137,10 +139,6 @@ async function boot(): Promise<void> {
     stage.backdrop.addChild(sky);
   };
   stage.app.renderer.on('resize', relayout);
-
-  // Dokuya pişirme, sahne bir kez çizildikten sonra yapılmalı.
-  skyline.cacheAsTexture(true);
-  decor.cacheAsTexture(true);
 
   new FixedLoop(step, render).start();
 }

@@ -52,18 +52,25 @@ function drawChassis(): Graphics {
   g.rect(-L, -H, L * 2, H * 0.42).fill({ color: C.frameLight, alpha: 0.9 });
   g.rect(-L, H - H * 0.35, L * 2, H * 0.35).fill({ color: C.frameDark, alpha: 0.9 });
 
-  // Güverte plakası
-  g.rect(-L, H, L * 2 - 2.6, 0.16).fill(C.frameLight);
-  for (let x = -L + 0.5; x < L - 2.8; x += 0.62) {
-    g.moveTo(x, H + 0.02).lineTo(x + 0.3, H + 0.14)
-      .stroke({ width: 0.05, color: C.frameDark, alpha: 0.5 });
+  // Kasa (flatbed) — gerçek araçta uzun, krem-sarı, açılır yanaklı
+  const bedFront = -0.2;
+  g.rect(-L, H, L + bedFront, 0.14).fill(C.deckShade);
+  g.rect(-L, H + 0.14, L + bedFront, 0.72).fill(C.deck);
+  g.rect(-L, H + 0.14, L + bedFront, 0.16).fill({ color: 0xE6D9A4, alpha: 0.7 });
+  g.rect(-L, H + 0.78, L + bedFront, 0.08).fill(C.deckShade);
+  // Yanak dikmeleri
+  for (let x = -L + 0.7; x < bedFront - 0.3; x += 1.25) {
+    g.rect(x, H + 0.14, 0.12, 0.72).fill({ color: C.deckLine, alpha: 0.65 });
   }
+  g.rect(-L, H + 0.14, L + bedFront, 0.72)
+    .stroke({ width: 0.04, color: C.deckLine, alpha: 0.8 });
 
   // Yan etek paneli — ana giydirme yüzeyi. Teleskop yapmadığı için yazı burada
-  // güvenle durabilir.
-  g.roundRect(-3.2, -H + 0.06, 5.1, H * 2 - 0.12, 0.06).fill(C.frameDark);
-  g.roundRect(-3.2, -H + 0.06, 5.1, H * 2 - 0.12, 0.06)
-    .stroke({ width: 0.035, color: C.frameLight, alpha: 0.6 });
+  // güvenle durabilir. Gerçek araçta sarı zemine kırmızı yazı.
+  g.roundRect(-3.2, -H + 0.06, 5.1, H * 2 - 0.12, 0.05).fill(C.cab);
+  g.rect(-3.2, -H + 0.06, 5.1, (H * 2 - 0.12) * 0.28).fill({ color: C.cabLight, alpha: 0.5 });
+  g.roundRect(-3.2, -H + 0.06, 5.1, H * 2 - 0.12, 0.05)
+    .stroke({ width: 0.035, color: C.cabLine, alpha: 0.8 });
 
   // Çamurluklar
   for (const x of [-2.2, -3.5]) {
@@ -77,10 +84,21 @@ function drawChassis(): Graphics {
     g.rect(-L - 0.18, -H + i * 0.17 + 0.085, 0.18, 0.085).fill(C.hazardK);
   }
 
-  // Giydirme: tek satır, gerçek yazı tipi, Türkçe karakterler dahil
-  const logo = worldText('YILMAZ VİNÇ', 0.44, { fill: C.hazardY, letterSpacing: 2 });
-  logo.position.set(-0.65, 0);
+  // Giydirme: tek satır, gerçek yazı tipi, Türkçe karakterler dahil.
+  // Gerçek araçta sarı zemine kırmızı — fotoğraftan alındı.
+  const logo = worldText('YILMAZ VİNÇ', 0.38, { fill: C.liveryRed, letterSpacing: 2 });
+  logo.position.set(-1.35, 0.11);
   g.addChild(logo);
+
+  // Telefon numarası — gerçek araçtaki en görünür ikinci giydirme.
+  // Türk vinç kamyonlarında numara firma adı kadar önemli; fotoğrafta
+  // kabin alnına kırmızıyla yazılmış.
+  const tel = worldText('0532 242 94 47', 0.19, { fill: C.liveryRed, letterSpacing: 0.5 });
+  tel.position.set(0.85, 0.11);
+  g.addChild(tel);
+  const tel2 = worldText('0212 549 54 03', 0.19, { fill: C.liveryRed, letterSpacing: 0.5 });
+  tel2.position.set(0.85, -0.14);
+  g.addChild(tel2);
 
   return g;
 }
@@ -97,7 +115,8 @@ function drawCab(): Graphics {
     .lineTo(F, H)
     .closePath()
     .fill(C.cab);
-  // Alt gölge
+  // Üst ışık ve alt gölge — hacim
+  g.rect(B, T - 0.55, F - B - 0.3, 0.42).fill({ color: C.cabLight, alpha: 0.45 });
   g.rect(B, H, F - B, 0.34).fill(C.cabShade);
   // Kontur
   g.moveTo(B, H).lineTo(B, T).lineTo(F - 0.55, T).lineTo(F, T - 0.85).lineTo(F, H)
@@ -127,9 +146,15 @@ function drawCab(): Graphics {
   g.roundRect(F + 0.18, T - 1.35, 0.1, 0.3, 0.04).fill(C.frameDark);
   g.roundRect(F - 0.12, H + 0.14, 0.14, 0.26, 0.05).fill(0xFFE9A8);
 
-  // Kapıdaki küçük logo
-  const door = worldText('YILMAZ VİNÇ', 0.2, { fill: C.frame, letterSpacing: 1 });
-  door.position.set(B + 0.83, 1.05);
+  // Türk bayrağı çıkartması — gerçek araçta kapıda
+  g.rect(B + 0.32, 1.02, 0.46, 0.3).fill(0xFFFFFF);
+  g.rect(B + 0.34, 1.04, 0.42, 0.26).fill(C.flagRed);
+  g.circle(B + 0.5, 1.17, 0.075).fill(0xFFFFFF);
+  g.circle(B + 0.53, 1.17, 0.062).fill(C.flagRed);
+
+  // Kabin kapısı üstü küçük marka yazısı
+  const door = worldText('YILMAZ', 0.17, { fill: C.liveryRed, letterSpacing: 1 });
+  door.position.set(B + 0.95, 1.17);
   g.addChild(door);
 
   // Kabin üstü bom yatağı
@@ -168,7 +193,7 @@ function drawSuperstructure(): Graphics {
   g.roundRect(-4.05, 0.1, 2.0, top + 0.2, 0.08)
     .stroke({ width: 0.045, color: C.frameDark, alpha: 0.8 });
 
-  const cw = worldText('YILMAZ VİNÇ', 0.26, { fill: C.hazardY, letterSpacing: 1 });
+  const cw = worldText('YILMAZ VİNÇ', 0.26, { fill: C.liveryRed, letterSpacing: 1 });
   cw.position.set(-3.05, top * 0.62);
   g.addChild(cw);
 
