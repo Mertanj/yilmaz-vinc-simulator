@@ -76,8 +76,8 @@ npm run spike    # fizik doğrulama testleri
 | 0 | Vite + TS + Pixi + planck iskeleti, sabit adım döngüsü | tamam |
 | 1 | Kamyon: süspansiyon, gaz, fren, kamera takibi | tamam |
 | 2 | Outrigger'lar, eğim göstergesi | tamam |
-| 3 | Bom: slew, luff, teleskop, halat, kanca | sırada |
-| 4 | Kanca bağlama, yük, LMI göstergesi, görev akışı | — |
+| 3 | Bom: luff, teleskop, halat, kanca, yük | tamam |
+| 4 | Görev akışı, puanlama, çok katlı hedefler | sırada |
 | 5 | Ses, menü, puanlama | — |
 | 6 | Mobil kontroller, paylaşım kartı, deploy | — |
 

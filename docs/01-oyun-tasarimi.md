@@ -113,7 +113,32 @@ Anti-sway tekniği: **tam bir periyot boyunca ivmelen** → salınım kendini yo
 eder. Alternatif: hareket et → yarım periyot bekle → ters hareket. Oyunun
 oyuncuya öğrettiği şey tam olarak budur.
 
-### 5.5 Mimari kararı: her şey tek solverda
+### 5.5 Mimari kararı: bom kinematik, yük dinamik
+
+> **Bu bölüm ikinci kez revize edildi.** Aşağıdaki "her şey tek solverda"
+> kararı Sprint 3'te yükle test edilince çöktü ve ilk taslaktaki içgüdüye
+> dönüldü. Neyin neden değiştiği burada duruyor, çünkü aynı hataya üçüncü kez
+> düşmemek için gerekçe lazım.
+>
+> **Ölçüm:** 3.2 tonluk yük kaldırılırken bom 28°'den 3°'ye çöktü. Tork
+> sınırını 1e10'a (pratikte sınırsız) çıkarmak hiçbir şeyi değiştirmedi — yani
+> suçlu tork değildi. Suçlu planck'in belgelediği hata kipiydi: *"daha hafif
+> bir gövde daha ağırını taşıyorsa mafsallar esner."* Kütleleri gerçekçi
+> sınırlarda yükseltmek düşüşü 12°'ye indirdi ama bitirmedi ve aracı boşta
+> 4.7° yatırdı.
+>
+> **Karar:** gerçek bir vinç bomu yük altında 12 derece çökmez, birkaç santim
+> eğilir. "Her şey solverda" ısrarı hibritten DAHA AZ gerçekçi sonuç
+> veriyordu. Bom artık kinematik: açı ve boy bizim durumumuz, kinematik
+> gövdelere yazılıyor, rijit. Halat, kanca, yük, kamyon ve ayaklar tamamen
+> dinamik kalıyor — sarkaç aynen çalışıyor.
+>
+> **Devrilme yine emergent:** kinematik gövde kuvvet hissetmediği için yükün
+> ve bomun ağırlığı şasiye `applyForce` ile açıkça aktarılıyor. Teleskop
+> açıldıkça bomun ağırlık merkezi dışarı kayıyor, yani devirici moment
+> kendiliğinden büyüyor.
+
+#### Önceki karar (geçersiz): her şey tek solverda
 
 > Bu bölüm, çalışan bir fizik spike'ı sonrası revize edildi. İlk taslakta bom
 > açısını ve boyunu fizik motorunun *dışında* kinematik olarak sürmeyi

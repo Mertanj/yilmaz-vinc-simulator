@@ -174,19 +174,6 @@ async function boot(): Promise<void> {
     camera.apply(stage.world, stage.far, stage.app.screen.width, stage.app.screen.height);
 
     updateHud();
-    (window as unknown as Record<string, unknown>).__dbg = {
-      truckX: truck.chassis.getPosition().x,
-      rig: outriggers.fraction,
-      boomLen: crane.lengthM, boomAng: crane.angleDeg, radius: crane.radiusM,
-      rope: crane.ropeM, hookY: crane.hook.getPosition().y,
-      loadY: load.getPosition().y, loadX: load.getPosition().x,
-      attached: crane.hasLoad, swing: crane.swingDeg,
-      lmi: crane.lmi.percent,
-      tipX: crane.tipWorld.x, tipY: crane.tipWorld.y,
-      tiltDeg: (-truck.chassis.getAngle() * 180) / Math.PI,
-      chassisY: truck.chassis.getPosition().y,
-      ext: crane.extensionM,
-    };
   };
 
   function updateHud(): void {
