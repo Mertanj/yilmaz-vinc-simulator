@@ -253,7 +253,14 @@ Yazı sadece **uzamayan** yüzeylere gider:
 Teknik olarak: giydirme, gerilen sprite'a *pişirilmez*. Ebeveyn dönüşümüne
 bağlı ayrı bir katman olarak çizilir, kendi ölçeğini korur.
 
-### 11.2 Okunabilirlik — hesaplanmış, tahmin değil
+### 11.2 Okunabilirlik — piksel kararı iptal olunca kısıt kalktı
+
+> **Bu bölüm artık geçersiz.** Sanat yönü prosedürel vektöre çevrildi, yani
+> giydirme sabit bir piksel ızgarasına sığmak zorunda değil. Logo gerçek yazı
+> tipiyle, tek satır, İ ve Ç dahil basılıyor. Aşağıdaki hesap piksel sanat
+> seçilseydi geçerli olacaktı; neden vazgeçildiğini göstermek için duruyor.
+
+#### Piksel sanat seçilseydi (tarihsel)
 
 Kamera genişliği 35 m (kamyon + hedef bina aynı karede olmalı), 1280 px
 tuvalde 36.6 px/m. Kamyon 10 m → ekranda 366 px. 1:4 upscale ile kaynak

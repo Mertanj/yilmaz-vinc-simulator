@@ -430,13 +430,19 @@ Araştırılan seçenekler: PixiJS Graphics ile prosedürel vektör · runtime'd
 dönüştürülen SVG · 3B modelden ön-render sprite · düz vektör sprite paketleri
 (Kenney Platformer Pack Industrial 70×70 düz vektör, piksel değil).
 
-**Ön eğilim: prosedürel vektör.** Çözdüğü sorunlar: çözünürlük bağımsız, anında
+**Karar: prosedürel vektör** — uygulandı ve ekranda doğrulandı. Vinç `PixiJS
+Graphics` ile kodla çiziliyor. Çözdüğü sorunlar: çözünürlük bağımsız, anında
 renk değişimi, tam pivot kontrolü, teleskop kusursuz render olur — ve §11.2'deki
-41×8 piksel giydirme kısıtı tamamen ortadan kalkar, logo tek satır sığar.
+41×8 piksel giydirme kısıtı tamamen ortadan kalkar, logo gerçek yazı tipiyle
+tek satır basılıyor (İ ve Ç dahil).
+
+Referans araştırması yapılamadı: iki araştırma ajanı da oturum limitine takılıp
+düştü. Karar kendi değerlendirmemle verildi; limit açılınca referans oyun ve
+3B model araştırması tekrar çalıştırılabilir.
 
 **Bilinen risk:** prosedürel vektörde kalite tamamen çizimin ne kadar iyi
 kodlandığına bağlı. Temiz, okunaklı, teknik-illüstrasyon kalitesinde bir vinç
-çıkar; fotogerçekçi bir vinç çıkmaz. Beklenti buna göre kurulmalı.
+çıkar; fotogerçekçi bir vinç çıkmaz.
 
 ### Kapsam uyarısı
 

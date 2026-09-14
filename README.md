@@ -59,3 +59,35 @@ planck.js (fizik) · PixiJS (render) · TypeScript · Vite
 
 Seçim gerekçeleri ve elenen alternatifler
 [`docs/02-teknik-plan.md`](docs/02-teknik-plan.md) §1'de.
+
+## Çalıştırma
+
+```bash
+npm install
+npm run dev      # geliştirme sunucusu
+npm run build    # üretim derlemesi (dist/)
+npm run spike    # fizik doğrulama testleri
+```
+
+## Durum
+
+| Sprint | İş | Durum |
+|---|---|---|
+| 0 | Vite + TS + Pixi + planck iskeleti, sabit adım döngüsü | tamam |
+| 1 | Kamyon: süspansiyon, gaz, fren, kamera takibi | tamam |
+| 2 | Outrigger'lar, devrilme, su terazisi | sırada |
+| 3 | Bom: slew, luff, teleskop, halat, kanca | — |
+| 4 | Kanca bağlama, yük, LMI göstergesi, görev akışı | — |
+| 5 | Ses, menü, puanlama | — |
+| 6 | Mobil kontroller, paylaşım kartı, deploy | — |
+
+## Sanat yönü
+
+Piksel sanat değil — **prosedürel vektör**. Vinç `PixiJS Graphics` ile kodla
+çiziliyor. Gerekçe: bom hem döner hem uzar, yani hazır sprite ile çizilemez;
+vinç zaten elle yapılacak bir şeydi, sadece tekniği seçtik. Kazançları:
+
+- Her zumda net, çözünürlükten bağımsız
+- Renk anında değişir
+- Giydirme gerçek yazı tipiyle basılıyor — İ ve Ç dahil, tek satır
+- Teleskop kesitleri kusursuz render oluyor (sprite boyuna esnetilmiyor)

@@ -34,16 +34,20 @@ export const LOAD_CHART: ReadonlyArray<readonly [number, number]> = [
 export function capacityAt(radiusM: number, outriggers = OutriggerState.Full): number {
   const chart = LOAD_CHART;
   const factor = OUTRIGGER_FACTOR[outriggers];
+  const first = chart[0];
+  const last = chart[chart.length - 1];
+  if (!first || !last) return 0;
 
-  if (radiusM <= chart[0][0]) return chart[0][1] * factor;
-  if (radiusM >= chart[chart.length - 1][0]) return 0;
+  if (radiusM <= first[0]) return first[1] * factor;
+  if (radiusM >= last[0]) return 0;
 
   for (let i = 0; i < chart.length - 1; i++) {
-    const [r0, c0] = chart[i];
-    const [r1, c1] = chart[i + 1];
-    if (radiusM >= r0 && radiusM <= r1) {
-      const t = (radiusM - r0) / (r1 - r0);
-      return (c0 + t * (c1 - c0)) * factor;
+    const lo = chart[i];
+    const hi = chart[i + 1];
+    if (!lo || !hi) continue;
+    if (radiusM >= lo[0] && radiusM <= hi[0]) {
+      const t = (radiusM - lo[0]) / (hi[0] - lo[0]);
+      return (lo[1] + t * (hi[1] - lo[1])) * factor;
     }
   }
   return 0;
