@@ -1,4 +1,4 @@
-import { Box, Circle, PrismaticJoint, RevoluteJoint, Vec2,
+import { Box, PrismaticJoint, RevoluteJoint, Vec2,
   type Body, type World, type PrismaticJoint as PJ } from 'planck';
 import type { Snapshotter } from './world';
 import { OutriggerState } from './loadChart';
@@ -44,13 +44,24 @@ export const OUTRIGGER = {
    * İlk denemede 2.9 m verilmişti ve araç 1.67 m kalkıyordu — gerçek bir vinç
    * süspansiyonu boşaltacak kadar, ~30 cm kalkar.
    */
-  maxStroke: 1.15,
+  maxStroke: 1.75,
+  /** Seviye ararken hedeflenen nominal uzama; kalanı düzeltme payı. */
+  nominalStroke: 1.15,
+  /** Bir ayağın nominalden sapabileceği en fazla miktar (m). */
+  levelAuthority: 0.45,
   /** Çapraz açılma açısı: yataya göre. Büyük = daha geniş açıklık. */
   spreadRatio: 0.75,
   extendSpeed: 0.85,
-  /** Aracın ağırlığını kaldıracak kadar yüksek olmalı. */
-  maxMotorForce: 5.0e5,
-  padRadius: 0.12,
+  /** Seviye düzeltmesinin kazancı (radyan -> metre). */
+  levelGain: 6.0,
+  /**
+   * Aracın ağırlığını kaldıracak ve YÜK ALTINDA çökmeyecek kadar yüksek olmalı.
+   * İlk değer 5.0e5'ti ve 3.6 tonluk yük kaldırılırken ayaklar sıkışıp araç
+   * 5° yatıyordu. Gerçek ayak silindiri kilit valfiyle rijit tutar.
+   */
+  maxMotorForce: 3.0e6,
+  padHalfWidth: 0.42,
+  padHalfHeight: 0.1,
   /** Bu oranın altında "toplu", üstünde "tam açık" sayılır. */
   halfThreshold: 0.35,
   fullThreshold: 0.88,
@@ -67,11 +78,11 @@ export class Outriggers {
   /** Oyuncunun komutu: açık mı kapalı mı. */
   private wantDeployed = false;
 
-  constructor(world: World, chassis: Body, snaps: Snapshotter) {
+  constructor(world: World, private readonly chassis: Body, snaps: Snapshotter) {
     for (const m of OUTRIGGER.mounts) {
       const axis = Vec2.normalize({ x: m.dir * OUTRIGGER.spreadRatio, y: -1 });
       const mountLocal = new Vec2(m.x, OUTRIGGER.mountY);
-      const anchor = chassis.getWorldPoint(mountLocal);
+      const anchor = this.chassis.getWorldPoint(mountLocal);
 
       // Mil: şasiye kızakla bağlı, dönmesi şasiye kilitli (gerçekte de öyle).
       const ram = world.createDynamicBody({ x: anchor.x, y: anchor.y });
@@ -87,10 +98,17 @@ export class Outriggers {
         y: anchor.y + axis.y * OUTRIGGER.legLength,
       };
       const foot = world.createDynamicBody(padPos);
-      // Fizik şekli küçük bir daire: köşesi zemine takılmıyor, temas kararlı.
-      // Görsel dikdörtgen pabuk OutriggerView'de ayrıca çiziliyor.
-      foot.createFixture(new Circle(OUTRIGGER.padRadius), { density: 1, friction: 1.2 });
+      // Pabuk düz bir plaka. İlk denemede daire yapılmıştı — temas kararlıydı
+      // ama daire YUVARLANIR: araç iki tekerlek üstünde duruyor gibi oldu ve
+      // ayaklar açıkken yavaşça geri kaydı (ölçümde 10 metre). Kutu + kilitli
+      // dönüş doğrusu: pabuk yere düz basıyor, dönemiyor, ve mafsal sayesinde
+      // şasi yine onun üzerinde eğilebiliyor.
+      foot.createFixture(
+        new Box(OUTRIGGER.padHalfWidth, OUTRIGGER.padHalfHeight),
+        { density: 1, friction: 1.4 },
+      );
       foot.setMassData({ mass: 900, center: { x: 0, y: 0 }, I: 120 });
+      foot.setFixedRotation(true);
 
       world.createJoint(new RevoluteJoint({}, ram, foot, padPos));
 
@@ -102,7 +120,7 @@ export class Outriggers {
         // Limit aralığı sıfırı içermeli, yoksa simülasyon başında sıçrar.
         lowerTranslation: 0,
         upperTranslation: OUTRIGGER.maxStroke,
-      }, chassis, ram, anchor, axis)) as PJ;
+      }, this.chassis, ram, anchor, axis)) as PJ;
 
       snaps.track(foot);
       this.legs.push({ joint, foot, mountLocal });
@@ -112,17 +130,55 @@ export class Outriggers {
   toggle(): void { this.wantDeployed = !this.wantDeployed; }
   get deployedCommand(): boolean { return this.wantDeployed; }
 
-  /** Her fizik adımında, world.step()'ten önce. */
+  /**
+   * Her fizik adımında, world.step()'ten önce.
+   *
+   * Ayaklar açıkken aracı **seviyeye getiriyor.** Gerçek operatör de tam olarak
+   * bunu yapar: her ayağı ayrı ayrı oynatıp su terazisini ortalar. Olmadığında
+   * bomun kendi ağırlığı burnu aşağı bastırıyor, arka ayak yerden kesiliyor ve
+   * araç kalıcı olarak yatık kalıyordu.
+   */
   update(): void {
-    const speed = this.wantDeployed ? OUTRIGGER.extendSpeed : -OUTRIGGER.extendSpeed;
-    for (const leg of this.legs) leg.joint.setMotorSpeed(speed);
+    const base = this.wantDeployed ? OUTRIGGER.extendSpeed : -OUTRIGGER.extendSpeed;
+
+    if (!this.wantDeployed) {
+      for (const leg of this.legs) leg.joint.setMotorSpeed(base);
+      return;
+    }
+
+    // Şasi açısı pozitif = saat yönünün tersi = burun yukarı.
+    //
+    // Hıza düzeltme eklemek yetmiyordu: iki ayak da strok sonuna dayanınca
+    // düzeltecek pay kalmıyor ve araç 2.6° yatık kalıyordu. Artık her ayağın
+    // kendi HEDEF uzaması var; strok nominalin üstünde pay bırakacak kadar
+    // uzun, ve motorlar hedefe oransal kontrolle sürülüyor.
+    const noseDown = -this.chassis.getAngle();
+    const corr = clamp(
+      noseDown * OUTRIGGER.levelGain,
+      -OUTRIGGER.levelAuthority, OUTRIGGER.levelAuthority,
+    );
+
+    this.legs.forEach((leg, i) => {
+      const front = (OUTRIGGER.mounts[i]?.dir ?? 1) > 0;
+      const target = OUTRIGGER.nominalStroke + (front ? corr : -corr);
+      const error = target - leg.joint.getJointTranslation();
+      leg.joint.setMotorSpeed(
+        clamp(error * 4, -OUTRIGGER.extendSpeed, OUTRIGGER.extendSpeed),
+      );
+    });
   }
 
-  /** 0 = tamamen toplu, 1 = tam açık. Ayakların en azı belirler. */
+  /**
+   * 0 = tamamen toplu, 1 = tam açık. Ayakların en azı belirler.
+   *
+   * Nominal stroğa göre ölçülüyor, maksimuma göre değil: strok seviye
+   * düzeltmesi için pay bırakacak şekilde uzun, o yüzden "tam açık" durumda
+   * bile joint maksimuma ulaşmıyor. Maksimuma bölmek HUD'da %50 gösteriyordu.
+   */
   get fraction(): number {
     let min = 1;
     for (const leg of this.legs) {
-      min = Math.min(min, leg.joint.getJointTranslation() / OUTRIGGER.maxStroke);
+      min = Math.min(min, leg.joint.getJointTranslation() / OUTRIGGER.nominalStroke);
     }
     return Math.max(0, Math.min(1, min));
   }
@@ -154,4 +210,8 @@ export class Outriggers {
       leg.foot.setAngularVelocity(0);
     }
   }
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return v < lo ? lo : v > hi ? hi : v;
 }

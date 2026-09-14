@@ -15,7 +15,7 @@ export const TRUCK = {
   chassisHalfLength: 4.8,
   chassisHalfHeight: 0.42,
   /** Şasi kütlesi — bom ve üst yapı hariç. */
-  chassisTonnes: 20,
+  chassisTonnes: 24,
   wheelRadius: 0.55,
   wheelTonnes: 0.4,
   /** Aks konumları, şasi merkezine göre (m). Kamyon +x yönüne gider,

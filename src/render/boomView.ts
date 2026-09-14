@@ -63,14 +63,10 @@ export class BoomView extends Container {
     const per = e / this.flies.length;
     this.flies.forEach((holder, i) => { holder.x = per * (i + 1); });
 
-    const lastLen = BOOM.sections[3] ?? 0;
-    this.tip.x = per * this.flies.length + lastLen;
+    // Uç, fizikteki bom ucuyla aynı yerde olmalı: dip kesit boyu + uzama.
+    // Kesit uzunluklarından toplamak görsel olarak yakın ama fizikle kayıyor.
+    this.tip.x = (BOOM.sections[0] ?? 9.5) + e;
     this.drawCylinder(angleDeg);
-  }
-
-  /** Anlık bom uzunluğu (m) — ayak piminden uca. */
-  get lengthM(): number {
-    return (BOOM.sections[0] ?? 0) + (this.tip.x - (BOOM.sections[0] ?? 0));
   }
 
   /** Bom ucunun, ayak pimine göre yerel konumu. */

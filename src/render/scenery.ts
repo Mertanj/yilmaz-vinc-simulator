@@ -88,69 +88,114 @@ export function drawGround(left: number, right: number): Graphics {
 }
 
 /**
- * Hedef bina — çok katlı atölye.
+ * Hedef bina — kademeli çok katlı atölye.
  *
- * Kat yükseklikleri level tasarımıyla uyumlu: her katın önünde yükleme açıklığı
- * var, vinç yükü buralara bırakacak.
+ * Her kademe 4.5 m geri çekiliyor; altındakinin çatısı üsttekinin yükleme
+ * terası oluyor. Vinç yükü bu teraslara bırakıyor.
  */
 export function drawFactory(x0: number): Container {
   const c = new Container();
   const g = new Graphics();
-  const w = 34;
-  const floorH = 5;
+  const right = 96.0;
+  const setback = 4.5;
+  const floorH = 5.0;
   const floors = 3;
-  const h = floorH * floors;
 
-  // Gövde
-  g.rect(x0, 0, w, h).fill(C.wall);
-  g.rect(x0, 0, w * 0.18, h).fill({ color: C.wallShade, alpha: 0.55 });
-  // Oluklu sac dokusu
-  for (let x = x0 + 0.6; x < x0 + w; x += 0.85) {
-    g.moveTo(x, 0.2).lineTo(x, h - 0.2)
-      .stroke({ width: 0.07, color: C.wallShade, alpha: 0.45 });
-  }
-  // Kat döşemeleri
-  for (let f = 1; f <= floors; f++) {
-    g.rect(x0 - 0.35, f * floorH - 0.34, w + 0.7, 0.34).fill(C.concreteD);
-    g.rect(x0 - 0.35, f * floorH - 0.34, w + 0.7, 0.1).fill({ color: C.concrete, alpha: 0.8 });
-  }
-  // Yükleme açıklıkları — vincin hedefleri
-  for (let f = 1; f < floors; f++) {
-    const y = f * floorH;
-    g.rect(x0 + 2.2, y, 5.2, floorH - 0.9).fill(C.frameDark);
-    g.rect(x0 + 2.2, y, 5.2, 0.28).fill({ color: C.hazardY, alpha: 0.85 });
-    // Korkuluk
-    for (let i = 0; i <= 5; i++) {
-      g.moveTo(x0 + 2.2 + i, y).lineTo(x0 + 2.2 + i, y + 1.1)
-        .stroke({ width: 0.08, color: C.chrome, alpha: 0.8 });
+  for (let f = floors - 1; f >= 0; f--) {
+    const left = x0 + setback * f;
+    const top = floorH * (f + 1);
+    const w = right - left;
+    const shade = f === 0 ? 1 : 0.94 + f * 0.03;
+
+    g.rect(left, 0, w, top).fill(mix(C.wall, 0xFFFFFF, (shade - 1) * 2));
+    g.rect(left, 0, 1.1, top).fill({ color: C.wallShade, alpha: 0.5 });
+    // Oluklu sac
+    for (let x = left + 0.7; x < right; x += 0.9) {
+      g.moveTo(x, 0.2).lineTo(x, top - 0.2)
+        .stroke({ width: 0.07, color: C.wallShade, alpha: 0.4 });
     }
-    g.moveTo(x0 + 2.2, y + 1.1).lineTo(x0 + 7.4, y + 1.1)
-      .stroke({ width: 0.1, color: C.chrome, alpha: 0.8 });
+    // Kat döşemesi / teras plakası
+    g.rect(left - 0.4, top - 0.36, w + 0.8, 0.36).fill(C.concreteD);
+    g.rect(left - 0.4, top - 0.36, w + 0.8, 0.1).fill({ color: C.concrete, alpha: 0.85 });
+
+    // Terasa açılan yükleme kapısı
+    if (f > 0) {
+      const dx = left + 2.2;
+      g.rect(dx, floorH * f, 5.2, floorH - 1.0).fill(C.frameDark);
+      g.rect(dx, floorH * f, 5.2, 0.26).fill({ color: C.hazardY, alpha: 0.85 });
+    }
+    // Pencereler
+    for (let i = 0; i < Math.floor((w - 10) / 4.6); i++) {
+      g.rect(left + 9 + i * 4.6, floorH * f + 1.6, 2.5, 2.1)
+        .fill({ color: C.glass, alpha: 0.85 });
+      g.rect(left + 9 + i * 4.6, floorH * f + 1.6, 2.5, 0.65)
+        .fill({ color: C.glassLight, alpha: 0.4 });
+    }
+    // Korkuluk
+    if (f < floors - 1) {
+      const px = x0 + setback * f;
+      g.rect(px, top, 0.24, 0.9).fill(C.chrome);
+      for (let i = 1; i <= 4; i++) {
+        g.rect(px + i * 0.95, top, 0.1, 0.9).fill({ color: C.chrome, alpha: 0.85 });
+      }
+      g.rect(px, top + 0.82, 4.4, 0.12).fill(C.chrome);
+    }
   }
+
   // Zemin kat kepengi
   g.rect(x0 + 2.2, 0.1, 6.5, floorH - 1.2).fill(C.frameLight);
   for (let y = 0.4; y < floorH - 1.2; y += 0.45) {
     g.moveTo(x0 + 2.3, y).lineTo(x0 + 8.6, y)
       .stroke({ width: 0.12, color: C.frameDark, alpha: 0.5 });
   }
-  // Pencereler
-  for (let f = 0; f < floors; f++) {
-    for (let i = 0; i < 4; i++) {
-      g.rect(x0 + 12 + i * 4.6, f * floorH + 1.6, 2.6, 2.2)
-        .fill({ color: C.glass, alpha: 0.85 });
-      g.rect(x0 + 12 + i * 4.6, f * floorH + 1.6, 2.6, 0.7)
-        .fill({ color: C.glassLight, alpha: 0.4 });
-    }
-  }
-  // Çatı
-  g.rect(x0 - 0.6, h, w + 1.2, 0.55).fill(C.roof);
-  g.rect(x0 - 0.6, h + 0.55, w + 1.2, 0.18).fill(C.frameDark);
 
   c.addChild(g);
-
-  const sign = worldText('SANAYİ SİTESİ · 3. BLOK', 0.85, { fill: C.frameDark });
-  sign.position.set(x0 + w / 2, h + 1.5);
+  const sign = worldText('SANAYİ SİTESİ · C BLOK', 0.8, { fill: C.frameDark });
+  sign.position.set(x0 + 16, floorH * floors + 1.4);
   c.addChild(sign);
+  return c;
+}
+
+/** Beton tekerlek takozu. */
+export function drawKerb(x: number): Graphics {
+  const g = new Graphics();
+  g.roundRect(x - 0.35, 0, 0.7, 0.68, 0.07).fill(C.concrete);
+  g.rect(x - 0.35, 0, 0.7, 0.16).fill({ color: 0xA7AEB2, alpha: 0.8 });
+  g.rect(x - 0.35, 0.52, 0.7, 0.16).fill({ color: C.concreteD, alpha: 0.9 });
+  for (let i = 0; i < 3; i++) {
+    g.rect(x - 0.3 + i * 0.22, 0.2, 0.1, 0.3).fill({ color: C.hazardY, alpha: 0.85 });
+  }
+  return g;
+}
+
+/**
+ * Kurulum alanı işareti.
+ *
+ * Level tasarımında yasal park penceresi sadece 99 santim: arkadan fosseptik
+ * döşemesi ayağı reddediyor, önden karşı ağırlığın kuyruğu sundurma kolonuna
+ * çarpıyor. Oyuncuya pencereyi göstermek şart, yoksa bunu tahmin etmesi
+ * imkânsız olurdu.
+ */
+export function drawSetupZone(centreX: number): Container {
+  const c = new Container();
+  const g = new Graphics();
+  const halfW = 5.2;
+  g.rect(centreX - halfW, -0.28, halfW * 2, 0.28).fill({ color: C.hazardY, alpha: 0.22 });
+  // Kenar çizgileri
+  for (const x of [centreX - halfW, centreX + halfW]) {
+    g.rect(x - 0.09, -0.3, 0.18, 0.3).fill({ color: C.hazardY, alpha: 0.9 });
+    g.rect(x - 0.09, 0, 0.18, 1.5).fill({ color: C.hazardY, alpha: 0.55 });
+  }
+  // Tarama
+  for (let x = centreX - halfW + 0.6; x < centreX + halfW; x += 1.2) {
+    g.moveTo(x, -0.26).lineTo(x + 0.5, -0.02)
+      .stroke({ width: 0.09, color: C.hazardY, alpha: 0.45 });
+  }
+  c.addChild(g);
+  const t = worldText('KURULUM ALANI', 0.62, { fill: C.hazardY });
+  t.position.set(centreX, 2.1);
+  t.alpha = 0.75;
+  c.addChild(t);
   return c;
 }
 

@@ -30,6 +30,12 @@
   #rig[data-state="half"] { color: #E8A62C; }
   #rig[data-state="stowed"] { color: #C7D1D6; }
   #tilt[data-warn="yes"] { color: #E2645A; font-weight: 600; }
+  #lmi[data-zone="green"] { color: #5FB07C; }
+  #lmi[data-zone="amber"] { color: #E8A62C; font-weight: 600; }
+  #lmi[data-zone="red"] { color: #E2645A; font-weight: 600; }
+  #hint { color: #8E9BA2; }
+  #hint[data-mode="crane"] { color: #E8A62C; }
+  #hud > div:first-child { line-height: 1.9; }
   .keys { text-align: right; line-height: 1.7; }
   kbd {
     background: #1D262B; border: 1px solid #35434A; border-radius: 3px;
@@ -41,10 +47,13 @@
   <div id="game"></div>
   <div id="hud">
     <div>
-      <b>YILMAZ VİNÇ</b> · sprint 2 &nbsp;·&nbsp;
+      <b>YILMAZ VİNÇ</b> &nbsp;·&nbsp;
       <span id="speed">0 km/sa</span> &nbsp;·&nbsp;
       <span id="rig" data-state="stowed">ayak: TOPLU %0</span> &nbsp;·&nbsp;
-      <span id="tilt" data-warn="no">eğim: +0.0°</span>
+      <span id="tilt" data-warn="no">eğim: +0.0°</span><br>
+      <span id="boom">bom: 9.5 m · 11° · R 0.0 m</span> &nbsp;·&nbsp;
+      <span id="lmi" data-zone="green">LMI %0</span><br>
+      <span id="hint" data-mode="drive">çalışma alanına yanaş, sonra Q ile ayakları aç</span>
     </div>
     <div class="keys">
       <kbd>→</kbd> gaz &nbsp; <kbd>←</kbd> geri &nbsp; <kbd>boşluk</kbd> el freni &nbsp; <kbd>Q</kbd> ayak aç/kapa &nbsp; <kbd>R</kbd> sıfırla
