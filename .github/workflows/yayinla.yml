@@ -2,6 +2,11 @@
 #
 # Böylece oynamak için kimsenin repoyu klonlaması, node kurması gerekmiyor —
 # linki açan oynuyor.
+#
+# TEK SEFERLİK AYAR: repo → Settings → Pages → Build and deployment →
+# Source: "GitHub Actions". Bunu iş akışı kendisi yapamıyor; workflow token'ı
+# Pages sitesini oluşturma yetkisine sahip değil ("Resource not accessible by
+# integration"). Ayar bir kez yapıldıktan sonra her push kendiliğinden yayınlar.
 name: Oyunu yayınla
 
 on:
@@ -45,10 +50,6 @@ jobs:
         env:
           # Proje sayfası alt dizinde servis ediliyor.
           VITE_BASE: /yilmaz-vinc-simulator/
-
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:
