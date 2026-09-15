@@ -1,6 +1,20 @@
 import { World, Edge, Box, Vec2, type Body } from 'planck';
 
 /** Yerçekimi ve simülasyon sabitleri. Her şey MKS: metre, kilogram, saniye. */
+/**
+ * Aracın kendi parçalarının çarpışma grubu.
+ *
+ * planck'te aynı NEGATİF grup indeksindeki fixture'lar birbiriyle hiç
+ * çarpışmaz, ama grup dışındaki her şeyle (zemin, yük, kasalar) normal
+ * çarpışır. Şasi, tekerlekler, ayak milleri ve pabuçlar bu gruba giriyor:
+ * gerçek bir vincin ayağı kendi lastiğine çarpmaz.
+ *
+ * Bu olmadan ön pabuk ön tekerleğin içine giriyor ve lastiğe dayanıp
+ * uzayamıyordu — "ön ayak tam açılmıyor ve aracı kaldırmıyor" şikayetinin
+ * sebebi buydu.
+ */
+export const TRUCK_GROUP = -1;
+
 export const SIM = {
   gravity: -9.81,
   // planck'in tavsiyesi 8/3, örnekleri 10/8. Vinç zinciri uzun ve yük ağır

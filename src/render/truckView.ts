@@ -209,7 +209,7 @@ function drawSuperstructure(): Graphics {
 /** Toplu haldeki outrigger kutuları. Sprint 2'de açılır hale gelecek. */
 function drawOutriggersStowed(): Graphics {
   const g = new Graphics();
-  for (const x of [-4.4, 3.3]) {
+  for (const x of [-4.4, 3.9]) {
     g.roundRect(x - 0.5, -0.34, 1.0, 0.62, 0.06).fill(C.frameDark);
     g.rect(x - 0.42, -0.26, 0.84, 0.12).fill({ color: C.frameLight, alpha: 0.7 });
     // Pabuç

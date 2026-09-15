@@ -1,6 +1,6 @@
 import { Box, Circle, WheelJoint, type Body, type World, type WheelJoint as WJ } from 'planck';
 import type { DriveInput } from '../input/keyboard';
-import type { Snapshotter } from './world';
+import { TRUCK_GROUP, type Snapshotter } from './world';
 
 /**
  * YV-25 kamyon şasisi. Üç akslı, arkadan çekişli.
@@ -43,7 +43,7 @@ export class Truck {
     this.chassis = world.createDynamicBody({ x: spawnX, y: restHeight });
     this.chassis.createFixture(
       new Box(TRUCK.chassisHalfLength, TRUCK.chassisHalfHeight),
-      { density: 1, friction: 0.6 },
+      { density: 1, friction: 0.6, filterGroupIndex: TRUCK_GROUP },
     );
     // Kütleyi elle veriyoruz: yoğunluktan gelen değer gerçekçi değil, ve ağırlık
     // merkezini kabine doğru kaydırmak devrilme davranışını doğru yere oturtuyor.
@@ -58,6 +58,7 @@ export class Truck {
       const wheel = world.createDynamicBody({ x: spawnX + dx, y: TRUCK.wheelRadius });
       wheel.createFixture(new Circle(TRUCK.wheelRadius), {
         density: 1, friction: 1.4, restitution: 0.05,
+        filterGroupIndex: TRUCK_GROUP,
       });
       wheel.setMassData({
         mass: TRUCK.wheelTonnes * 1000,

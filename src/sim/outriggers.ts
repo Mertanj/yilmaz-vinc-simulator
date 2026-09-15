@@ -1,6 +1,6 @@
-import { Box, PrismaticJoint, RevoluteJoint, Vec2,
+import { Circle, PrismaticJoint, Vec2,
   type Body, type World, type PrismaticJoint as PJ } from 'planck';
-import type { Snapshotter } from './world';
+import { TRUCK_GROUP, type Snapshotter } from './world';
 import { OutriggerState } from './loadChart';
 
 /**
@@ -12,20 +12,28 @@ import { OutriggerState } from './loadChart';
  * genişledi = daha stabil" mesajını doğrudan veriyor, hem de yük tablosundaki
  * outrigger çarpanına birebir karşılık geliyor.
  *
- * Fizik tarafında her ayak iki gövde:
+ * Fizik tarafında her ayak TEK joint:
  *
- *   şasi --PrismaticJoint(motor+limit)--> mil --RevoluteJoint--> pabuç
+ *   şasi --PrismaticJoint(motor+limit)--> pabuç
  *
- * **Pabuğun ayrı ve mafsallı olması şart.** İlk sürümde pabuk doğrudan
- * prismatic ile şasiye bağlıydı; prismatic joint iki gövde arasındaki DÖNMEYİ
- * de kilitlediği için iki ayak yere basınca şasi hiç eğilemiyordu. Sonuç: aşırı
- * kısıtlanmış bir sistem (ölçümde 0.65 m düzensiz kaldırma, ayaklar %58'de
- * takılı, 2.3° eğim) ve daha kötüsü — devrilme imkânsız hale geliyordu.
- * Mafsallı pabuç, şasinin bir pabuk üzerinde dönüp diğerini yerden kesmesine
- * izin veriyor; devrilme yine solverdan çıkıyor.
+ * **Araya mil + mafsal koymak denendi ve başarısız oldu.** Amaç şasinin bir
+ * pabuk üzerinde dönebilmesiydi. Ama zincir `şasi → mil → mafsal → pabuk →
+ * zemin` olunca 900 kg'lık pabuk 24 tonluk şasiyi taşımaya çalışıyor ve
+ * planck'in belgelediği kural devreye giriyor: *"daha hafif bir gövde daha
+ * ağırını taşıyorsa mafsallar esner."* Ölçümde joint 2.14 m uzama raporlarken
+ * bağlantı–pabuk gerçek mesafesi bambaşkaydı: mafsal kopmuştu. Araç da hiç
+ * kalkmıyordu.
  *
- * Motor kuvveti aracın ağırlığını yenecek kadar yüksek olduğu için, ayaklar
- * yere bastığında şasi süspansiyondan kendiliğinden kalkıyor.
+ * Zincir kısaltıldı: pabuk doğrudan şasiye prismatic ile bağlı, tek kısıt.
+ * Prismatic dönmeyi de kilitliyor, ama bu artık sorun değil — iki pabuk da
+ * yerdeyken şasinin dönmemesi zaten istenen şey (kriko üstünde bir vinç öyle
+ * durur), ve aşırı yüklenince bir pabuk yerden kesildiği anda (temas tek
+ * yönlü) şasi diğerinin üzerinde dönebiliyor. Devrilme emergent kalıyor.
+ *
+ * Pabuğun çarpışma şekli DAİRE: kutu köşesi araç yatınca zemine takılıyor.
+ * Yuvarlanma sorunu yok, çünkü prismatic pabuğun dönüşünü şasiye kilitliyor —
+ * daha önce daire serbest mafsaldayken yuvarlanıp aracı 10 metre geri
+ * kaydırmıştı.
  */
 export const OUTRIGGER = {
   /** Şasi üzerindeki bağlanma noktaları (x, y) ve açılma yönü. */
@@ -38,16 +46,50 @@ export const OUTRIGGER = {
    * düzeltemiyordu — seviye kontrolünün kazancı ne olursa olsun 2.7°'de
    * takılmasının sebebi buydu, kontrolcü değil geometri.
    *
-   * x=3.3'te pabuk +4.26'ya basıyor, tekerleğin dışında. Gerçek kamyon
-   * vinçlerinde de ön ayak kabinin altında/önündedir.
+   * x=3.9'da pabuk +4.86'ya basıyor: hem tekerleğin (+3.95 ön kenar) dışında
+   * hem de bacak lastiğin önünden geçiyor. Gerçek kamyon vinçlerinde de ön
+   * ayak kabinin altında/önündedir.
    */
   mounts: [
-    { x: 3.3, dir: 1 },    // ön ayak, ön tekerleğin dışına
+    { x: 3.9, dir: 1 },    // ön ayak, ön tekerleğin önüne
     { x: -4.4, dir: -1 },  // arka ayak, arkaya-aşağı
   ],
   mountY: -0.1,
   /** Pabuğun mil ucundaki sabit ofseti (m). */
   legLength: 0.45,
+  /**
+   * Hedef: bağlantı noktasının yerden yüksekliği (m).
+   *
+   * **Kontrol edilen büyüklük strok değil, bu.** Strok komutu vermek yanlıştı:
+   * kontrolcü 2.0 m uzama istiyordu, oysa o yükseklikten pabuğun yere değmesi
+   * için 0.7 m yetiyor. Mil pabuğu yerin 1.3 m altına sürmeye çalışıyor, zemin
+   * durduruyor ve mil–pabuk mafsalı kopuyordu (ölçümde joint 1.99 diyordu ama
+   * gerçek mesafe 1.44'tü). Gerçek bir ayak silindiri de böyle çalışmaz: pabuk
+   * yere değene kadar açılır, sonra aracı kaldırır.
+   *
+   * Yükseklik hedefi aynı zamanda seviyeyi KENDİLİĞİNDEN sağlıyor: iki
+   * bağlantının yerel y'si eşit olduğu için ikisi de aynı dünya yüksekliğine
+   * gelirse şasi düzdür. Ayrı bir PID gerekmiyor.
+   *
+   * 1.50 m, süspansiyon tam açıkken bağlantının olacağı yüksekliğin biraz
+   * üstünde — yani lastikler yerden kesiliyor.
+   */
+  targetMountHeight: 1.50,
+  /**
+   * Komutun anlık stroktan ne kadar önde olabileceği (m).
+   *
+   * Mafsalın kopmasının sebebi komutun 1.3 metre ileride olmasıydı. Önce
+   * "pabuk yere değince tavan koy" denendi ve bu sefer araç hiç kalkmadı:
+   * kaldırmak için ayağın temas noktasının ÖTESİNE bastırması gerekiyor, tavan
+   * tam da onu yasaklıyordu (arka ayak tavanı aşınca geri çekilme komutu bile
+   * alıyordu).
+   *
+   * Doğrusu tavan değil, önde gitme sınırı: komut her an stroktan en fazla
+   * 15 cm ileride. Bu kadarı kaldırma kuvvetini üretmeye yetiyor, ama mafsalı
+   * koparacak kadar değil. Araç yükseldikçe hata küçülüyor ve kendiliğinden
+   * duruyor.
+   */
+  maxCommandLead: 0.15,
   /**
    * Tam açıldığında milin uzama miktarı (m).
    *
@@ -57,33 +99,20 @@ export const OUTRIGGER = {
    * süspansiyonu boşaltacak kadar, ~30 cm kalkar.
    */
   maxStroke: 2.15,
-  /** Seviye ararken hedeflenen nominal uzama; kalanı düzeltme payı. */
-  nominalStroke: 1.15,
-  /** Bir ayağın nominalden sapabileceği en fazla miktar (m). */
-  levelAuthority: 0.85,
+  /** HUD'da "%100 açık" sayılacak nominal uzama — ölçülen yerleşme değeri. */
+  nominalStroke: 1.25,
   /** Çapraz açılma açısı: yataya göre. Büyük = daha geniş açıklık. */
   spreadRatio: 0.75,
   extendSpeed: 0.85,
-  /**
-   * Seviye kontrolü: PI.
-   *
-   * Önce sadece oransaldı ve yakınsamıyordu — kalıcı hata oransal kontrolde
-   * kaçınılmaz. Hesap: kazanç 9 iken ayak farkı 2·corr/8.3 = 0.241·corr kadar
-   * karşı eğim üretiyor, yani döngü kazancı 2.17. 8.5°'lik bozucu moment
-   * 8.5/(1+2.17) = 2.7°'de dengeleniyordu; ölçülen değer tam buydu. Kazancı
-   * büyütmek salınım riski getirir, integral terim kalıcı hatayı sıfırlar.
-   */
-  levelGain: 9.0,
-  /** İntegral kazancı (radyan·saniye -> metre). */
-  levelIntegralGain: 14.0,
+  /** Yükseklik hatasını strok hızına çeviren kazanç. */
+  heightGain: 3.0,
   /**
    * Aracın ağırlığını kaldıracak ve YÜK ALTINDA çökmeyecek kadar yüksek olmalı.
    * İlk değer 5.0e5'ti ve 3.6 tonluk yük kaldırılırken ayaklar sıkışıp araç
    * 5° yatıyordu. Gerçek ayak silindiri kilit valfiyle rijit tutar.
    */
   maxMotorForce: 3.0e6,
-  padHalfWidth: 0.42,
-  padHalfHeight: 0.1,
+  padRadius: 0.12,
   /** Bu oranın altında "toplu", üstünde "tam açık" sayılır. */
   halfThreshold: 0.35,
   fullThreshold: 0.88,
@@ -93,13 +122,14 @@ interface Leg {
   joint: PJ;
   foot: Body;
   mountLocal: Vec2;
+  /** Kızak ekseni, şasi yerel çerçevesinde. */
+  axisLocal: Vec2;
 }
 
 export class Outriggers {
   private readonly legs: Leg[] = [];
   /** Oyuncunun komutu: açık mı kapalı mı. */
   private wantDeployed = false;
-  private levelIntegral = 0;
 
   constructor(world: World, private readonly chassis: Body, snaps: Snapshotter) {
     for (const m of OUTRIGGER.mounts) {
@@ -107,33 +137,23 @@ export class Outriggers {
       const mountLocal = new Vec2(m.x, OUTRIGGER.mountY);
       const anchor = this.chassis.getWorldPoint(mountLocal);
 
-      // Mil: şasiye kızakla bağlı, dönmesi şasiye kilitli (gerçekte de öyle).
-      const ram = world.createDynamicBody({ x: anchor.x, y: anchor.y });
-      ram.createFixture(new Box(0.16, 0.16), { density: 1, isSensor: true });
-      // planck'in 10:1 kütle oranı sınırı bir vinç oyununda doğrudan bizi
-      // vuruyor: 20 t şasiyi taşıyacak parçalar çok hafif olamaz.
-      ram.setMassData({ mass: 1400, center: { x: 0, y: 0 }, I: 200 });
-
-      // Pabuç: milin ucuna MAFSALLI. Şasinin bir pabuk üzerinde dönebilmesi
-      // için gerekli — devrilmenin emergent kalmasını sağlayan şey bu.
+      // Pabuk: doğrudan şasiye bağlı. Dönüşü kilitli daire — kutu köşesi
+      // zemine takılıyor, serbest daire yuvarlanıyordu.
       const padPos = {
         x: anchor.x + axis.x * OUTRIGGER.legLength,
         y: anchor.y + axis.y * OUTRIGGER.legLength,
       };
       const foot = world.createDynamicBody(padPos);
-      // Pabuk düz bir plaka. İlk denemede daire yapılmıştı — temas kararlıydı
-      // ama daire YUVARLANIR: araç iki tekerlek üstünde duruyor gibi oldu ve
-      // ayaklar açıkken yavaşça geri kaydı (ölçümde 10 metre). Kutu + kilitli
-      // dönüş doğrusu: pabuk yere düz basıyor, dönemiyor, ve mafsal sayesinde
-      // şasi yine onun üzerinde eğilebiliyor.
-      foot.createFixture(
-        new Box(OUTRIGGER.padHalfWidth, OUTRIGGER.padHalfHeight),
-        { density: 1, friction: 1.4 },
-      );
+      foot.createFixture(new Circle(OUTRIGGER.padRadius), {
+        density: 1, friction: 1.4, filterGroupIndex: TRUCK_GROUP,
+      });
       foot.setMassData({ mass: 900, center: { x: 0, y: 0 }, I: 120 });
-      foot.setFixedRotation(true);
-
-      world.createJoint(new RevoluteJoint({}, ram, foot, padPos));
+      // setFixedRotation YOK. Denendi ve sistemi bozdu: prismatic pabuğun
+      // dönüşünü şasiye bağlar; pabuğun dönüşü ayrıca dünyaya kilitlenince
+      // şasi de dünyaya dönüşsüz kilitleniyor. Eğim tam 0.00° çıkıyordu ama
+      // sebebi seviye kontrolü değil, aracın döndürülemez olmasıydı —
+      // devrilme de imkânsız hale geliyordu, üstelik ayaklar jamlanıyordu.
+      // Daire + prismatic zaten yeterli: dönüş kilitli olduğu için yuvarlanmaz.
 
       const joint = world.createJoint(new PrismaticJoint({
         enableMotor: true,
@@ -143,10 +163,10 @@ export class Outriggers {
         // Limit aralığı sıfırı içermeli, yoksa simülasyon başında sıçrar.
         lowerTranslation: 0,
         upperTranslation: OUTRIGGER.maxStroke,
-      }, this.chassis, ram, anchor, axis)) as PJ;
+      }, this.chassis, foot, padPos, axis)) as PJ;
 
       snaps.track(foot);
-      this.legs.push({ joint, foot, mountLocal });
+      this.legs.push({ joint, foot, mountLocal, axisLocal: axis });
     }
   }
 
@@ -161,43 +181,34 @@ export class Outriggers {
    * bomun kendi ağırlığı burnu aşağı bastırıyor, arka ayak yerden kesiliyor ve
    * araç kalıcı olarak yatık kalıyordu.
    */
-  update(dt: number): void {
-    const base = this.wantDeployed ? OUTRIGGER.extendSpeed : -OUTRIGGER.extendSpeed;
-
+  update(): void {
     if (!this.wantDeployed) {
-      this.levelIntegral = 0;
-      for (const leg of this.legs) leg.joint.setMotorSpeed(base);
+      for (const leg of this.legs) leg.joint.setMotorSpeed(-OUTRIGGER.extendSpeed);
       return;
     }
 
-    // Şasi açısı pozitif = saat yönünün tersi = burun yukarı.
-    //
-    // Hıza düzeltme eklemek yetmiyordu: iki ayak da strok sonuna dayanınca
-    // düzeltecek pay kalmıyor ve araç 2.6° yatık kalıyordu. Artık her ayağın
-    // kendi HEDEF uzaması var; strok nominalin üstünde pay bırakacak kadar
-    // uzun, ve motorlar hedefe oransal kontrolle sürülüyor.
-    const noseDown = -this.chassis.getAngle();
+    for (const leg of this.legs) {
+      const mount = this.chassis.getWorldPoint(leg.mountLocal);
+      // Eksenin dünyadaki düşey bileşeni; mil şasiye kilitli olduğu için
+      // araç yattıkça eksen de yatıyor.
+      const axis = this.chassis.getWorldVector(leg.axisLocal);
+      const down = Math.max(-axis.y, 0.25);
 
-    // İntegral terimi yetki payı içinde biriktir; dışarı taşarsa sarmal
-    // birikme (windup) olur ve araç ters yöne aşar.
-    this.levelIntegral = clamp(
-      this.levelIntegral + noseDown * OUTRIGGER.levelIntegralGain * dt,
-      -OUTRIGGER.levelAuthority, OUTRIGGER.levelAuthority,
-    );
+      const ext = leg.joint.getJointTranslation();
 
-    const corr = clamp(
-      noseDown * OUTRIGGER.levelGain + this.levelIntegral,
-      -OUTRIGGER.levelAuthority, OUTRIGGER.levelAuthority,
-    );
-
-    this.legs.forEach((leg, i) => {
-      const front = (OUTRIGGER.mounts[i]?.dir ?? 1) > 0;
-      const target = OUTRIGGER.nominalStroke + (front ? corr : -corr);
-      const error = target - leg.joint.getJointTranslation();
-      leg.joint.setMotorSpeed(
-        clamp(error * 4, -OUTRIGGER.extendSpeed, OUTRIGGER.extendSpeed),
+      // Hedef: bağlantıyı istenen yüksekliğe getirecek strok. Komut stroktan
+      // en fazla maxCommandLead kadar önde olabilir.
+      const heightError = OUTRIGGER.targetMountHeight - mount.y;
+      const lead = clamp(
+        heightError / down, -OUTRIGGER.maxCommandLead, OUTRIGGER.maxCommandLead,
       );
-    });
+      const target = clamp(ext + lead, 0, OUTRIGGER.maxStroke);
+
+      leg.joint.setMotorSpeed(clamp(
+        (target - ext) * OUTRIGGER.heightGain,
+        -OUTRIGGER.extendSpeed, OUTRIGGER.extendSpeed,
+      ));
+    }
   }
 
   /**
@@ -237,7 +248,6 @@ export class Outriggers {
 
   reset(chassis: Body): void {
     this.wantDeployed = false;
-    this.levelIntegral = 0;
     for (const leg of this.legs) {
       const anchor = chassis.getWorldPoint(leg.mountLocal);
       leg.foot.setTransform({ x: anchor.x, y: anchor.y }, 0);

@@ -125,7 +125,7 @@ async function boot(): Promise<void> {
 
     // Ayaklar yerdeyken sürüş kilitli — gerçekte de öyle.
     truck.drive(craneMode ? { throttle: 0, handbrake: true } : keys.readDrive());
-    outriggers.update(dt);
+    outriggers.update();
 
     crane.update(craneMode ? keys.readCrane() : NEUTRAL, dt, crane.lmi);
     // Kinematik bomu konumlandır ve yükü şasiye aktar — adımdan hemen önce.
