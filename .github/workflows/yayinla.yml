@@ -1,0 +1,65 @@
+# Oyunu GitHub Pages'e yayınlar: https://mertanj.github.io/yilmaz-vinc-simulator/
+#
+# Böylece oynamak için kimsenin repoyu klonlaması, node kurması gerekmiyor —
+# linki açan oynuyor.
+name: Oyunu yayınla
+
+on:
+  push:
+    branches: [main, claude/yilmaz-vinc-game-plan-8pazni]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Aynı anda tek yayın. Üst üste gelen push'larda sonuncusu kazanır.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  derle:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # Tip kontrolü + fizik regresyonu. `npm run sahne` bölümün tamamını
+      # oynuyor ve beş yükten biri katına çıkmazsa sıfırdan farklı kodla
+      # çıkıyor — yani bozuk bir fizik asla yayına gitmiyor.
+      - name: Tip kontrolü
+        run: npx tsc --noEmit
+      - name: Fizik regresyonu (bölümü baştan sona oyna)
+        run: npm run sahne
+
+      - name: Derle
+        run: npm run build
+        env:
+          # Proje sayfası alt dizinde servis ediliyor.
+          VITE_BASE: /yilmaz-vinc-simulator/
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  yayinla:
+    needs: derle
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
