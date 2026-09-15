@@ -38,7 +38,8 @@ export class Camera {
   private readonly lookAheadSec = 0.8;
   private readonly maxLookAhead = 9;
   private readonly maxOffset = 11;
-  private readonly minY = 5.5;
+  /** Zemin çizgisinin ekranın altından bu kadar piksel yukarıda durması hedefi. */
+  private readonly zeminPayiPx = 46;
 
   /**
    * En yakın ölçek. 34'ten 30'a indirildi — sahada "kamera biraz dar"
@@ -92,17 +93,30 @@ export class Camera {
       : clamp(velX * this.lookAheadSec, -this.maxLookAhead, this.maxLookAhead);
 
     const hedefX = (minX + maxX) / 2;
-    const hedefY = (minY + maxY) / 2;
+
+    // **Dikeyde kutuyu ORTALAMIYORUZ, ALTINA YASLIYORUZ.**
+    //
+    // Ölçek hem genişliği hem yüksekliği sığdıracak şekilde seçiliyor ve
+    // çoğu zaman genişlik bağlayıcı oluyor; dikeyde artan boşluk ortalanınca
+    // yarısı zeminin ALTINA düşüyordu — ekranın alt üçte biri boş griydi.
+    // Kutunun altını ekranın altına yaslayıp artan boşluğu göğe vermek hem
+    // israfı bitiriyor hem de bomun üstünde nefes payı bırakıyor.
+    const yariEkranM = screenH > 0 ? screenH / 2 / this.ppm : 10;
+    const payM = this.ppm > 0 ? this.zeminPayiPx / this.ppm : 1.5;
+    // Alta yaslanmış konum…
+    const alta = minY + yariEkranM - payM;
+    // …ama kutunun üstü de kadrajda kalmalı.
+    const ustSinir = maxY - yariEkranM + payM;
+    const hedefY = Math.max(alta, ustSinir);
 
     this.x = approach(this.x, hedefX + look, this.tauX, dt);
     this.x = clamp(this.x, hedefX - this.maxOffset, hedefX + this.maxOffset);
-    this.y = approach(this.y, Math.max(hedefY, this.minY), this.tauY, dt);
-    if (this.y < this.minY) this.y = this.minY;
+    this.y = approach(this.y, hedefY, this.tauY, dt);
   }
 
   snapTo(x: number, y: number): void {
     this.x = x;
-    this.y = Math.max(y, this.minY);
+    this.y = y;
     this.ppm = this.maxPpm;
   }
 

@@ -17,27 +17,125 @@
     -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
   }
   #game { position: fixed; inset: 0; }
-  #hud {
-    position: fixed; left: 0; right: 0; top: 0;
-    padding: calc(12px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px))
-             12px calc(16px + env(safe-area-inset-left, 0px));
-    font-family: "IBM Plex Mono", ui-monospace, monospace;
-    font-size: 12px; color: #C7D1D6; pointer-events: none;
-    display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  /* --- üst şerit: kim, hangi görev, ne kadar süre, kaç puan --- */
+  #ust {
+    position: fixed; left: 0; right: 0; top: 0; z-index: 10; pointer-events: none;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 16px 10px;
+    display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px;
+    color: #C7D1D6; background: linear-gradient(#0E1417E0, #0E141700);
   }
-  #hud b { color: #E8A62C; font-weight: 600; }
-  #rig[data-state="full"] { color: #5FB07C; }
-  #rig[data-state="half"] { color: #E8A62C; }
-  #rig[data-state="stowed"] { color: #C7D1D6; }
-  #tilt[data-warn="yes"] { color: #E2645A; font-weight: 600; }
-  #lmi[data-zone="green"] { color: #5FB07C; }
-  #lmi[data-zone="amber"] { color: #E8A62C; font-weight: 600; }
-  #lmi[data-zone="red"] { color: #E2645A; font-weight: 600; }
-  #hint { color: #8E9BA2; }
+  #ust b { color: #E8A62C; font-weight: 600; letter-spacing: 0.06em; }
+  #gorev { color: #E4E9EB; white-space: nowrap; }
+  #gorev-brif { color: #8E9BA2; }
+  #sayac { margin-left: auto; color: #8E9BA2; white-space: nowrap; }
+  #puan { color: #E8A62C; font-weight: 600; }
+
+  /* --- sol panel: vinçin göstergesi --- */
+  /*
+     Eskiden bütün bilgi üstte tek satırda, 12 punto, kısaltmalarla akıyordu
+     ("LMI %78 · kap 4.5 t"). Sahadan gelen geri bildirim netti: okunmuyor ve
+     ne anlama geldiği anlaşılmıyor. Şimdi gerçek bir gösterge paneli —
+     kısaltma yok, her satırın Türkçe etiketi var, ve en üstte momentin kendisi
+     hem çubuk hem yüzde hem de tek kelimelik durum olarak duruyor.
+  */
+  #panel {
+    position: fixed; left: 16px; top: 64px; z-index: 10; pointer-events: none;
+    width: 244px; max-width: calc(100vw - 32px);
+    padding: 14px 16px 12px; border-radius: 4px;
+    background: rgba(14, 20, 23, 0.86); border: 1px solid #253038;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; color: #C7D1D6;
+  }
+  #panel .baslik {
+    font-size: 11px; letter-spacing: 0.12em; color: #8E9BA2; margin-bottom: 8px;
+  }
+  #panel .bar {
+    position: relative; height: 12px; border-radius: 2px;
+    background: #1B2429; overflow: hidden;
+  }
+  #bar-dolu {
+    display: block; height: 100%; width: 0%; background: #5FB07C;
+    transition: width 0.12s linear, background-color 0.2s linear;
+  }
+  /* %100 çizgisi — sınırın nerede olduğu çubuğun üstünde görünsün. */
+  .bar-sinir {
+    position: absolute; top: 0; bottom: 0; left: 66.7%; width: 2px;
+    background: #E2645A; opacity: 0.85;
+  }
+  #moment-yuzde {
+    font-family: "Barlow Condensed", Impact, sans-serif; font-weight: 700;
+    font-size: 30px; line-height: 1.05; margin-top: 6px; color: #5FB07C;
+  }
+  #moment-durum {
+    font-size: 11px; letter-spacing: 0.1em; font-weight: 600; color: #5FB07C;
+    margin-bottom: 10px;
+  }
+  #moment-yuzde[data-zone="amber"], #moment-durum[data-zone="amber"] { color: #E8A62C; }
+  #moment-yuzde[data-zone="red"],   #moment-durum[data-zone="red"]   { color: #E2645A; }
+
+  #panel dl {
+    display: grid; grid-template-columns: 1fr auto; gap: 4px 10px;
+    margin: 0 0 10px; font-size: 12px; border-top: 1px solid #1D262B; padding-top: 9px;
+  }
+  #panel dt { color: #8E9BA2; margin: 0; }
+  #panel dd { margin: 0; text-align: right; font-weight: 600; color: #E4E9EB; }
+  #p-ayak[data-state="full"] { color: #5FB07C; }
+  #p-ayak[data-state="half"] { color: #E8A62C; }
+  #p-egim[data-warn="yes"] { color: #E2645A; }
+
+  #hint {
+    font-size: 11.5px; line-height: 1.45; color: #8E9BA2;
+    border-top: 1px solid #1D262B; padding-top: 9px;
+  }
   #hint[data-mode="crane"] { color: #E8A62C; }
   #hint[data-mode="ready"] { color: #5FB07C; font-weight: 600; }
-  #gorev { color: #E4E9EB; }
-  #sure { color: #6C7C84; }
+
+  /* --- uyarı şeridi: fizik sınırına dayanınca ne yapılacağını SÖYLER --- */
+  #uyari {
+    position: fixed; left: 50%; top: 84px; transform: translateX(-50%);
+    z-index: 26; pointer-events: none; text-align: center;
+    padding: 12px 22px; border-radius: 4px; max-width: min(34rem, calc(100vw - 32px));
+    background: rgba(58, 18, 16, 0.94); border: 1px solid #E2645A;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; color: #F3DAD7;
+  }
+  #uyari[hidden] { display: none; }
+  #uyari[data-zone="amber"] {
+    background: rgba(58, 42, 12, 0.94); border-color: #E8A62C; color: #F6E6C4;
+  }
+  #uyari .bas {
+    font-family: "Barlow Condensed", Impact, sans-serif; font-weight: 700;
+    font-size: 21px; letter-spacing: 0.03em; line-height: 1.1; color: #E2645A;
+  }
+  #uyari[data-zone="amber"] .bas { color: #E8A62C; }
+  #uyari p { margin: 5px 0 0; font-size: 12.5px; line-height: 1.5; }
+  #uyari .cozum { color: #FFFFFF; font-weight: 600; }
+  #uyari.carpiyor { animation: uyariNabiz 0.7s ease-in-out infinite; }
+  @keyframes uyariNabiz { 50% { opacity: 0.62; } }
+
+  /* --- tuşlar --- */
+  #tuslar {
+    position: fixed; right: 16px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    z-index: 10; pointer-events: none; text-align: right; line-height: 1.85;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 11.5px; color: #8E9BA2;
+    /* Kamera geri çekilince bina buranın altına giriyor ve yazı kayboluyordu. */
+    padding: 9px 12px; border-radius: 4px;
+    background: rgba(14, 20, 23, 0.8); border: 1px solid #1D262B;
+  }
+  #tuslar b { color: #E8A62C; font-weight: 600; }
+  kbd {
+    background: #1D262B; border: 1px solid #35434A; border-radius: 3px;
+    padding: 1px 5px; color: #E4E9EB; font: inherit; font-size: 11px;
+  }
+
+  @media (max-width: 720px) {
+    /* Görevin uzun açıklaması dar ekranda satırı taşırıyor; kod, ad ve
+       tonaj kalıyor — oyuncunun karar verirken ihtiyacı olan zaten o. */
+    #gorev-brif { display: none; }
+    #panel { width: 200px; top: 58px; padding: 11px 12px 10px; }
+    #moment-yuzde { font-size: 25px; }
+    #tuslar { display: none; }
+  }
 
   /* --- yerleştirme onay paneli --- */
   #kondu {
@@ -59,6 +157,10 @@
     text-transform: uppercase; line-height: 1;
   }
   #kondu .ad { font-size: 13px; color: #E8A62C; margin-top: 6px; font-weight: 600; }
+  #kondu .kazanc {
+    font-family: "Barlow Condensed", Impact, sans-serif; font-weight: 700;
+    font-size: 30px; line-height: 1.1; color: #5FB07C; margin-top: 4px;
+  }
   #kondu dl {
     display: grid; grid-template-columns: auto auto; gap: 3px 16px;
     margin: 12px 0 0; font-size: 12px; justify-content: center;
@@ -99,33 +201,49 @@
   #sonuc-ic td { padding: 5px 0; border-bottom: 1px solid #1D262B; }
   #sonuc-ic td:first-child { text-align: left; color: #8E9BA2; }
   #sonuc-ic td:last-child { text-align: right; font-weight: 600; }
-  #sonuc-ic .puan { font-size: 15px; font-weight: 600; margin: 16px 0 4px; }
-  #sonuc-ic .note { font-size: 11px; color: #6C7C84; margin: 0; }
-  #hud > div:first-child { line-height: 1.9; }
-  .keys { text-align: right; line-height: 1.7; }
-  kbd {
-    background: #1D262B; border: 1px solid #35434A; border-radius: 3px;
-    padding: 1px 5px; color: #E4E9EB; font: inherit; font-size: 11px;
+  #sonuc-ic .toplam {
+    font-family: "Barlow Condensed", Impact, sans-serif; font-weight: 700;
+    font-size: 34px; line-height: 1.1; color: #E8A62C; margin: 0 0 12px;
   }
+  #sonuc-ic .puan { font-size: 14px; color: #8E9BA2; margin: 14px 0 4px; }
+  #sonuc-ic .note { font-size: 11px; color: #6C7C84; margin: 0; }
 </style>
 </head>
 <body>
   <div id="game"></div>
-  <div id="hud">
-    <div>
-      <b>YILMAZ VİNÇ</b> &nbsp;·&nbsp;
-      <span id="speed">0 km/sa</span> &nbsp;·&nbsp;
-      <span id="rig" data-state="stowed">ayak: TOPLU %0</span> &nbsp;·&nbsp;
-      <span id="tilt" data-warn="no">eğim: +0.0°</span><br>
-      <span id="boom">bom: 9.5 m · 11° · R 0.0 m</span> &nbsp;·&nbsp;
-      <span id="lmi" data-zone="green">LMI %0</span><br>
-      <span id="hint" data-mode="drive">çalışma alanına yanaş, sonra Q ile ayakları aç</span><br>
-    <span id="gorev">T1/4 · yük hazırlanıyor</span><br>
-    <span id="sure">0:00</span>
-    </div>
-    <div class="keys">
-      <kbd>→</kbd> gaz &nbsp; <kbd>←</kbd> geri &nbsp; <kbd>boşluk</kbd> el freni &nbsp; <kbd>Q</kbd> ayak aç/kapa &nbsp; <kbd>R</kbd> sıfırla
-    </div>
+  <div id="ust">
+    <b>YILMAZ VİNÇ</b>
+    <span id="gorev">T1/5 · yük hazırlanıyor</span>
+    <span id="gorev-brif"></span>
+    <span id="sayac"><span id="sure">0:00</span> · <span id="puan">0 puan</span></span>
+  </div>
+
+  <div id="panel">
+    <div class="baslik">KALDIRMA MOMENTİ</div>
+    <div class="bar"><i id="bar-dolu"></i><i class="bar-sinir"></i></div>
+    <div id="moment-yuzde">%0</div>
+    <div id="moment-durum" data-zone="green">GÜVENLİ</div>
+
+    <dl>
+      <dt>kancadaki ağırlık</dt><dd id="p-yuk">0.00 t</dd>
+      <dt>bu mesafede sınır</dt><dd id="p-sinir">0.00 t</dd>
+      <dt>çalışma yarıçapı</dt><dd id="p-yaricap">0.0 m</dd>
+      <dt>bom</dt><dd id="p-bom">9.5 m · 11°</dd>
+      <dt>ayaklar</dt><dd id="p-ayak" data-state="stowed">TOPLU</dd>
+      <dt>araç eğimi</dt><dd id="p-egim" data-warn="no">+0.0°</dd>
+      <dt>hız</dt><dd id="p-hiz">0 km/sa</dd>
+    </dl>
+
+    <div id="hint" data-mode="drive">çalışma alanına yanaş, sonra Q ile ayakları aç</div>
+  </div>
+
+  <div id="uyari" hidden></div>
+
+  <div id="tuslar">
+    <b>sürüş</b> <kbd>→</kbd> gaz <kbd>←</kbd> geri <kbd>boşluk</kbd> el freni<br>
+    <b>kurulum</b> <kbd>Q</kbd> ayak aç/kapa<br>
+    <b>vinç</b> <kbd>W</kbd><kbd>S</kbd> bom <kbd>⇧W</kbd><kbd>⇧S</kbd> teleskop<br>
+    <kbd>↑</kbd><kbd>↓</kbd> kanca <kbd>boşluk</kbd> bağla/bırak <kbd>R</kbd> sıfırla
   </div>
 
   <div id="kondu" hidden></div>

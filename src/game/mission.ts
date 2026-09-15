@@ -32,10 +32,23 @@ export interface Score {
   carpma: number;
   /** Her görevde hedef merkezine uzaklık (m). */
   sapmalar: number[];
+  /** Toplanan puan. */
+  puan: number;
+}
+
+/** Bir yerleştirmeden kazanılan puanın dökümü. */
+export interface Puan {
+  temel: number;
+  isabet: number;
+  hiz: number;
+  ceza: number;
+  toplam: number;
 }
 
 /** Biten bir görevin özeti — yerleştirme onay ekranı bunu gösteriyor. */
 export interface Tamamlanan {
+  /** Bu yerleştirmeden kazanılan puan. */
+  puan: Puan;
   kod: string;
   ad: string;
   /** Hedef merkezine yatay uzaklık (cm). */
@@ -61,14 +74,34 @@ export interface Result {
 /** Devrilme sayılan eğim. Ayaklar yarım açıkken ağır yükte gerçekten oluyor. */
 const DEVRILME_DEG = 8;
 /**
- * Bu süreyi aşan her saniye puandan düşüyor.
+ * Yerleştirme başına puan.
  *
- * Başsız rigin dikkatli (salınımı söndüren, halatı dibe vurdurmayan) turunda
- * görev başına yaklaşık 170 saniye geçiyor; altı kaldırma için taban bu.
- * Dört görevlik sürümde 300 saniyeydi ve ceza tek başına 97 puandı — her
- * tamamlanmış tur D'ye düşüyordu.
+ * Sahadan gelen istek: "sapmadan puan kırmak yerine her yerleştirmeye puan
+ * verelim, öyle daha eğlenceli." Haklı — ceza tabanlı bir sistem iyi oynayınca
+ * hiçbir şey hissettirmiyor, sadece kötü oynayınca acıtıyor. Şimdi her yükü
+ * yerine koymak puan KAZANDIRIYOR, isabet ve hız da üstüne biniyor.
  */
-const HEDEF_SURE = 720;
+export const PUAN = {
+  /** Yükü yerine koymanın kendisi. Bitirmek her zaman kazandırır. */
+  temel: 1000,
+  /** Tam ortaya koyarsan bu kadar; sapma büyüdükçe doğrusal azalır. */
+  isabetTam: 600,
+  /** Bu sapmada (m) isabet bonusu sıfırlanır. */
+  isabetSifir: 2.0,
+  /** Bu süreden (s) hızlı bitirirsen tam hız bonusu. */
+  hizTamSn: 90,
+  /** Bu süreden yavaşsa hız bonusu sıfır. */
+  hizSifirSn: 240,
+  hizTam: 400,
+  /** Kırmızıda geçen saniye başına kesinti. */
+  kirmiziCezasi: 40,
+  /** Çarpma başına kesinti. */
+  carpmaCezasi: 150,
+} as const;
+
+/** Bir görevden alınabilecek en yüksek puan — not bunun oranından çıkıyor. */
+const GOREV_MAX = PUAN.temel + PUAN.isabetTam + PUAN.hizTam;
+
 
 export class Mission {
   private index = 0;
@@ -76,6 +109,8 @@ export class Mission {
   /** Bu görevin başladığı an ve o andan beri görülen en yüksek LMI. */
   private gorevBasi = 0;
   private gorevMaxLmi = 0;
+  private gorevKirmiziSn = 0;
+  private gorevCarpmaBasi = 0;
   /** Son biten görevin özeti. main.ts `sira` değişince paneli gösteriyor. */
   sonTamamlanan: Tamamlanan | null = null;
   private bitti = false;
@@ -84,7 +119,7 @@ export class Mission {
   private sifirlandi = false;
 
   readonly score: Score = {
-    sure: 0, maxLmi: 0, kirmiziSn: 0, maxSalinim: 0, carpma: 0, sapmalar: [],
+    sure: 0, maxLmi: 0, kirmiziSn: 0, maxSalinim: 0, carpma: 0, sapmalar: [], puan: 0,
   };
 
   private readonly teraslar = factoryTerraces();
@@ -130,6 +165,9 @@ export class Mission {
     this.scene.carpma = 0;
     this.gorevBasi = 0;
     this.gorevMaxLmi = 0;
+    this.gorevKirmiziSn = 0;
+    this.gorevCarpmaBasi = 0;
+    this.score.puan = 0;
     this.sonTamamlanan = null;
     this.scene.spawnLoad(TASKS[0] ?? null);
   }
@@ -150,7 +188,10 @@ export class Mission {
       if (Number.isFinite(lmi)) {
         if (lmi > this.score.maxLmi) this.score.maxLmi = Math.min(999, lmi);
         if (lmi > this.gorevMaxLmi) this.gorevMaxLmi = Math.min(999, lmi);
-        if (lmi > 100) this.score.kirmiziSn += dt;
+        if (lmi > 100) {
+          this.score.kirmiziSn += dt;
+          this.gorevKirmiziSn += dt;
+        }
       }
       const s = Math.abs(this.salinimDeg());
       if (s > this.score.maxSalinim) this.score.maxSalinim = s;
@@ -198,21 +239,28 @@ export class Mission {
   private tamamla(hedef: { x: number; y: number }): void {
     const sapma = Math.abs(this.scene.load.getPosition().x - hedef.x);
     const biten = TASKS[this.index];
+    const gorevSure = this.score.sure - this.gorevBasi;
+    const gorevCarpma = this.scene.carpma - this.gorevCarpmaBasi;
     this.score.sapmalar.push(sapma);
     this.durulmaSn = 0;
     this.index++;
     if (biten) {
+      const puan = puanla(sapma, gorevSure, this.gorevKirmiziSn, gorevCarpma);
+      this.score.puan += puan.toplam;
       this.sonTamamlanan = {
+        puan,
         kod: biten.kod, ad: biten.ad,
         sapmaCm: sapma * 100,
         maxLmi: this.gorevMaxLmi,
-        sure: this.score.sure - this.gorevBasi,
+        sure: gorevSure,
         kalan: TASKS.length - this.index,
         sira: this.index,
       };
     }
     this.gorevBasi = this.score.sure;
     this.gorevMaxLmi = 0;
+    this.gorevKirmiziSn = 0;
+    this.gorevCarpmaBasi = this.scene.carpma;
     const sonraki = TASKS[this.index];
     if (sonraki) {
       // Konan yük sahnede kalsın istiyoruz ama malzeme alanı tek gövde
@@ -233,29 +281,36 @@ export class Mission {
  * yerleştirme 15 cm, 688 saniye. Bu "işi bitirmiş ama pürüzlü" bir tur ve C
  * vermesi gerekiyor; kusursuz bir tur (çarpma yok, LMI sarıda kalıyor) A.
  */
-function degerlendir(score: Score, devrildi: boolean, sifirlandi: boolean): Result {
-  let puan = 100;
-  // Asıl ceza KIRMIZIDA GEÇEN SÜRE. Zirve cezası sadece uç değerlerde ve
-  // hafif: 140'lık anlık bir diken salınan bir yükte fizik gereği oluşuyor,
-  // kırmızıda on saniye durmak ise operatör hatası.
-  puan -= score.kirmiziSn * 2.0;
-  puan -= Math.max(0, score.maxLmi - 120) * 0.4;
-  puan -= score.carpma * 6;
-  // Ortalama yerleştirme sapması — metre başına 12 puan.
-  const ortSapma = score.sapmalar.length
-    ? score.sapmalar.reduce((a, b) => a + b, 0) / score.sapmalar.length
-    : 0;
-  puan -= ortSapma * 12;
-  puan -= Math.max(0, score.sure - HEDEF_SURE) * 0.06;
-  // Salınım kendi başına ceza değil; sadece 30 dereceyi aşınca sayılıyor,
-  // çünkü sarkaç oyunun becerisi, hatası değil.
-  puan -= Math.max(0, score.maxSalinim - 30) * 0.6;
-  // Yarım kalan bölüm tamamlanmış sayılmaz.
-  puan -= (TASKS.length - score.sapmalar.length) * 20;
-  if (devrildi) puan = Math.min(puan, 15);
+/** Bir yerleştirmenin puan dökümü. */
+function puanla(
+  sapmaM: number, sureSn: number, kirmiziSn: number, carpma: number,
+): Puan {
+  const temel = PUAN.temel;
+  const isabet = Math.round(
+    PUAN.isabetTam * Math.max(0, 1 - sapmaM / PUAN.isabetSifir),
+  );
+  const hizOran = (PUAN.hizSifirSn - sureSn) / (PUAN.hizSifirSn - PUAN.hizTamSn);
+  const hiz = Math.round(PUAN.hizTam * Math.max(0, Math.min(1, hizOran)));
+  const ceza = Math.round(kirmiziSn * PUAN.kirmiziCezasi + carpma * PUAN.carpmaCezasi);
+  // Yerleştirme asla eksi puan yazmıyor: bitirmek her zaman ilerleme demek.
+  const toplam = Math.max(0, temel + isabet + hiz - ceza);
+  return { temel, isabet, hiz, ceza, toplam };
+}
 
-  puan = Math.max(0, Math.min(100, puan));
+/**
+ * Bölüm notu, toplanan puanın alınabilecek en yüksek puana oranından.
+ *
+ * Eskiden 100'den ceza düşülüyordu ve iyi oynamak hiçbir şey hissettirmiyordu;
+ * şimdi not doğrudan kazanılan puanın yüzdesi. Yarım kalan bölüm kendiliğinden
+ * düşük not alıyor, ayrıca ceza vermeye gerek yok — konulmayan yükün puanı yok.
+ */
+function degerlendir(score: Score, devrildi: boolean, sifirlandi: boolean): Result {
+  const enYuksek = GOREV_MAX * TASKS.length;
+  let oran = enYuksek > 0 ? (score.puan / enYuksek) * 100 : 0;
+  if (devrildi) oran = Math.min(oran, 15);
+  const puan = Math.max(0, Math.min(100, oran));
   const not = puan >= 85 ? 'A' : puan >= 70 ? 'B' : puan >= 55 ? 'C' : 'D';
-  const usta = !devrildi && !sifirlandi && score.carpma === 0 && score.maxLmi <= 90;
+  const usta = !devrildi && !sifirlandi && score.carpma === 0
+    && score.kirmiziSn === 0 && score.sapmalar.length === TASKS.length;
   return { not, puan, usta, score, devrildi };
 }

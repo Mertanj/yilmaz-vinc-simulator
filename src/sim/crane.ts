@@ -350,6 +350,11 @@ export class Crane {
     // Kırmızıda yarıçapı artıran hareketler kilitli: bom indirme ve teleskop açma.
     const luffCmd = lmi.blockRadiusIncrease ? Math.max(0, input.luff) : input.luff;
     const teleCmd = lmi.blockRadiusIncrease ? Math.min(0, input.telescope) : input.telescope;
+    // Oyuncu KİLİTLİ bir hareketi denedi mi? Uyarının somut olması buna bağlı:
+    // "aşırı yük" demek yetmiyor, hangi kolun neden çalışmadığını söylemek
+    // gerekiyor. Sahadan gelen geri bildirim tam da buydu — panelde bir şeyler
+    // kırmızıya dönüyor ama ne yapılması gerektiği anlaşılmıyor.
+    this.kilitliDenendi = luffCmd !== input.luff || teleCmd !== input.telescope;
 
     // Hidrolik silindir pozisyon kontrollüdür: komutu doğrudan konuma entegre
     // ediyoruz, hız sınırı ve strok limitiyle. Kilit valfli bir silindir gibi
@@ -624,6 +629,9 @@ export class Crane {
     }
     return null;
   }
+
+  /** Bu adımda oyuncu yük momenti yüzünden kilitli bir kola bastı mı? */
+  kilitliDenendi = false;
 
   /** Son örneklenen LMI. Hem HUD hem aktüatör kısıtları bunu okur. */
   lmi: LmiReading = computeLmi(0, 0, 0, OutriggerState.Full);

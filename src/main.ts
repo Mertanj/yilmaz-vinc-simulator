@@ -71,18 +71,14 @@ async function boot(): Promise<void> {
   const camera = new Camera();
   camera.snapTo(truck.position.x, truck.position.y + 3);
 
+  const el = (id: string): HTMLElement | null => document.getElementById(id);
   const hud = {
-    speed: document.getElementById('speed'),
-    rig: document.getElementById('rig'),
-    tilt: document.getElementById('tilt'),
-    boom: document.getElementById('boom'),
-    lmi: document.getElementById('lmi'),
-    hint: document.getElementById('hint'),
-    gorev: document.getElementById('gorev'),
-    sure: document.getElementById('sure'),
-    sonuc: document.getElementById('sonuc'),
-    sonucIc: document.getElementById('sonuc-ic'),
-    kondu: document.getElementById('kondu'),
+    gorev: el('gorev'), gorevBrif: el('gorev-brif'), sure: el('sure'), puan: el('puan'),
+    barDolu: el('bar-dolu'), yuzde: el('moment-yuzde'), durum: el('moment-durum'),
+    pYuk: el('p-yuk'), pSinir: el('p-sinir'), pYaricap: el('p-yaricap'),
+    pBom: el('p-bom'), pAyak: el('p-ayak'), pEgim: el('p-egim'), pHiz: el('p-hiz'),
+    hint: el('hint'), uyari: el('uyari'),
+    sonuc: el('sonuc'), sonucIc: el('sonuc-ic'), kondu: el('kondu'),
   };
 
   const step = (dt: number): void => {
@@ -168,49 +164,72 @@ async function boot(): Promise<void> {
 
   function updateHud(): void {
     const craneMode = scene.craneMode;
-    if (hud.speed) hud.speed.textContent = `${truck.speedKmh.toFixed(0)} km/sa`;
+    const r = crane.lmi;
+    // Yük tablosu 28 metrede bitiyor. Ötesinde kapasite sıfır, yani yüzde
+    // tanımsız — bu "sınırı aştın" değil, "bu mesafede hiç çalışılamaz"
+    // durumu ve oyuncuya öyle anlatılmalı.
+    const tabloDisi = r.capacityTonnes <= 0;
+    const pct = tabloDisi || !Number.isFinite(r.percent)
+      ? 999 : Math.min(999, r.percent);
 
+    const gorev = mission.task;
     if (hud.gorev) {
-      const t = mission.task;
-      hud.gorev.textContent = t
-        ? `${t.kod}/${mission.taskCount} · ${t.ad} ${t.tonnes.toFixed(2)} t — ${t.brif}`
+      hud.gorev.textContent = gorev
+        ? `${gorev.kod}/${mission.taskCount} · ${gorev.ad} ${gorev.tonnes.toFixed(2)} t`
         : 'bölüm tamamlandı';
     }
+    if (hud.gorevBrif) hud.gorevBrif.textContent = gorev ? `— ${gorev.brif}` : '';
     if (hud.sure) {
       const sn = mission.score.sure;
       hud.sure.textContent =
-        `${Math.floor(sn / 60)}:${(sn % 60).toFixed(0).padStart(2, '0')}`
-        + ` · çarpma ${mission.score.carpma}`
-        + ` · en yüksek LMI %${mission.score.maxLmi.toFixed(0)}`
-        + (mission.score.kirmiziSn > 0.05
-          ? ` · kırmızıda ${mission.score.kirmiziSn.toFixed(1)} sn` : '');
+        `${Math.floor(sn / 60)}:${(sn % 60).toFixed(0).padStart(2, '0')}`;
     }
-    sonucGoster();
-    konduGoster();
+    if (hud.puan) hud.puan.textContent = `${mission.score.puan} puan`;
 
-    if (hud.rig) {
-      const label = { [OutriggerState.Stowed]: 'TOPLU',
-                      [OutriggerState.Half]: 'YARI AÇIK',
-                      [OutriggerState.Full]: 'TAM AÇIK' }[outriggers.state];
-      hud.rig.textContent = `ayak: ${label} %${(outriggers.fraction * 100).toFixed(0)}`;
-      hud.rig.dataset['state'] = outriggers.state;
+    // --- kaldırma momenti göstergesi ---
+    // Çubuk %150'ye kadar ölçekli; %100 çizgisi CSS'te 66.7'de duruyor, yani
+    // sınırı aşmak çubukta da gözle görülüyor.
+    if (hud.barDolu) {
+      hud.barDolu.style.width = `${Math.min(100, (pct / 150) * 100).toFixed(1)}%`;
+      hud.barDolu.style.backgroundColor =
+        r.zone === 'red' ? '#E2645A' : r.zone === 'amber' ? '#E8A62C' : '#5FB07C';
     }
-    if (hud.tilt) {
+    if (hud.yuzde) {
+      hud.yuzde.textContent = tabloDisi ? '—' : `%${pct.toFixed(0)}`;
+      hud.yuzde.dataset['zone'] = r.zone;
+    }
+    if (hud.durum) {
+      hud.durum.textContent = tabloDisi ? 'YARIÇAP TABLO DIŞI'
+        : r.zone === 'red' ? 'AŞIRI YÜK'
+        : r.zone === 'amber' ? 'DİKKAT · SINIRA YAKIN' : 'GÜVENLİ';
+      hud.durum.dataset['zone'] = r.zone;
+    }
+
+    if (hud.pYuk) hud.pYuk.textContent = `${r.loadTonnes.toFixed(2)} t`;
+    if (hud.pSinir) {
+      hud.pSinir.textContent = tabloDisi ? 'tablo dışı' : `${r.capacityTonnes.toFixed(2)} t`;
+    }
+    if (hud.pYaricap) hud.pYaricap.textContent = `${crane.radiusM.toFixed(1)} m`;
+    if (hud.pBom) {
+      hud.pBom.textContent = `${crane.lengthM.toFixed(1)} m · ${crane.angleDeg.toFixed(0)}°`;
+    }
+    if (hud.pAyak) {
+      hud.pAyak.textContent = { [OutriggerState.Stowed]: 'TOPLU',
+                                [OutriggerState.Half]: 'YARI AÇIK',
+                                [OutriggerState.Full]: 'TAM AÇIK' }[outriggers.state];
+      hud.pAyak.dataset['state'] = outriggers.state;
+    }
+    if (hud.pEgim) {
       const deg = scene.tiltDeg;
-      hud.tilt.textContent = `eğim: ${deg >= 0 ? '+' : ''}${deg.toFixed(1)}°`;
-      hud.tilt.dataset['warn'] = Math.abs(deg) > 3 ? 'yes' : 'no';
+      hud.pEgim.textContent = `${deg >= 0 ? '+' : ''}${deg.toFixed(1)}°`;
+      hud.pEgim.dataset['warn'] = Math.abs(deg) > 3 ? 'yes' : 'no';
     }
-    if (hud.boom) {
-      hud.boom.textContent =
-        `bom: ${crane.lengthM.toFixed(1)} m · ${crane.angleDeg.toFixed(0)}° · R ${crane.radiusM.toFixed(1)} m`;
-    }
-    if (hud.lmi) {
-      const r = crane.lmi;
-      const pct = Number.isFinite(r.percent) ? Math.min(999, r.percent) : 999;
-      hud.lmi.textContent =
-        `LMI %${pct.toFixed(0)} · kap ${r.capacityTonnes.toFixed(1)} t · yük ${r.loadTonnes.toFixed(2)} t`;
-      hud.lmi.dataset['zone'] = r.zone;
-    }
+    if (hud.pHiz) hud.pHiz.textContent = `${truck.speedKmh.toFixed(0)} km/sa`;
+
+    uyariGoster(craneMode, tabloDisi);
+    konduGoster();
+    sonucGoster();
+
     if (hud.hint) {
       if (!craneMode) {
         hud.hint.textContent = 'çalışma alanına yanaş, sonra Q ile ayakları aç';
@@ -237,6 +256,63 @@ async function boot(): Promise<void> {
   }
 
   /**
+   * Fizik sınırına dayanınca NE OLDUĞUNU ve NE YAPILACAĞINI söyler.
+   *
+   * Sahadan gelen geri bildirim: "panelde bir şey kırmızıya dönüyor ama
+   * okuyarak anlayamıyorum; öyle bir durumda 'hayır, bu yükü burada
+   * kaldıramazsın' gibi bir uyarı versin." Doğru istek — yük momenti
+   * göstergesi zaten kolları kilitliyordu ama bunu oyuncuya hiç söylemiyordu,
+   * dolayısıyla kilit bozukluk gibi hissediliyordu.
+   */
+  function uyariGoster(craneMode: boolean, tabloDisi: boolean): void {
+    const u = hud.uyari;
+    if (!u) return;
+    const r = crane.lmi;
+    if (!craneMode || r.zone === 'green') { u.hidden = true; return; }
+
+    const kilitli = crane.kilitliDenendi;
+    if (tabloDisi) {
+      // Yük tablosunun sonunu geçtik. Burada mesele yükün ağırlığı değil,
+      // mesafenin kendisi: boş kanca bile bu yarıçapta kaldırılamaz.
+      u.dataset['zone'] = 'red';
+      u.classList.toggle('carpiyor', kilitli);
+      u.innerHTML = [
+        '<div class="bas">⚠ YARIÇAP TABLO DIŞI</div>',
+        `<p><b>${crane.radiusM.toFixed(1)} m</b> mesafede bu vinç`
+        + ' <b>hiçbir yük</b> kaldıramaz — yük tablosu 28 metrede bitiyor.</p>',
+        '<p class="cozum">W ile bomu kaldır ya da ⇧S ile teleskobu topla.</p>',
+      ].join('');
+      u.hidden = false;
+      return;
+    }
+    if (r.zone === 'red') {
+      u.dataset['zone'] = 'red';
+      u.classList.toggle('carpiyor', kilitli);
+      u.innerHTML = [
+        '<div class="bas">⚠ AŞIRI YÜK — BU YÜKÜ BURADA KALDIRAMAZSIN</div>',
+        `<p>Kancadaki <b>${r.loadTonnes.toFixed(2)} t</b>,`
+        + ` <b>${crane.radiusM.toFixed(1)} m</b> mesafede izin verilen`
+        + ` <b>${r.capacityTonnes.toFixed(2)} t</b> sınırının üstünde.</p>`,
+        kilitli
+          ? '<p class="cozum">Bom indirme ve teleskop açma KİLİTLİ.'
+            + ' W ile bomu kaldır ya da ⇧S ile teleskobu topla — yarıçap kısalır,'
+            + ' sınır yükselir.</p>'
+          : '<p class="cozum">W ile bomu kaldır: yarıçap kısalır, sınır yükselir.</p>',
+      ].join('');
+    } else {
+      u.dataset['zone'] = 'amber';
+      u.classList.remove('carpiyor');
+      u.innerHTML = [
+        '<div class="bas">SINIRA YAKLAŞIYORSUN</div>',
+        `<p>${r.loadTonnes.toFixed(2)} t / ${r.capacityTonnes.toFixed(2)} t`
+        + ` · yarıçap ${crane.radiusM.toFixed(1)} m.`
+        + ' Yarıçapı büyütürsen kollar kilitlenir.</p>',
+      ].join('');
+    }
+    u.hidden = false;
+  }
+
+  /**
    * Yük terasa oturduğunda onay paneli.
    *
    * Sahadan gelen ihtiyaç: "doğru yerleştirdim mi bilmek istiyorum". Kör
@@ -253,13 +329,20 @@ async function boot(): Promise<void> {
       konduBitis = performance.now() + 4000;
       const yakin = t.sapmaCm <= 60;
       const lmiIyi = t.maxLmi <= 90;
+      const pz = t.puan;
       hud.kondu.innerHTML = [
         '<div class="tik">✓ YERİNE KONDU</div>',
         `<div class="ad">${t.kod} · ${t.ad}</div>`,
+        `<div class="kazanc">+${pz.toplam} puan</div>`,
         '<dl>',
-        `<dt>hedeften sapma</dt><dd data-iyi="${yakin ? 'evet' : 'hayir'}">${t.sapmaCm.toFixed(0)} cm</dd>`,
-        `<dt>bu görevde en yüksek LMI</dt><dd data-iyi="${lmiIyi ? 'evet' : 'hayir'}">%${t.maxLmi.toFixed(0)}</dd>`,
-        `<dt>süre</dt><dd>${Math.floor(t.sure / 60)}:${(t.sure % 60).toFixed(0).padStart(2, '0')}</dd>`,
+        `<dt>yerleştirme</dt><dd data-iyi="evet">+${pz.temel}</dd>`,
+        `<dt>isabet · ${t.sapmaCm.toFixed(0)} cm sapma</dt>`
+        + `<dd data-iyi="${yakin ? 'evet' : 'hayir'}">+${pz.isabet}</dd>`,
+        `<dt>hız · ${Math.floor(t.sure / 60)}:${(t.sure % 60).toFixed(0).padStart(2, '0')}</dt>`
+        + `<dd data-iyi="${pz.hiz > 0 ? 'evet' : 'hayir'}">+${pz.hiz}</dd>`,
+        pz.ceza > 0 ? `<dt>aşırı yük / çarpma</dt><dd data-iyi="hayir">−${pz.ceza}</dd>` : '',
+        `<dt>bu görevde en yüksek moment</dt>`
+        + `<dd data-iyi="${lmiIyi ? 'evet' : 'hayir'}">%${t.maxLmi.toFixed(0)}</dd>`,
         '</dl>',
         `<p class="sonraki">${t.kalan > 0
           ? `sırada ${t.kalan} görev var · yeni yük malzeme alanında`
@@ -289,16 +372,17 @@ async function boot(): Promise<void> {
       `<div class="not" data-not="${r.not}">${r.not}</div>`,
       `<h2>${r.devrildi ? 'ARAÇ DEVRİLDİ' : 'BÖLÜM TAMAMLANDI'}</h2>`,
       r.usta ? '<p class="rozet">USTA VİNÇÇİ</p>' : '',
+      `<p class="toplam">${s.puan} puan</p>`,
       '<table>',
+      `<tr><td>tamamlanan görev</td><td>${s.sapmalar.length} / ${mission.taskCount}</td></tr>`,
       `<tr><td>süre</td><td>${Math.floor(s.sure / 60)}:${(s.sure % 60).toFixed(0).padStart(2, '0')}</td></tr>`,
-      `<tr><td>en yüksek LMI</td><td>%${s.maxLmi.toFixed(0)}</td></tr>`,
+      `<tr><td>en yüksek kaldırma momenti</td><td>%${s.maxLmi.toFixed(0)}</td></tr>`,
       `<tr><td>kırmızıda geçen süre</td><td>${s.kirmiziSn.toFixed(1)} sn</td></tr>`,
       `<tr><td>en geniş salınım</td><td>${s.maxSalinim.toFixed(0)}°</td></tr>`,
       `<tr><td>çarpma</td><td>${s.carpma}</td></tr>`,
-      `<tr><td>yerleştirme sapması</td><td>${(ortSapma * 100).toFixed(0)} cm</td></tr>`,
-      `<tr><td>tamamlanan görev</td><td>${s.sapmalar.length} / ${mission.taskCount}</td></tr>`,
+      `<tr><td>ortalama yerleştirme sapması</td><td>${(ortSapma * 100).toFixed(0)} cm</td></tr>`,
       '</table>',
-      `<p class="puan">${r.puan.toFixed(0)} / 100</p>`,
+      `<p class="puan">başarı %${r.puan.toFixed(0)}</p>`,
       '<p class="note">R ile yeniden başla</p>',
     ].join('');
     hud.sonuc.hidden = false;
