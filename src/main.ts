@@ -5,17 +5,19 @@ import { Camera } from './core/camera';
 import { Keyboard } from './input/keyboard';
 import { SIM } from './sim/world';
 import { Scene, SCENE } from './sim/scene';
+import { Mission } from './game/mission';
+import { drawLoad, TargetMarker } from './render/missionView';
 import { TRUCK } from './sim/truck';
 import { OutriggerState } from './sim/loadChart';
 import { TruckView, drawWheel, drawContactShadow } from './render/truckView';
 import { OutriggerView } from './render/outriggerView';
-import { CableView, drawHookBlock, drawMachineLoad } from './render/craneView';
+import { CableView, drawHookBlock } from './render/craneView';
 import {
   drawSky, drawGround, drawFactory, drawFarSkyline, drawEntranceSign, drawPropBox,
   drawSetupZone, drawKerb,
 } from './render/scenery';
 
-const { factoryX: FACTORY_X, setupX: SETUP_X, kerbX: KERB_X, load: LOAD } = SCENE;
+const { factoryX: FACTORY_X, setupX: SETUP_X, kerbX: KERB_X } = SCENE;
 
 async function boot(): Promise<void> {
   const host = document.getElementById('game');
@@ -25,7 +27,8 @@ async function boot(): Promise<void> {
   // --- fizik ---
   // Dünyanın kurulumu Scene'in içinde; başsız test de aynı sınıfı sürüyor.
   const scene = new Scene();
-  const { truck, outriggers, crane, props, load } = scene;
+  const { truck, outriggers, crane, props } = scene;
+  const mission = new Mission(scene);
 
   // --- sabit dekor ---
   // NOT: burada cacheAsTexture DENENDİ ve geri alındı. Dekor metre biriminde
@@ -48,14 +51,20 @@ async function boot(): Promise<void> {
   const outriggerView = new OutriggerView();
   const cableView = new CableView();
   const hookView = drawHookBlock();
-  const loadView = drawMachineLoad(LOAD.halfWidth, LOAD.halfHeight);
+  const marker = new TargetMarker();
 
   const actors = new Container();
   actors.addChild(
-    shadow, ...propViews, loadView, ...wheelViews,
+    shadow, ...propViews, marker, ...wheelViews,
     outriggerView, truckView, cableView, hookView,
   );
   stage.world.addChild(actors);
+
+  // Yük görünümü göreve bağlı: her görevin ölçüsü ve türü farklı, o yüzden
+  // gövde yenilendiğinde çizim de yenileniyor.
+  let loadViewFor = scene.loadTask;
+  let loadView = loadViewFor ? drawLoad(loadViewFor) : new Container();
+  actors.addChildAt(loadView, actors.getChildIndex(marker));
 
   // --- girdi ve kamera ---
   const keys = new Keyboard();
@@ -69,6 +78,10 @@ async function boot(): Promise<void> {
     boom: document.getElementById('boom'),
     lmi: document.getElementById('lmi'),
     hint: document.getElementById('hint'),
+    gorev: document.getElementById('gorev'),
+    sure: document.getElementById('sure'),
+    sonuc: document.getElementById('sonuc'),
+    sonucIc: document.getElementById('sonuc-ic'),
   };
 
   const step = (dt: number): void => {
@@ -80,7 +93,11 @@ async function boot(): Promise<void> {
       toggleHook: keys.consumeHookToggle(),
       reset,
     }, dt);
-    if (reset) camera.snapTo(TRUCK.spawnX, 6);
+    if (reset) {
+      camera.snapTo(TRUCK.spawnX, 6);
+      mission.markReset();
+    }
+    mission.update(dt);
   };
 
   const render = (alpha: number, frameDt: number): void => {
@@ -107,9 +124,22 @@ async function boot(): Promise<void> {
       view.rotation = s.a;
     });
 
-    const l = scene.snaps.interpolate(load, alpha);
-    loadView.position.set(l.x, l.y);
-    loadView.rotation = l.a;
+    // Görev değiştiyse yük çizimini yenile.
+    if (scene.loadTask !== loadViewFor) {
+      loadViewFor = scene.loadTask;
+      const yeni = loadViewFor ? drawLoad(loadViewFor) : new Container();
+      actors.addChildAt(yeni, actors.getChildIndex(loadView));
+      loadView.destroy({ children: true });
+      loadView = yeni;
+    }
+    if (loadViewFor) {
+      const l = scene.snaps.interpolate(scene.load, alpha);
+      loadView.position.set(l.x, l.y);
+      loadView.rotation = l.a;
+    }
+
+    // Hedef işareti yük havadayken parlıyor: kör kaldırmada aranan şey o.
+    marker.update(mission.target, mission.task?.halfWidth ?? 1, crane.hasLoad);
 
     const h = scene.snaps.interpolate(crane.hook, alpha);
     hookView.position.set(h.x, h.y);
@@ -127,6 +157,21 @@ async function boot(): Promise<void> {
   function updateHud(): void {
     const craneMode = scene.craneMode;
     if (hud.speed) hud.speed.textContent = `${truck.speedKmh.toFixed(0)} km/sa`;
+
+    if (hud.gorev) {
+      const t = mission.task;
+      hud.gorev.textContent = t
+        ? `${t.kod}/${mission.taskCount} · ${t.ad} ${t.tonnes.toFixed(2)} t — ${t.brif}`
+        : 'bölüm tamamlandı';
+    }
+    if (hud.sure) {
+      const sn = mission.score.sure;
+      hud.sure.textContent =
+        `${Math.floor(sn / 60)}:${(sn % 60).toFixed(0).padStart(2, '0')}`
+        + ` · çarpma ${mission.score.carpma}`
+        + ` · en yüksek LMI %${mission.score.maxLmi.toFixed(0)}`;
+    }
+    sonucGoster();
 
     if (hud.rig) {
       const label = { [OutriggerState.Stowed]: 'TOPLU',
@@ -174,6 +219,37 @@ async function boot(): Promise<void> {
         hud.hint.dataset['mode'] = reason === 'hazir' ? 'ready' : 'crane';
       }
     }
+  }
+
+  /** Bölüm bitince ya da devrilince sonuç panelini bir kez yaz. */
+  let sonucYazildi = false;
+  function sonucGoster(): void {
+    const r = mission.result;
+    if (!r) {
+      if (sonucYazildi && hud.sonuc) { hud.sonuc.hidden = true; sonucYazildi = false; }
+      return;
+    }
+    if (sonucYazildi || !hud.sonuc || !hud.sonucIc) return;
+    sonucYazildi = true;
+    const s = r.score;
+    const ortSapma = s.sapmalar.length
+      ? s.sapmalar.reduce((a, b) => a + b, 0) / s.sapmalar.length : 0;
+    hud.sonucIc.innerHTML = [
+      `<div class="not" data-not="${r.not}">${r.not}</div>`,
+      `<h2>${r.devrildi ? 'ARAÇ DEVRİLDİ' : 'BÖLÜM TAMAMLANDI'}</h2>`,
+      r.usta ? '<p class="rozet">USTA VİNÇÇİ</p>' : '',
+      '<table>',
+      `<tr><td>süre</td><td>${Math.floor(s.sure / 60)}:${(s.sure % 60).toFixed(0).padStart(2, '0')}</td></tr>`,
+      `<tr><td>en yüksek LMI</td><td>%${s.maxLmi.toFixed(0)}</td></tr>`,
+      `<tr><td>en geniş salınım</td><td>${s.maxSalinim.toFixed(0)}°</td></tr>`,
+      `<tr><td>çarpma</td><td>${s.carpma}</td></tr>`,
+      `<tr><td>yerleştirme sapması</td><td>${(ortSapma * 100).toFixed(0)} cm</td></tr>`,
+      `<tr><td>tamamlanan görev</td><td>${s.sapmalar.length} / ${mission.taskCount}</td></tr>`,
+      '</table>',
+      `<p class="puan">${r.puan.toFixed(0)} / 100</p>`,
+      '<p class="note">R ile yeniden başla</p>',
+    ].join('');
+    hud.sonuc.hidden = false;
   }
 
   // --- gökyüzü, ekran boyutuna bağlı ---

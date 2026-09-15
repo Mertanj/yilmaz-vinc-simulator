@@ -1,4 +1,4 @@
-import { Box, type Body, type World } from 'planck';
+import { Box, type Body, type World, type Contact } from 'planck';
 import {
   createWorld, createGround, createFactoryBody, createKerb, scatterProps,
   Snapshotter, SIM,
@@ -7,6 +7,7 @@ import { Truck } from './truck';
 import { Outriggers } from './outriggers';
 import { Crane, NEUTRAL, type CraneInput, type Grabbable } from './crane';
 import type { DriveInput } from '../input/keyboard';
+import { TASKS, MALZEME_X, type Task } from '../game/tasks';
 
 /**
  * Sahnenin fizik tarafı — tek kaynak.
@@ -28,22 +29,10 @@ export const SCENE = {
    * denetimi (`overlaps`) artık bunu yakalıyor.
    */
   kerbX: 57.9,
-  /**
-   * Demo yükü 1.8 t — sayıyla seçildi, gözle değil.
-   *
-   * "Bom 2. kata yetmiyor" şikâyetinin sebebi bom DEĞİLDİ. Bom ucunun hedefin
-   * tam üstünde olması gerektiği için L·cosθ = Δx, yani yarıçap yalnızca yatay
-   * mesafeye bağlı — bom boyu ve açısı R'yi hiç değiştirmiyor. Park edilen
-   * yerden üç hedefin de geometrisi rahat tutuyor (`npm run sahne` zarf
-   * tablosunda hepsi "ulasir"); engelleyen yük tablosuydu.
-   *
-   * 2. kat R 17.6 m'de, kapasite 2.64 t. Yük + kanca:
-   *   3.2 t → %143   2.4 t → %108   2.0 t → %93   1.8 t → %85
-   * 1.8 t seçildi: statikte yeşilin üst ucu, salınım sırasındaki dinamik
-   * sıçramalara pay kalıyor. Çatı (R 21.1 m, kap 1.81 t) bu yükle hâlâ kırmızı
-   * — bölüm tasarımında ağır yük alt kata, hafif yük üst kata gidecek.
-   */
-  load: { x: 59.5, halfWidth: 1.15, halfHeight: 0.85, tonnes: 1.8 },
+  /** Bunun üstündeki normal impuls (N·s) çarpma sayılıyor. */
+  carpmaEsigiNs: 9000,
+  /** Malzeme alanının merkezi — her görevin yükü buraya geliyor. */
+  malzemeX: MALZEME_X,
 } as const;
 
 /** Bir fizik adımının bütün girdisi. Klavye de, test de bunu üretir. */
@@ -73,8 +62,18 @@ export class Scene {
   readonly outriggers: Outriggers;
   readonly crane: Crane;
   readonly props: ReturnType<typeof scatterProps>;
-  readonly load: Body;
-  readonly grabbables: Grabbable[];
+  /** Malzeme alanındaki güncel yük. Görev değişince yenisiyle değişiyor. */
+  load!: Body;
+  private loadSpec: Task | null = null;
+  grabbables: Grabbable[] = [];
+  /**
+   * Sert çarpışma sayısı — puanlamaya giriyor.
+   *
+   * Her temas değil, ÇARPMA sayılıyor: yükü terasa usulca koymak da bir
+   * temastır. Eşik çözücünün bildirdiği normal impulsa bakıyor, böylece
+   * "bıraktım" ile "çarptım" ayrışıyor.
+   */
+  carpma = 0;
 
   constructor() {
     createGround(this.world);
@@ -85,22 +84,58 @@ export class Scene {
     this.crane = new Crane(this.world, this.truck.chassis, this.snaps);
     this.props = scatterProps(this.world, this.snaps);
 
-    const L = SCENE.load;
-    this.load = this.world.createDynamicBody({ x: L.x, y: L.halfHeight + 0.05 });
-    this.load.createFixture(new Box(L.halfWidth, L.halfHeight), {
-      density: 1, friction: 0.85, restitution: 0.02,
-    });
-    this.load.setMassData({ mass: L.tonnes * 1000, center: { x: 0, y: 0 }, I: 1400 });
-    this.load.setAngularDamping(0.5);
-    this.snaps.track(this.load);
-
-    this.grabbables = [
-      { body: this.load, halfWidth: L.halfWidth, halfHeight: L.halfHeight },
-      ...this.props.map((p) => ({ body: p.body, halfWidth: p.hw, halfHeight: p.hh })),
-    ];
+    this.spawnLoad(TASKS[0] ?? null);
 
     assertNoSpawnOverlap(this.world);
+
+    // Sert çarpışmaları say. post-solve, impuls hesaplandıktan sonra çağrılıyor.
+    this.world.on('post-solve', (contact: Contact, impulse: { normalImpulses: number[] }) => {
+      const a = contact.getFixtureA().getBody();
+      const b = contact.getFixtureB().getBody();
+      // Sadece YÜK ve KANCA sayılıyor. Şasi de sayılsa takoza yanaşmak —
+      // yani park etmenin tek yolu — her turda bir çarpma yazıyordu.
+      const ilgili = (x: Body): boolean => x === this.load || x === this.crane.hook;
+      if (!ilgili(a) && !ilgili(b)) return;
+      const j = Math.max(...(impulse.normalImpulses ?? [0]));
+      if (j > SCENE.carpmaEsigiNs) this.carpma++;
+    });
   }
+
+  /**
+   * Malzeme alanına yeni bir yük koyar, eskisini siler.
+   *
+   * Yükün gövdesi görev başına yeniden yaratılıyor çünkü her görevin ölçüsü ve
+   * kütlesi farklı; planck'te bir fikstürün şeklini sonradan değiştirmek yok.
+   */
+  spawnLoad(spec: Task | null): void {
+    if (this.load) this.world.destroyBody(this.load);
+    this.loadSpec = spec;
+    if (!spec) {
+      this.grabbables = this.props.map((p) => ({ body: p.body, halfWidth: p.hw, halfHeight: p.hh }));
+      return;
+    }
+    const body = this.world.createDynamicBody({ x: SCENE.malzemeX, y: spec.halfHeight + 0.05 });
+    body.createFixture(new Box(spec.halfWidth, spec.halfHeight), {
+      density: 1, friction: 0.85, restitution: 0.02,
+    });
+    // Atalet momenti kütleyle ölçekleniyor: sabit bırakılınca ağır yük hafif
+    // yükten daha çabuk dönüyordu, ki bu tersine olmalı.
+    body.setMassData({
+      mass: spec.tonnes * 1000,
+      center: { x: 0, y: 0 },
+      I: (spec.tonnes * 1000 * (spec.halfWidth ** 2 + spec.halfHeight ** 2)) / 3,
+    });
+    body.setAngularDamping(0.5);
+    this.snaps.track(body);
+    this.load = body;
+    this.grabbables = [
+      { body, halfWidth: spec.halfWidth, halfHeight: spec.halfHeight },
+      ...this.props.map((p) => ({ body: p.body, halfWidth: p.hw, halfHeight: p.hh })),
+    ];
+  }
+
+  /** Güncel yükün tanımı — boyutları puanlama ve çizim için gerekiyor. */
+  get loadTask(): Task | null { return this.loadSpec; }
 
   /** Ayaklar yerdeyse vinç fazındayız: sürüş kilitli, vinç açık. */
   get craneMode(): boolean {

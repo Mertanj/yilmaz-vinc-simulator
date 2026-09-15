@@ -192,9 +192,11 @@ export function drawSetupZone(centreX: number): Container {
       .stroke({ width: 0.09, color: C.hazardY, alpha: 0.45 });
   }
   c.addChild(g);
+  // Yazı yere değil YUKARI yazılıyor: kamyon tam bu alana park ediyor, 2.1
+  // metrede kalan etiketin yarısı kasanın arkasında kalıp "LANI" diye okunuyordu.
   const t = worldText('KURULUM ALANI', 0.62, { fill: C.hazardY });
-  t.position.set(centreX, 2.1);
-  t.alpha = 0.75;
+  t.position.set(centreX, 6.4);
+  t.alpha = 0.7;
   c.addChild(t);
   return c;
 }

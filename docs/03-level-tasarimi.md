@@ -191,3 +191,74 @@ Dokunacağım tek sayı bu; gerisi taşıyıcı.
 Ayrıca sarı bölge hız düşüşü **oransal** olsun (%80 LMI'de tam hız, %100'de
 ~%40), basamaklı değil. T3 ve T4 tamamen sarıda geçiyor; orada basamak bozuk
 hissettirir.
+
+---
+
+# Sprint 4 — bölümün kurulan hâli
+
+Yukarısı tasarım; burası **koda giren ve ölçülen** hâli. İkisi arasındaki farklar
+tasarımın yanlışlığından değil, park konumunun ve yük tablosunun sahada
+ölçülmesinden geliyor — `npm run sahne` zarf tablosunu her çalıştırmada basıyor.
+
+## Ölçülen zarf
+
+Kamyon takoza (x = 57.9) dayandığında bom ayağı (51.7, 4.0) oluyor. Halat düşey
+olmak zorunda olduğu için bom ucu hedefin tam üstünde duruyor, yani
+**L·cos θ = Δx**: yarıçap yalnızca yatay mesafeye bağlı, bom boyu ve açısı onu
+değiştirmiyor. Üç hedefin de geometrisi rahat yetiyor; sınırı yük tablosu koyuyor.
+
+| Hedef | x | y | R | Kapasite |
+|---|---|---|---|---|
+| 1. kat terası | 64.2 | 5.0 | 13.1 m | 4.54 t |
+| 2. kat terası | 68.7 | 10.0 | 17.6 m | 2.64 t |
+| Çatı | 72.2 | 15.0 | 21.1 m | 1.81 t |
+
+## Dört görev
+
+Ağırlıklar hedeflenen LMI eğrisinden **geriye doğru** hesaplandı (kanca 0.45 t dahil):
+
+| | Yük | t | Hedef | LMI | Bölge |
+|---|---|---|---|---|---|
+| T1 | Sac bobin | 2.30 | 1. kat | %61 | yeşil |
+| T2 | CNC torna | 3.10 | 1. kat | %78 | yeşil |
+| T3 | Jeneratör 100 kVA | 1.80 | 2. kat | %85 | sarı sınırı |
+| T4 | Çatı klima santrali | 1.25 | Çatı | %94 | sarı |
+
+T1 ile T2 aynı terasa gidiyor, tek değişen ağırlık: tablonun *yer* değil
+*yarıçaptaki yük* ile ilgili olduğunu anlatmanın en ucuz yolu.
+
+**Malzeme tek noktadan geliyor (x = 60.1).** Dördü aynı anda sahaya sığmıyor:
+takozun sağ kenarı 58.25, fabrika cephesi 62.0, arada 3.75 metre var ve en geniş
+yük 3 metre. Dördünü yan yana dizmek 12 metre ister, o da binayı 12 metre uzağa
+iter ve bütün bırakma yarıçapları erişilemez olur.
+
+## Puanlama
+
+Süre · en yüksek LMI · en geniş salınım · çarpma · yerleştirme sapması. Ağırlıklar
+başsız rigin gerçek turuna göre ayarlandı — dört görev tamam, LMI kısa süre %109,
+salınım 33°, yerleştirme 15 cm, 688 saniye → **C (66)**. Kusursuz bir tur A veriyor.
+
+Çarpma sayarken **sadece yük ve kanca** dikkate alınıyor. Şasi de sayılınca takoza
+yanaşmak — yani park etmenin tek yolu — her turda bir çarpma yazıyordu.
+
+## Devrilme şu an ERİŞİLEMEZ — ölçülmüş bir boşluk
+
+Devrilme tespiti (eğim > 8°) kodda duruyor ama pratikte hiç tetiklenmiyor. Sebebi
+ölçüldü: ayaklar açıkken **bom 27.5 metre yatay uzatıldığında bile** (≈589 kN·m
+devirme momenti) araç 0.000° kalıyor, bacak stroku hiç değişmiyor, bacak kuvvetleri
+sadece 241 kN'dan 189 kN'a kayıyor.
+
+İki sebep var ve ikisi de modelleme kaynaklı:
+
+1. **Ayak silindirleri iki yönlü.** Gerçek kriko sadece İTER; rüzgâr tarafındaki
+   bacak boşalır ve pabuç yerden kesilir. Bizimki prismatic joint + motor, yani
+   aynı kuvvetle ÇEKİYOR da — araç yere bağlanmış oluyor.
+2. **Seviye düzeltmesi hiç durmuyor.** Kurulumda seviyeye getiren denetleyici her
+   adımda çalışmaya devam ediyor, dolayısıyla oluşan her eğimi anında geri alıyor.
+
+Ayrıca ayak komutu ikili (açık/kapalı), yani tasarımın öngördüğü "yarım ayakla
+kaldır, devril" senaryosu oyuncuya hiç sunulmuyor.
+
+**Sprint 5 önerisi:** bacak çekmede serbest bıraksın (tek yönlü kriko), seviye
+düzeltmesi kurulumdan sonra kilitlensin, ayak açma kademeli olsun. Üçü birlikte
+devrilmeyi tasarımdaki yerine — emergent bir sonuç olarak — geri getiriyor.

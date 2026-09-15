@@ -85,6 +85,16 @@ export const CRANE = {
   /** Vinç hızının sıfırdan tama çıkma süresi (s). Anlık basamak darbe yaratıyor. */
   winchRampSec: 0.45,
   /**
+   * Bom ve teleskop için aynı rampa.
+   *
+   * Vince rampa konmuştu ama boma konmamıştı ve fatura ölçümde çıktı: LMI
+   * zirvesi taşıma sırasında %172, halat kuvveti 10.8 t — statik 2.75 tonun
+   * 3.9 KATI. Sebep basamak komut: tuşu bırakınca bom aynı karede duruyor,
+   * rijit halat da bu duruşu yüke aynen geçiriyor. Gerçek bir hidrolik
+   * kumanda kolu da, valfi de böyle davranmaz; ikisi de rampalıdır.
+   */
+  boomRampSec: 0.6,
+  /**
    * İki-blok koruması (anti two-block): halat strok sonuna bu kadar kala vinç
    * yavaşlar. Gerçek vinçlerde bunu bir limit anahtarı yapar.
    *
@@ -97,7 +107,18 @@ export const CRANE = {
   hookTonnes: 0.45,
   /** Kanca boğazının blok merkezine göre düşey ofseti (m) — görselle aynı. */
   hookThroatM: 0.46,
-  minRopeM: 1.2,
+  /**
+   * Kancanın bom kafasına en fazla yaklaşabileceği mesafe.
+   *
+   * 1.2 idi ve ölçümde pahalıya mal oldu: halat dibe vurunca yük fiilen bom
+   * ucuna RİJİT bağlanıyor, bomun her ivmesi doğrudan yüke biniyor ve halat
+   * kuvveti 13.7 tona (statik yükün 5 katı) fırlıyordu. Gerçek kanca bloğu da
+   * makara takımı yüzünden kafanın 1.5-2 metre altında durur; iki-blok zaten
+   * vinççilikte yasak durumdur. 2.0 hem gerçek hem de o rijit kipi kapatıyor.
+   */
+  minRopeM: 2.0,
+  /** LMI okumasının zaman sabiti (s). Gerçek yük hücreleri de filtrelidir. */
+  lmiFilterSec: 0.2,
   maxRopeM: 26,
 
   /**
@@ -228,6 +249,9 @@ export class Crane {
   private ropeLength = 3.0;
   private stowed = true;
   private winchRate = 0;
+  /** Rampalanmış aktüatör hızları — komut basamak, hidrolik değil. */
+  private luffRate = 0;
+  private teleRate = 0;
 
   constructor(
     private readonly world: World,
@@ -244,6 +268,13 @@ export class Crane {
       { x: pivot.x + dir.x * baseHalf, y: pivot.y + dir.y * baseHalf }, rad,
     );
     this.boomBase.setKinematic();
+    // **Uyku kapalı.** Kinematik gövdeyi setTransform ile sürmek planck'e
+    // "hareket" gibi görünmüyor; bom hareket ederken bile zincir uyku eşiğinin
+    // altında sayılabiliyor. Bu tuzağa bir kez düşüldü: yerde duran yük uykuda
+    // kaldığı için bağlandığı halde hiç kalkmadı ve teşhisi pahalı oldu
+    // (bkz. flushJointQueue'daki setAwake). Vinç zincirinin uyumasına hiç izin
+    // vermemek o sınıf hatayı tamamen kapatıyor ve ölçülebilir bir bedeli yok.
+    this.boomBase.setSleepingAllowed(false);
 
     // --- teleskop kesiti ---
     const flyHalf = 4.3;
@@ -252,6 +283,7 @@ export class Crane {
       { x: pivot.x + dir.x * flyCentre, y: pivot.y + dir.y * flyCentre }, rad,
     );
     this.boomFly.setKinematic();
+    this.boomFly.setSleepingAllowed(false);
 
     this.tipLocal = new Vec2(flyHalf, 0);
 
@@ -270,6 +302,7 @@ export class Crane {
     // "hafif gövde ağırını taşıyamaz" kuralı devreye girdi — halat 8 metre
     // kısaldığı halde yük yerinden kıpırdamadı. Kütleyi EN SON yazıyoruz.
     this.hook.setFixedRotation(true);
+    this.hook.setSleepingAllowed(false);
     this.hook.setMassData({
       mass: CRANE.hookTonnes * 1000, center: { x: 0, y: 0 }, I: 90,
     });
@@ -321,15 +354,20 @@ export class Crane {
     // Hidrolik silindir pozisyon kontrollüdür: komutu doğrudan konuma entegre
     // ediyoruz, hız sınırı ve strok limitiyle. Kilit valfli bir silindir gibi
     // rijit tutuyor — solvera yaptırmaya çalıştığımızda 12° çöküyordu.
-    const luffRate = (luffCmd * CRANE.luffSpeedDegPerSec * Math.PI * scale) / 180;
+    const luffHedef = (luffCmd * CRANE.luffSpeedDegPerSec * Math.PI * scale) / 180;
+    const luffMax = ((CRANE.luffSpeedDegPerSec * Math.PI) / 180 / CRANE.boomRampSec) * dt;
+    this.luffRate += clamp(luffHedef - this.luffRate, -luffMax, luffMax);
     this.angle = clamp(
-      this.angle + luffRate * dt,
+      this.angle + this.luffRate * dt,
       (CRANE.minAngleDeg * Math.PI) / 180,
       (CRANE.maxAngleDeg * Math.PI) / 180,
     );
+
+    const teleHedef = teleCmd * CRANE.telescopeSpeedMps * scale;
+    const teleMax = (CRANE.telescopeSpeedMps / CRANE.boomRampSec) * dt;
+    this.teleRate += clamp(teleHedef - this.teleRate, -teleMax, teleMax);
     this.extension = clamp(
-      this.extension + teleCmd * CRANE.telescopeSpeedMps * scale * dt,
-      0, CRANE.maxExtensionM,
+      this.extension + this.teleRate * dt, 0, CRANE.maxExtensionM,
     );
 
     // Vinç hızı rampalı: komut basamak, hidrolik değil. Rampasız her basış
@@ -355,6 +393,7 @@ export class Crane {
   flushJointQueue(candidates: Grabbable[]): void {
     if (this.pendingDetach && this.attachJoint) {
       this.attached?.setAngularDamping(this.releasedAngularDamping);
+      this.attached?.setSleepingAllowed(true);
       this.world.destroyJoint(this.attachJoint);
       this.attachJoint = null;
       this.attached = null;
@@ -386,6 +425,7 @@ export class Crane {
         // tepki vermiyordu. Kanca yükseliyor, yük yerde kalıyor, halat boşta —
         // LMI 0.16 t okuyordu.
         item.body.setAwake(true);
+        item.body.setSleepingAllowed(false);
         this.hook.setAwake(true);
 
         // Sapan takımı: yük bağlıyken dönmeye karşı direnir, bırakınca serbest.
@@ -467,6 +507,15 @@ export class Crane {
     const a = this.angle + chassisAngle;
     const dir = { x: Math.cos(a), y: Math.sin(a) };
 
+    // Kinematik gövdeler sadece setTransform ile sürülüyor, hızları yazılmıyor.
+    //
+    // Hızı da yazmak DENENDİ (çözücü mafsal bağlantı noktasının hızını gövdeden
+    // okuyor, dolayısıyla doğru olan bu görünüyordu) ve sistemi bozdu: LMI %999,
+    // salınım 80°, araç devrildi. Sebep ilk adımlar — gövde kurulum konumunda,
+    // hedef ise oturmuş şasiye göre hesaplanıyor, aradaki yarım metrelik fark
+    // dt'ye bölününce 30 m/s'lik bir hız oluyor ve rijit halat bunu kancaya
+    // aynen geçiriyor. Konum yazmak yeterli; bir sonraki adım zaten yeniden
+    // yazıyor.
     const baseHalf = CRANE.boomBaseLengthM / 2;
     this.boomBase.setTransform(
       { x: pivot.x + dir.x * baseHalf, y: pivot.y + dir.y * baseHalf }, a,
@@ -551,9 +600,19 @@ export class Crane {
    */
   sampleLmi(dt: number, outriggers: OutriggerState): void {
     const f = this.readCableForce(dt);
-    const tonnes = f ? Math.hypot(f.x, f.y) / 9810 : 0;
-    this.lmi = computeLmi(this.radiusM, tonnes, 0, outriggers);
+    const ham = f ? Math.hypot(f.x, f.y) / 9810 : 0;
+    // **Okuma filtreli.** Gerçek LMI'ler yük hücresini filtreler; filtresiz bir
+    // sistem her tümsekte alarm verirdi. Bizde de gerekti: tek karelik çözücü
+    // sıçramaları %427'ye kadar çıkıp hem göstergeyi hem puanı anlamsız
+    // kılıyordu. Zaman sabiti 0.2 s — sarkacın saniyelerle ölçülen gerçek
+    // gerilim artışını (40°'de +%46) olduğu gibi geçiriyor, sadece tek adımlık
+    // dikenleri kesiyor.
+    const k = Math.min(1, dt / CRANE.lmiFilterSec);
+    this.lmiTonnes += (ham - this.lmiTonnes) * k;
+    this.lmi = computeLmi(this.radiusM, this.lmiTonnes, 0, outriggers);
   }
+
+  private lmiTonnes = 0;
 
   /** Halat kuvveti, henüz çözülmemişse null. */
   private readCableForce(dt: number): { x: number; y: number } | null {

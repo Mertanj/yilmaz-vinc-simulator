@@ -3,14 +3,18 @@
  *
  * Bu projede her fizik kararı ölçümle alındı; göz kararı defalarca yanlış
  * teşhis koydurdu (tork sanılan mafsal esnemesi, bom boyu sanılan LMI kilidi,
- * hız sanılan uyku kipi). Tarayıcı açmadan aynı `Scene`'i sürüp sayıları
- * yazdırmak, o teşhisleri saniyeler içinde yapıp yanlışlarını eliyor.
+ * hız sanılan uyku kipi, kütle sanılan çağrı sırası). Tarayıcı açmadan aynı
+ * `Scene`'i sürüp sayıları yazdırmak o teşhisleri saniyeler içinde yapıyor.
+ *
+ * Şimdi bölümün TAMAMINI oynuyor: sür, ayakları aç, dört yükü sırayla al ve
+ * terasına koy. Dördü de konmazsa sıfırdan farklı kodla çıkıyor.
  */
-import { Scene, IDLE, SCENE, type SceneInput } from '../src/sim/scene';
+import { Scene, IDLE, type SceneInput } from '../src/sim/scene';
 import { SIM, factoryTerraces } from '../src/sim/world';
 import { CRANE } from '../src/sim/crane';
 import { capacityAt, OutriggerState } from '../src/sim/loadChart';
-import type { CraneInput } from '../src/sim/crane';
+import { Mission } from '../src/game/mission';
+import { TASKS } from '../src/game/tasks';
 
 const DT = 1 / SIM.hz;
 
@@ -23,197 +27,232 @@ function toward(current: number, target: number, deadband: number): number {
 
 class Rig {
   readonly scene = new Scene();
+  readonly mission = new Mission(this.scene);
   t = 0;
 
-  /** Girdiyi n saniye boyunca uygula. */
+  /** En yüksek LMI'nin nerede olduğunu da tutuyoruz — zirveyi bulmak için. */
+  zirve = { lmi: 0, t: 0, etiket: '', R: 0, ton: 0, halat: 0 };
+  etiket = 'baslangic';
+
+  /** Koşul sağlanana kadar sür; en fazla maxSec. Sağlandı mı döner. */
+  runUntil(maxSec: number, done: (r: Rig) => boolean, input: (r: Rig) => Partial<SceneInput>): boolean {
+    const steps = Math.round(maxSec / DT);
+    for (let i = 0; i < steps; i++) {
+      if (done(this)) return true;
+      this.run(DT, input);
+    }
+    return done(this);
+  }
+
   run(seconds: number, input: (r: Rig) => Partial<SceneInput>): void {
     const steps = Math.round(seconds / DT);
     for (let i = 0; i < steps; i++) {
       this.scene.step({ ...IDLE, ...input(this) }, DT);
+      this.mission.update(DT);
       this.t += DT;
+      const l = this.scene.crane.lmi;
+      if (Number.isFinite(l.percent) && l.percent > this.zirve.lmi) {
+        this.zirve = {
+          lmi: l.percent, t: this.t, etiket: this.etiket,
+          R: l.radiusM, ton: l.loadTonnes, halat: this.scene.crane.ropeM,
+        };
+      }
     }
   }
 
-  /** Bir kere basılan tuş: ilk adımda tetiklenir, gerisi boşta geçer. */
   tap(key: 'toggleOutriggers' | 'toggleHook', settle: number): void {
     this.scene.step({ ...IDLE, [key]: true }, DT);
+    this.mission.update(DT);
     this.t += DT;
     this.run(settle, () => ({}));
   }
 
-  /** Bom açısını, teleskop boyunu ve halatı aynı anda hedefe sür. */
-  servo(target: { angleDeg?: number; extM?: number; ropeDropTo?: number }): CraneInput {
+  /**
+   * Bom ucunu (tx, ty) noktasına götüren açı ve boyu ANALİTİK çözer.
+   *
+   * Bom ucunun x'ini kovalamak işe yaramadı: teleskopu açmak ve bomu indirmek
+   * ucu aynı yöne götürüyor ama yüksekliği zıt yönde değiştiriyor, dolayısıyla
+   * tek eksenli bir kovalama kendi kuyruğunu yakalıyor. Hedef uç konumundan
+   * L = |Δ| ve θ = atan2 doğrudan çıkıyor; iki ekseni de hedefine sürmek hem
+   * kararlı hem de gerçek operatörün kafasındaki resim.
+   */
+  boomTo(tx: number, ty: number): { luff: number; telescope: number } {
+    const pivot = this.scene.truck.chassis.getWorldPoint(CRANE.pivot);
+    const dx = tx - pivot.x;
+    const dy = ty - pivot.y;
+    const L = Math.min(Math.max(Math.hypot(dx, dy), CRANE.boomBaseLengthM),
+                       CRANE.boomBaseLengthM + CRANE.maxExtensionM);
+    const th = Math.min(Math.max((Math.atan2(dy, dx) * 180) / Math.PI,
+                                 CRANE.minAngleDeg), CRANE.maxAngleDeg);
+    // Komutlar ORANSAL: aç/kapa sürüş hedefin etrafında çatırdıyor ve rijit
+    // halat her çatırtıyı yüke darbe olarak geçiriyordu.
     const c = this.scene.crane;
-    const luff = target.angleDeg === undefined ? 0
-      : toward(c.angleDeg, target.angleDeg, 0.4);
-    const telescope = target.extM === undefined ? 0
-      : toward(c.extensionM, target.extM, 0.08);
-    // Kancayı verilen yüksekliğe indir: halat uzatmak kancayı aşağı götürür.
-    const winch = target.ropeDropTo === undefined ? 0
-      : toward(c.hook.getPosition().y, target.ropeDropTo, 0.05);
-    return { luff, telescope, winch };
+    const band = (e: number, k: number): number => Math.max(-1, Math.min(1, e / k));
+    return {
+      luff: band(th - c.angleDeg, 3.0),
+      telescope: band(L - c.lengthM, 0.8),
+    };
   }
+}
 
-  line(tag: string): string {
-    const s = this.scene;
-    const c = s.crane;
-    const hook = c.hook.getPosition();
-    const load = s.load.getPosition();
-    const lmi = c.lmi;
-    return [
-      tag.padEnd(7),
-      `bom ${c.lengthM.toFixed(1)}m/${c.angleDeg.toFixed(0)}° R${c.radiusM.toFixed(1)}m`,
-      `kanca ${hook.x.toFixed(2)},${hook.y.toFixed(2)} (${((c.hook.getAngle() * 180) / Math.PI).toFixed(2)}°)`,
-      `yuk ${load.x.toFixed(2)},${load.y.toFixed(2)} (${((s.load.getAngle() * 180) / Math.PI).toFixed(2)}°)`,
-      `bagli ${c.hasLoad ? 'E' : 'H'}`,
-      `LMI %${Math.min(999, lmi.percent).toFixed(0)} yuk ${lmi.loadTonnes.toFixed(2)}t`,
-      `egim ${s.tiltDeg.toFixed(2)}°`,
-    ].join('  ');
-  }
+const out: string[] = [];
+const say = (s: string): void => { out.push(s); };
+
+function durum(r: Rig, tag: string): void {
+  const c = r.scene.crane;
+  const l = r.scene.load.getPosition();
+  say(`${tag.padEnd(8)} bom ${c.lengthM.toFixed(1)}m/${c.angleDeg.toFixed(0)}° R${c.radiusM.toFixed(1)}m`
+    + `  yuk ${l.x.toFixed(2)},${l.y.toFixed(2)}`
+    + `  LMI %${Math.min(999, c.lmi.percent).toFixed(0)}`
+    + `  egim ${r.scene.tiltDeg.toFixed(2)}°`);
 }
 
 function main(): void {
   const r = new Rig();
-  const out: string[] = [];
-  const log = (tag: string): void => { out.push(r.line(tag)); };
 
-  log('BASLA');
-
-  // 1) Takoza dayanana kadar sür — oyuncu da öyle yapıyor.
+  // 1) Takoza dayanana kadar sür, sonra ayakları aç.
   r.run(20, (rig) => ({ drive: { throttle: rig.scene.truck.speedKmh < 26 ? 1 : 0, handbrake: false } }));
   r.run(3, () => ({ drive: { throttle: 0, handbrake: true } }));
-  log('PARK');
-
-  // 2) Ayakları aç ve otursun.
   r.tap('toggleOutriggers', 6);
-  log('AYAK');
-  out.push(`        ayak %${(r.scene.outriggers.fraction * 100).toFixed(0)}  durum ${r.scene.outriggers.state}`);
+  say(`PARK+AYAK  ayak %${(r.scene.outriggers.fraction * 100).toFixed(0)}`
+    + `  egim ${r.scene.tiltDeg.toFixed(2)}°`);
 
   // --- çalışma zarfı: park edilen yerden neye ulaşılıyor? ---
-  //
-  // Bu tabloyu gözle kestirmek defalarca yanıldı; "bom yetmiyor" sanılan şey
-  // iki kez yük tablosu kilidi çıktı. Park edilen gerçek pim konumundan
-  // hesaplamak tartışmayı bitiriyor.
   const pivot = r.scene.truck.chassis.getWorldPoint(CRANE.pivot);
-  const hookT = CRANE.hookTonnes;
-  const targets: Array<{ ad: string; x: number; y: number }> = [
-    { ad: 'YUK ALMA', x: r.scene.load.getPosition().x, y: SCENE.load.halfHeight * 2 + 1.6 },
-    ...factoryTerraces().map((t, i) => ({
-      ad: i === 0 ? '1. KAT' : i === 1 ? '2. KAT' : 'CATI',
-      x: t.x, y: t.y + 3.0,
-    })),
-  ];
-  out.push('        --- calisma zarfi (park edilen yerden) ---');
-  for (const t of targets) {
-    // Halat düşey: bom ucu hedefin TAM ÜSTÜNDE. O yüzden L·cosθ = dx, yani
-    // yarıçap yalnızca yatay mesafeye bağlı — bom boyu ve açısı R'yi değiştirmez.
-    const dx = t.x - pivot.x;
-    const R = CRANE.pivotOffsetM + dx;
+  say('--- calisma zarfi ---');
+  factoryTerraces().forEach((t, i) => {
+    const R = CRANE.pivotOffsetM + (t.x - pivot.x);
     const cap = capacityAt(R, OutriggerState.Full);
-    const need = SCENE.load.tonnes + hookT;
-    const ratio = need / Math.max(cap, 0.01);
+    const gorevler = TASKS.filter((g) => g.hedef === i);
+    const detay = gorevler
+      .map((g) => `${g.kod} %${(((g.tonnes + CRANE.hookTonnes) / cap) * 100).toFixed(0)}`)
+      .join(' ');
+    say(`  hedef${i}  x ${t.x.toFixed(1)} y ${t.y.toFixed(1)}  R ${R.toFixed(1)}m`
+      + `  kap ${cap.toFixed(2)}t   ${detay || '(görev yok)'}`);
+  });
 
-    // Ulaşılabilir mi: L·cosθ = dx ve bom ucu hedeften en az minRope yukarıda
-    // olacak şekilde bir (L, θ) var mı?
-    let reach = false;
-    for (let th = CRANE.minAngleDeg; th <= CRANE.maxAngleDeg; th += 0.5) {
-      const c = Math.cos((th * Math.PI) / 180);
-      if (c <= 0.01) continue;
-      const L = dx / c;
-      if (L < CRANE.boomBaseLengthM || L > CRANE.boomBaseLengthM + CRANE.maxExtensionM) continue;
-      const tipY = pivot.y + L * Math.sin((th * Math.PI) / 180);
-      if (tipY >= t.y + CRANE.minRopeM) { reach = true; break; }
-    }
-    out.push(
-      `        ${t.ad.padEnd(9)} R ${R.toFixed(1)}m  kap ${cap.toFixed(2)}t`
-      + `  LMI %${(ratio * 100).toFixed(0)}`
-      + `  ${reach ? 'ulasir' : 'ULASMAZ'}`
-      + `  ${ratio > 1 ? '[KIRMIZI]' : ratio > 0.9 ? '[SARI]' : '[YESIL]'}`,
-    );
+  // 2) Dört görevi sırayla oyna.
+  for (let n = 0; n < TASKS.length; n++) {
+    const task = r.mission.task;
+    const hedef = r.mission.target;
+    if (!task || !hedef) break;
+    const loadX = r.scene.load.getPosition().x;
+    // Kancayı yükün üstünde SERBEST tut, üstüne oturtma: bir kez değince
+    // sürtünme onu yanda kilitliyor ve halat eğik kalıyor.
+    const asili = task.halfHeight * 2 + 1.15;
+
+    const iz = (etiket: string): void => {
+      if (!process.env['IZ']) return;
+      const c = r.scene.crane;
+      const l = r.scene.load.getPosition();
+      say(`   iz ${etiket.padEnd(10)} bom ${c.lengthM.toFixed(1)}/${c.angleDeg.toFixed(0)}°`
+        + ` uc ${c.tipWorld.x.toFixed(1)},${c.tipWorld.y.toFixed(1)} halat ${c.ropeM.toFixed(1)}`
+        + ` kanca ${c.hook.getPosition().x.toFixed(1)},${c.hook.getPosition().y.toFixed(1)}`
+        + ` yuk ${l.x.toFixed(2)},${l.y.toFixed(2)} bagli ${c.hasLoad ? 'E' : 'H'}`
+        + ` salinim ${r.mission.salinimDeg().toFixed(0)}°`
+        + ` LMI %${Math.min(999, c.lmi.percent).toFixed(0)}`);
+    };
+
+    // --- ALMA: bom ucunu yükün üstüne, kancayı serbest indir ---
+    const almaUcY = () => r.scene.truck.chassis.getWorldPoint(CRANE.pivot).y + 5.5;
+    iz('alma-basi');
+    // **Önce kancayı topla, sonra bomu çevir.**
+    //
+    // Bir önceki yükü terasa bıraktıktan sonra kanca aşağıda kalıyor; bom
+    // malzeme alanına dönerken kanca terasın üstünden sürtünerek geçip oraya
+    // oturuyordu. Sonra 21 metre halat salındığı halde kanca kıpırdamıyor,
+    // teras kenarına kayıyor ve alma "yan-cekme" ile reddediliyordu. Gerçek
+    // operatör de yükü bırakır bırakmaz kancayı kafaya toplar.
+    r.run(20, () => ({ crane: { luff: 0, telescope: 0, winch: 1 } }));
+    iz('kanca-toplandi');
+    r.run(26, (rig) => ({ crane: { ...rig.boomTo(loadX, almaUcY()), winch: 0 } }));
+    iz('bom-dondu');
+    r.run(26, (rig) => ({ crane: {
+      ...rig.boomTo(loadX, almaUcY()),
+      winch: toward(rig.scene.crane.hook.getPosition().y, asili, 0.05),
+    } }));
+    iz('kanca-indi');
+    r.run(18, () => ({}));
+    iz('indi');
+    r.etiket = `${task.kod}-kalkis`;
+    const kapi = r.scene.crane.attachCheck(r.scene.grabbables).reason;
+    r.tap('toggleHook', 1.0);
+    say(`${task.kod} AL    kapi ${kapi}  bagli ${r.scene.crane.hasLoad ? 'E' : 'H'}`
+      + `  merkez farki ${Math.abs(loadX - r.scene.crane.hook.getPosition().x).toFixed(2)} m`);
+
+    // --- TAŞIMA: bom ucunu hedefin üstüne, yükü korkuluğu aşacak kotta tut ---
+    //
+    // Uç, hedefin yükseklik + 3.5 m üstüne gidiyor; böylece halat hiç dibe
+    // vurmuyor ve yükü düşeyde vinç yönetiyor. Bom indirilirken vinç toplanmazsa
+    // yük binanın cephesine dayanıp kalıyor — ölçümde tam olarak bu oldu.
+    r.etiket = `${task.kod}-tasima`;
+    // Bom ucunu, halat rahat bir boyda kalacak şekilde seçiyoruz. Uç alçak
+    // kalınca vinç dibe vuruyor, yük bom ucuna rijit bağlanıyor ve bomun her
+    // ivmesi kuvvet zirvesine dönüşüyordu (ölçümde %286, 13.7 t).
+    // Taşıma yüksekliğini BOM UCU belirliyor, vinç değil: vinci mutlak bir
+    // yüksekliğe sürmek halatı dibe vurduruyordu ve oradan bir kilitlenme
+    // çıkıyordu — halat kısaldıkça sarkaç kısalıyor, 20 santimlik bir kayma
+    // 10 dereceye denk geliyor, salınım kapısı kapanıp bomu durduruyor, bom
+    // durunca uç yükselmiyor ve halat kısa kalıyor. Vinç artık sadece halat
+    // boyunu 4 metrede tutuyor.
+    const calismaHalati = 4.0;
+    const tasimaY = hedef.y + task.halfHeight + 1.8;
+    const ucY = tasimaY + task.halfHeight + CRANE.hookThroatM + calismaHalati;
+    // Bom hedefe OTURANA KADAR sür — sabit süre yetmiyordu: salınım kapısı
+    // bomu sık sık durdurduğu için 80 saniyede yol yarıda kalıyor, yük de bir
+    // alt terasa bırakılıyordu.
+    const vardi = r.runUntil(240,
+      (rig) => Math.abs(rig.scene.crane.tipWorld.x - hedef.x) < 0.15
+        && Math.abs(rig.scene.crane.tipWorld.y - ucY) < 0.3,
+      (rig) => {
+        // **Salınıma göre ORANSAL yavaşla, durma.**
+        //
+        // Açık/kapalı kapı iki kez kilitlendi: bom durunca salınım sönene kadar
+        // hiçbir şey ilerlemiyor, ama bom hareket halindeyken kancanın yarım
+        // metre geride kalması zaten normal — yani kapı bir daha hiç açılmıyordu.
+        // Kumanda kolu analog (luff/telescope sayı, sadece ±1 değil), o yüzden
+        // kazancı sürekli kısmak hem mümkün hem de operatörün yaptığı şey.
+        const c = rig.scene.crane;
+        const kayma = Math.abs(c.hook.getPosition().x - c.tipWorld.x);
+        const kazanc = Math.max(0.12, Math.min(1, 1 - kayma / 1.2));
+        const b = rig.boomTo(hedef.x, ucY);
+        return { crane: {
+          luff: b.luff * kazanc,
+          telescope: b.telescope * kazanc,
+          winch: Math.max(-1, Math.min(1, (c.ropeM - calismaHalati) / 1.0)),
+        } };
+      });
+    iz(vardi ? 'vardi' : 'VARAMADI');
+    r.run(14, () => ({}));
+
+    // --- KOYMA: usulca indir, sonra bırak ---
+    r.run(22, (rig) => ({ crane: {
+      luff: 0, telescope: 0,
+      winch: toward(rig.scene.load.getPosition().y, hedef.y + task.halfHeight + 0.06, 0.04),
+    } }));
+    r.run(4, () => ({}));
+    iz('kondu');
+    r.tap('toggleHook', 3.0);
+    durum(r, `${task.kod} KOY`);
+    const s = r.mission.score;
+    say(`         tamamlanan ${s.sapmalar.length}/${TASKS.length}`
+      + `  sapma ${(s.sapmalar[s.sapmalar.length - 1] ?? NaN).toFixed(2)} m`
+      + `  maxLMI %${s.maxLmi.toFixed(0)}  salinim ${s.maxSalinim.toFixed(0)}°  carpma ${s.carpma}`);
   }
 
-  // 3-4) Bom ucunu yükün üstüne getir (açıyla — teleskop dipte), sarkaç sönsün,
-  //      sonra kancayı indir.
-  //
-  // Bomu kaldırmak yarıçapı KISALTIR. Kamyon yüke yakın park ettiği için
-  // toplanmış bom 30°'de yükü 0.5 m aşıyor; çare teleskop değil, açı.
-  const loadX = r.scene.load.getPosition().x;
-  const overLoad = (rig: Rig): CraneInput => {
-    const e = loadX - rig.scene.crane.tipWorld.x;
-    // Bom ucu yükün sağındaysa bomu kaldır (yarıçap kısalır), solundaysa indir.
-    if (Math.abs(e) < 0.05) return { luff: 0, telescope: 0, winch: 0 };
-    return { luff: e < 0 ? 1 : -1, telescope: 0, winch: 0 };
-  };
-  // Kancayı yükün üstünde SERBEST tutuyoruz, üstüne oturtmuyoruz: bir kez
-  // değdiğinde sürtünme onu 0.9 m yanda kilitliyor ve halat eğik kalıyordu
-  // (kapı haklı olarak 'yan-cekme' diyordu). Bağlanma bandı zaten yükün 1.7 m
-  // üstüne kadar izin veriyor — sapancı da kancayı havada yakalar.
-  const asili = SCENE.load.halfHeight * 2 + 1.15;
-  const dur = (rig: Rig): number => {
-    const v = rig.scene.crane.hook.getLinearVelocity();
-    return Math.hypot(v.x, v.y);
-  };
-
-  r.run(24, (rig) => ({ crane: overLoad(rig) }));
-  r.run(20, (rig) => ({ crane: {   // kancayı yükün üstüne indir, değdirmeden
-    luff: 0, telescope: 0, winch: toward(rig.scene.crane.hook.getPosition().y, asili, 0.05),
-  } }));
-  r.run(16, (rig) => ({ crane: overLoad(rig) }));   // bom ucunu ince ayarla
-  r.run(18, () => ({}));                            // sarkaç sönsün
-  log('INDI');
-  out.push(`        kanca_y ${r.scene.crane.hook.getPosition().y.toFixed(2)} (yuk ustu ${(SCENE.load.halfHeight * 2).toFixed(2)})`
-    + `  hiz ${dur(r).toFixed(3)} m/s`
-    + `  yan cekme ${(r.scene.crane.tipWorld.x - r.scene.crane.hook.getPosition().x).toFixed(2)} m`
-    + `  merkez farki ${Math.abs(loadX - r.scene.crane.hook.getPosition().x).toFixed(2)} m`
-    + `  kapi: ${r.scene.crane.attachCheck(r.scene.grabbables).reason}`);
-
-  // 5) Bağla.
-  r.tap('toggleHook', 1.0);
-  log('BAGLA');
-
-  // 6) Kaldır — 2. kat terasının üstüne çıkacak kadar.
-  const terr = factoryTerraces();
-  const hedef = terr[1] ?? { x: 68.7, y: 10.0 };
-  r.run(14, (rig) => ({ crane: {
-    luff: 0, telescope: 0,
-    winch: toward(rig.scene.load.getPosition().y, hedef.y + 2.6, 0.1),
-  } }));
-  log('KALKTI');
-
-  // 7) Terasa taşı: bomu indirerek + teleskopu açarak yarıçapı büyüt.
-  r.run(45, (rig) => {
-    const e = hedef.x - rig.scene.crane.tipWorld.x;
-    const c = rig.scene.crane;
-    if (Math.abs(e) < 0.08) return { crane: { luff: 0, telescope: 0, winch: 0 } };
-    // Önce açıyı indirerek uzan, açı bitince teleskopu aç.
-    if (e > 0 && c.angleDeg > 34) return { crane: { luff: -1, telescope: 0, winch: 0 } };
-    return { crane: { luff: 0, telescope: e > 0 ? 1 : -1, winch: 0 } };
-  });
-  r.run(10, () => ({}));
-  log('TERAS');
-  out.push(`        teras hedefi x ${hedef.x.toFixed(1)}  yuk x ${r.scene.load.getPosition().x.toFixed(2)}`
-    + `  yuk y ${r.scene.load.getPosition().y.toFixed(2)}  (teras kotu ${hedef.y.toFixed(1)})`);
-
-  // 8) Yükü terasa indir ve bırak.
-  r.run(16, (rig) => ({ crane: {
-    luff: 0, telescope: 0,
-    winch: toward(rig.scene.load.getPosition().y, hedef.y + SCENE.load.halfHeight + 0.1, 0.05),
-  } }));
-  r.run(4, () => ({}));
-  r.tap('toggleHook', 3.0);
-  log('BIRAK');
-
-  const l = r.scene.load.getPosition();
-  const kondu = Math.abs(l.y - (hedef.y + SCENE.load.halfHeight)) < 0.45
-    && Math.abs(l.x - hedef.x) < 2.6;
-  out.push(`        SONUC: yuk ${l.x.toFixed(2)},${l.y.toFixed(2)}`
-    + `  aci ${((r.scene.load.getAngle() * 180) / Math.PI).toFixed(1)}°`
-    + `  ->  2. KAT'A ${kondu ? 'KONDU' : 'KONMADI'}`);
+  const res = r.mission.result;
+  const s = r.mission.score;
+  say('--- sonuc ---');
+  say(`  LMI zirvesi %${r.zirve.lmi.toFixed(0)} · ${r.zirve.etiket} · t=${r.zirve.t.toFixed(0)}s`
+    + `  R ${r.zirve.R.toFixed(1)}m  kuvvet ${r.zirve.ton.toFixed(2)}t  halat ${r.zirve.halat.toFixed(1)}m`);
+  say(`  faz ${r.mission.phase}  tamamlanan ${s.sapmalar.length}/${TASKS.length}`
+    + `  sure ${s.sure.toFixed(0)}s  not ${res?.not ?? '-'} (${res?.puan.toFixed(0) ?? '-'})`
+    + `  usta ${res?.usta ? 'E' : 'H'}`);
 
   console.log(out.join('\n'));
-
-  // Gerçek bir regresyon testi: görev tamamlanamazsa sıfırdan farklı çık.
-  if (!kondu) throw new Error('görev tamamlanamadı: yük 2. kata konmadı');
+  if (s.sapmalar.length < TASKS.length) {
+    throw new Error(`bölüm tamamlanamadı: ${s.sapmalar.length}/${TASKS.length} görev`);
+  }
 }
 
 // Hata olursa node zaten yığın izini basıp sıfırdan farklı kodla çıkar.
