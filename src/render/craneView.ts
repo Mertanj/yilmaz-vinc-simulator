@@ -25,18 +25,22 @@ export class CableView extends Graphics {
 
 export function drawHookBlock(): Graphics {
   const g = new Graphics();
-  // Makara gövdesi
-  g.roundRect(-0.3, -0.34, 0.6, 0.5, 0.08).fill(C.hydraulic);
-  g.rect(-0.3, -0.34, 0.6, 0.14).fill({ color: C.hydraulicL, alpha: 0.9 });
-  g.circle(-0.12, -0.08, 0.1).fill(C.chrome);
-  g.circle(0.12, -0.08, 0.1).fill(C.chrome);
-  // Kanca — çengel siluetini belirgin tut, küçük ölçekte okunması gereken şey bu
-  g.moveTo(0, 0.16).lineTo(0, 0.36)
+  // Yerel +y dünyada YUKARI: çengel NEGATİF y'de olmalı. Bir ara yukarı
+  // bakıyordu, yani kanca ters duruyordu ve yükü tuttuğu nokta (grabPoint,
+  // merkezin 0.46 m altı) çizimle uyuşmuyordu.
+  //
+  // Makara gövdesi — halatın bağlandığı üst kısım
+  g.roundRect(-0.3, -0.16, 0.6, 0.5, 0.08).fill(C.hydraulic);
+  g.rect(-0.3, 0.2, 0.6, 0.14).fill({ color: C.hydraulicL, alpha: 0.9 });
+  g.circle(-0.12, 0.08, 0.1).fill(C.chrome);
+  g.circle(0.12, 0.08, 0.1).fill(C.chrome);
+  // Çengel — siluetini belirgin tut, küçük ölçekte okunması gereken şey bu
+  g.moveTo(0, -0.16).lineTo(0, -0.36)
     .stroke({ width: 0.12, color: C.chrome, cap: 'round' });
-  g.arc(0, 0.46, 0.16, Math.PI * 0.85, Math.PI * 0.15, true)
+  g.arc(0, -0.46, 0.16, Math.PI * 1.15, Math.PI * 1.85, false)
     .stroke({ width: 0.11, color: C.chrome, cap: 'round' });
   // Emniyet mandalı
-  g.moveTo(-0.13, 0.42).lineTo(0.1, 0.52)
+  g.moveTo(-0.13, -0.42).lineTo(0.1, -0.52)
     .stroke({ width: 0.04, color: C.chrome, alpha: 0.75 });
   return g;
 }
@@ -56,8 +60,8 @@ export function drawMachineLoad(hw: number, hh: number): Graphics {
     g.rect(-hw * 0.78, -hh * 0.5 + i * hh * 0.22, hw * 0.5, hh * 0.09)
       .fill({ color: 0x6E1C19, alpha: 0.7 });
   }
-  // Kaldırma mapaları
-  g.circle(-hw * 0.6, -hh, 0.09).stroke({ width: 0.05, color: C.chrome });
-  g.circle(hw * 0.6, -hh, 0.09).stroke({ width: 0.05, color: C.chrome });
+  // Kaldırma mapaları — yükün ÜSTÜNDE (+y dünyada yukarı)
+  g.circle(-hw * 0.6, hh, 0.09).stroke({ width: 0.05, color: C.chrome });
+  g.circle(hw * 0.6, hh, 0.09).stroke({ width: 0.05, color: C.chrome });
   return g;
 }

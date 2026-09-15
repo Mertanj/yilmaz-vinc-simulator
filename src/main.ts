@@ -10,7 +10,7 @@ import {
 } from './sim/world';
 import { Truck, TRUCK } from './sim/truck';
 import { Outriggers } from './sim/outriggers';
-import { Crane, NEUTRAL } from './sim/crane';
+import { Crane, NEUTRAL, type Grabbable } from './sim/crane';
 import { OutriggerState } from './sim/loadChart';
 import { TruckView, drawWheel, drawContactShadow } from './render/truckView';
 import { OutriggerView } from './render/outriggerView';
@@ -87,6 +87,12 @@ async function boot(): Promise<void> {
   stage.world.addChild(actors);
 
   // --- girdi ve kamera ---
+  /** Kancalanabilir her şey, yarı yükseklikleriyle. */
+  const grabbables: Grabbable[] = [
+    { body: load, halfWidth: LOAD.halfWidth, halfHeight: LOAD.halfHeight },
+    ...props.map((p) => ({ body: p.body, halfWidth: p.hw, halfHeight: p.hh })),
+  ];
+
   const keys = new Keyboard();
   const camera = new Camera();
   camera.snapTo(truck.position.x, truck.position.y + 3);
@@ -119,7 +125,7 @@ async function boot(): Promise<void> {
 
     // Ayaklar yerdeyken sürüş kilitli — gerçekte de öyle.
     truck.drive(craneMode ? { throttle: 0, handbrake: true } : keys.readDrive());
-    outriggers.update();
+    outriggers.update(dt);
 
     crane.update(craneMode ? keys.readCrane() : NEUTRAL, dt, crane.lmi);
     // Kinematik bomu konumlandır ve yükü şasiye aktar — adımdan hemen önce.
@@ -132,13 +138,13 @@ async function boot(): Promise<void> {
     crane.sampleLmi(dt, outriggers.state);
 
     // Joint yaratma/yok etme adımın DIŞINDA — planck world.step() içinde kilitli.
-    crane.flushJointQueue([load, ...props.map((p) => p.body)]);
+    crane.flushJointQueue(grabbables);
   };
 
   const render = (alpha: number, frameDt: number): void => {
     const c = snaps.interpolate(truck.chassis, alpha);
     truckView.position.set(c.x, c.y);
-    truckView.rotation = -c.a;
+    truckView.rotation = c.a;
     shadow.position.set(c.x, 0.05);
 
     truckView.boom.setPose(crane.angleDeg, crane.extensionM);
@@ -148,7 +154,7 @@ async function boot(): Promise<void> {
       if (!view) return;
       const w = snaps.interpolate(body, alpha);
       view.position.set(w.x, w.y);
-      view.rotation = -w.a;
+      view.rotation = w.a;
     });
 
     props.forEach((p, i) => {
@@ -156,16 +162,16 @@ async function boot(): Promise<void> {
       if (!view) return;
       const s = snaps.interpolate(p.body, alpha);
       view.position.set(s.x, s.y);
-      view.rotation = -s.a;
+      view.rotation = s.a;
     });
 
     const l = snaps.interpolate(load, alpha);
     loadView.position.set(l.x, l.y);
-    loadView.rotation = -l.a;
+    loadView.rotation = l.a;
 
     const h = snaps.interpolate(crane.hook, alpha);
     hookView.position.set(h.x, h.y);
-    hookView.rotation = -h.a;
+    hookView.rotation = h.a;
     cableView.update(crane.tipWorld, { x: h.x, y: h.y });
 
     outriggerView.update(outriggers.geometry(truck.chassis));
@@ -204,10 +210,21 @@ async function boot(): Promise<void> {
       hud.lmi.dataset['zone'] = r.zone;
     }
     if (hud.hint) {
-      hud.hint.textContent = craneMode
-        ? (crane.hasLoad ? 'yük bağlı · boşluk ile bırak' : 'kancayı yüke indir · boşluk ile bağla')
-        : 'çalışma alanına yanaş, sonra Q ile ayakları aç';
-      hud.hint.dataset['mode'] = craneMode ? 'crane' : 'drive';
+      if (!craneMode) {
+        hud.hint.textContent = 'çalışma alanına yanaş, sonra Q ile ayakları aç';
+        hud.hint.dataset['mode'] = 'drive';
+      } else if (crane.hasLoad) {
+        hud.hint.textContent = 'yük bağlı · boşluk ile bırak';
+        hud.hint.dataset['mode'] = 'crane';
+      } else if (crane.canAttach(grabbables)) {
+        // Menzile girdiğini söylemek şart: oyuncu aksi halde kancanın neden
+        // tutmadığını anlayamıyor.
+        hud.hint.textContent = 'KANCA MENZİLDE · boşluk ile bağla';
+        hud.hint.dataset['mode'] = 'ready';
+      } else {
+        hud.hint.textContent = 'kancayı yükün üstüne indir';
+        hud.hint.dataset['mode'] = 'crane';
+      }
     }
   }
 

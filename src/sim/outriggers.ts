@@ -29,8 +29,20 @@ import { OutriggerState } from './loadChart';
  */
 export const OUTRIGGER = {
   /** Şasi üzerindeki bağlanma noktaları (x, y) ve açılma yönü. */
+  /**
+   * Bağlanma noktaları. Pabuçlar TEKERLEKLERDEN DIŞARIDA olmalı.
+   *
+   * Ön ayak önce x=2.0'daydı ve pabuk +2.96'ya basıyordu; ön tekerlek ise
+   * +3.40'ta, yani tekerlek pabuktan dışarıdaydı. Burun aşağı bastırınca ön
+   * tekerlek yere değip dayanak oluyor ve ayaklar onu aşıp aracı
+   * düzeltemiyordu — seviye kontrolünün kazancı ne olursa olsun 2.7°'de
+   * takılmasının sebebi buydu, kontrolcü değil geometri.
+   *
+   * x=3.3'te pabuk +4.26'ya basıyor, tekerleğin dışında. Gerçek kamyon
+   * vinçlerinde de ön ayak kabinin altında/önündedir.
+   */
   mounts: [
-    { x: 2.0, dir: 1 },    // ön ayak (kabin arkası), öne-aşağı
+    { x: 3.3, dir: 1 },    // ön ayak, ön tekerleğin dışına
     { x: -4.4, dir: -1 },  // arka ayak, arkaya-aşağı
   ],
   mountY: -0.1,
@@ -44,16 +56,26 @@ export const OUTRIGGER = {
    * İlk denemede 2.9 m verilmişti ve araç 1.67 m kalkıyordu — gerçek bir vinç
    * süspansiyonu boşaltacak kadar, ~30 cm kalkar.
    */
-  maxStroke: 1.75,
+  maxStroke: 2.15,
   /** Seviye ararken hedeflenen nominal uzama; kalanı düzeltme payı. */
   nominalStroke: 1.15,
   /** Bir ayağın nominalden sapabileceği en fazla miktar (m). */
-  levelAuthority: 0.45,
+  levelAuthority: 0.85,
   /** Çapraz açılma açısı: yataya göre. Büyük = daha geniş açıklık. */
   spreadRatio: 0.75,
   extendSpeed: 0.85,
-  /** Seviye düzeltmesinin kazancı (radyan -> metre). */
-  levelGain: 6.0,
+  /**
+   * Seviye kontrolü: PI.
+   *
+   * Önce sadece oransaldı ve yakınsamıyordu — kalıcı hata oransal kontrolde
+   * kaçınılmaz. Hesap: kazanç 9 iken ayak farkı 2·corr/8.3 = 0.241·corr kadar
+   * karşı eğim üretiyor, yani döngü kazancı 2.17. 8.5°'lik bozucu moment
+   * 8.5/(1+2.17) = 2.7°'de dengeleniyordu; ölçülen değer tam buydu. Kazancı
+   * büyütmek salınım riski getirir, integral terim kalıcı hatayı sıfırlar.
+   */
+  levelGain: 9.0,
+  /** İntegral kazancı (radyan·saniye -> metre). */
+  levelIntegralGain: 14.0,
   /**
    * Aracın ağırlığını kaldıracak ve YÜK ALTINDA çökmeyecek kadar yüksek olmalı.
    * İlk değer 5.0e5'ti ve 3.6 tonluk yük kaldırılırken ayaklar sıkışıp araç
@@ -77,6 +99,7 @@ export class Outriggers {
   private readonly legs: Leg[] = [];
   /** Oyuncunun komutu: açık mı kapalı mı. */
   private wantDeployed = false;
+  private levelIntegral = 0;
 
   constructor(world: World, private readonly chassis: Body, snaps: Snapshotter) {
     for (const m of OUTRIGGER.mounts) {
@@ -138,10 +161,11 @@ export class Outriggers {
    * bomun kendi ağırlığı burnu aşağı bastırıyor, arka ayak yerden kesiliyor ve
    * araç kalıcı olarak yatık kalıyordu.
    */
-  update(): void {
+  update(dt: number): void {
     const base = this.wantDeployed ? OUTRIGGER.extendSpeed : -OUTRIGGER.extendSpeed;
 
     if (!this.wantDeployed) {
+      this.levelIntegral = 0;
       for (const leg of this.legs) leg.joint.setMotorSpeed(base);
       return;
     }
@@ -153,8 +177,16 @@ export class Outriggers {
     // kendi HEDEF uzaması var; strok nominalin üstünde pay bırakacak kadar
     // uzun, ve motorlar hedefe oransal kontrolle sürülüyor.
     const noseDown = -this.chassis.getAngle();
+
+    // İntegral terimi yetki payı içinde biriktir; dışarı taşarsa sarmal
+    // birikme (windup) olur ve araç ters yöne aşar.
+    this.levelIntegral = clamp(
+      this.levelIntegral + noseDown * OUTRIGGER.levelIntegralGain * dt,
+      -OUTRIGGER.levelAuthority, OUTRIGGER.levelAuthority,
+    );
+
     const corr = clamp(
-      noseDown * OUTRIGGER.levelGain,
+      noseDown * OUTRIGGER.levelGain + this.levelIntegral,
       -OUTRIGGER.levelAuthority, OUTRIGGER.levelAuthority,
     );
 
@@ -169,18 +201,20 @@ export class Outriggers {
   }
 
   /**
-   * 0 = tamamen toplu, 1 = tam açık. Ayakların en azı belirler.
+   * 0 = tamamen toplu, 1 = tam açık.
    *
-   * Nominal stroğa göre ölçülüyor, maksimuma göre değil: strok seviye
-   * düzeltmesi için pay bırakacak şekilde uzun, o yüzden "tam açık" durumda
-   * bile joint maksimuma ulaşmıyor. Maksimuma bölmek HUD'da %50 gösteriyordu.
+   * **Ortalama alınıyor, minimum değil.** Seviye düzeltmesi bir ayağı uzatıp
+   * diğerini kısaltıyor; minimumu almak kısalan ayağı ölçüp aracı "yarı açık"
+   * sayıyordu. Sonuç sadece kozmetik değildi — yük tablosu 0.6 ile çarpılıyor
+   * ve kapasite 2.9 tondan 1.7 tona düşüyordu. Açılma durumu ile seviye
+   * düzeltmesi ayrı şeyler; ortalama ikisini doğru ayırıyor.
    */
   get fraction(): number {
-    let min = 1;
-    for (const leg of this.legs) {
-      min = Math.min(min, leg.joint.getJointTranslation() / OUTRIGGER.nominalStroke);
-    }
-    return Math.max(0, Math.min(1, min));
+    if (this.legs.length === 0) return 0;
+    let total = 0;
+    for (const leg of this.legs) total += leg.joint.getJointTranslation();
+    const avg = total / this.legs.length;
+    return Math.max(0, Math.min(1, avg / OUTRIGGER.nominalStroke));
   }
 
   /** Yük tablosuna verilecek durum. */
@@ -203,6 +237,7 @@ export class Outriggers {
 
   reset(chassis: Body): void {
     this.wantDeployed = false;
+    this.levelIntegral = 0;
     for (const leg of this.legs) {
       const anchor = chassis.getWorldPoint(leg.mountLocal);
       leg.foot.setTransform({ x: anchor.x, y: anchor.y }, 0);

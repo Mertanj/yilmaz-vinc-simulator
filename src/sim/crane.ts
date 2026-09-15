@@ -86,17 +86,27 @@ export const CRANE = {
   winchRampSec: 0.45,
 
   hookTonnes: 0.45,
+  /** Kanca boğazının blok merkezine göre düşey ofseti (m) — görselle aynı. */
+  hookThroatM: 0.46,
   minRopeM: 1.2,
   maxRopeM: 26,
 
   /**
-   * Kanca bu mesafeye girer ve yeterince yavaşsa yük bağlanır.
+   * Bağlanma penceresi — küresel yarıçap değil, yükün üstündeki bir BANT.
    *
-   * 1.1 m ile başladık, testte sürekli ıskalıyordu: kamyon 80 cm farklı yerde
-   * durunca yük menzil dışında kalıyor. Gerçekte kancayı yüke elle geçiren bir
-   * sapancı var, yani bu kadar hassas olması gerçekçi de değil.
+   * Önce yarıçap kullanılıyordu (1.1, sonra 1.8 m) ve ikisi de ıskalıyordu:
+   * kanca yükten 1 metre yanda kalıp yere kadar inince küresel mesafe 2.09 m
+   * oluyor, oysa yatayda zaten yükün üstünde. Yarıçap yatay ve düşey hatayı
+   * aynı kefeye koyuyor, halbuki bunlar farklı şeyler — kancanın yükün ÜSTÜNDE
+   * olması gerekir, ona eşit uzaklıkta değil.
+   *
+   * Bant: yatayda yükün yarı genişliği + pay, düşeyde üst yüzeyin biraz altı
+   * ile epey üstü arası. Gerçekte kancayı yüke geçiren bir sapancı var, bu
+   * kadar cömert olması gerçekçi de.
    */
-  attachRadiusM: 1.8,
+  attachSideMarginM: 0.75,
+  attachBelowTopM: 0.7,
+  attachAboveTopM: 1.7,
   attachMaxSpeedMps: 1.2,
 } as const;
 
@@ -115,6 +125,20 @@ export interface CraneInput {
 }
 
 export const NEUTRAL: CraneInput = { luff: 0, telescope: 0, winch: 0 };
+
+/**
+ * Kancalanabilir bir yük.
+ *
+ * Yarı yükseklik açıkça veriliyor. Önce şeklin iç alanlarından (`m_vertices`)
+ * okunmaya çalışılıyordu; bulamayınca 0.4'e düşüyordu, oysa yükün gerçek yarı
+ * yüksekliği 0.85. Bağlanma noktası 45 santim yanlış hesaplanıyor ve kanca
+ * doğru yerde dururken "yakalamıyordu".
+ */
+export interface Grabbable {
+  body: Body;
+  halfWidth: number;
+  halfHeight: number;
+}
 
 export class Crane {
   readonly boomBase: Body;
@@ -246,7 +270,7 @@ export class Crane {
   }
 
   /** world.step()'ten SONRA. Joint yaratma/yok etme burada güvenli. */
-  flushJointQueue(candidates: Body[]): void {
+  flushJointQueue(candidates: Grabbable[]): void {
     if (this.pendingDetach && this.attachJoint) {
       this.world.destroyJoint(this.attachJoint);
       this.attachJoint = null;
@@ -255,23 +279,43 @@ export class Crane {
     this.pendingDetach = false;
 
     if (this.pendingAttach && !this.attached) {
-      const hookAt = this.hook.getWorldCenter();
-      const v = this.hook.getLinearVelocity();
-      if (Math.hypot(v.x, v.y) <= CRANE.attachMaxSpeedMps) {
-        for (const body of candidates) {
-          const p = body.getWorldCenter();
-          const top = { x: p.x, y: p.y + halfHeightOf(body) };
-          if (Math.hypot(top.x - hookAt.x, top.y - hookAt.y) <= CRANE.attachRadiusM) {
-            this.attachJoint = this.world.createJoint(
-              new RevoluteJoint({}, this.hook, body, hookAt),
-            ) as RevoluteJoint;
-            this.attached = body;
-            break;
-          }
-        }
+      const target = this.findGrabbable(candidates);
+      if (target) {
+        this.attachJoint = this.world.createJoint(
+          new RevoluteJoint({}, this.hook, target, this.grabPoint),
+        ) as RevoluteJoint;
+        this.attached = target;
       }
     }
     this.pendingAttach = false;
+  }
+
+  /** Kancanın gerçekten yükü tuttuğu nokta — blok merkezi değil, boğaz. */
+  get grabPoint(): { x: number; y: number } {
+    const c = this.hook.getWorldCenter();
+    return { x: c.x, y: c.y - CRANE.hookThroatM };
+  }
+
+  private findGrabbable(candidates: Grabbable[]): Body | null {
+    const v = this.hook.getLinearVelocity();
+    if (Math.hypot(v.x, v.y) > CRANE.attachMaxSpeedMps) return null;
+
+    const g = this.grabPoint;
+    for (const item of candidates) {
+      const p = item.body.getWorldCenter();
+      const topY = p.y + item.halfHeight;
+      const sideOk =
+        Math.abs(p.x - g.x) <= item.halfWidth + CRANE.attachSideMarginM;
+      const heightOk =
+        g.y >= topY - CRANE.attachBelowTopM && g.y <= topY + CRANE.attachAboveTopM;
+      if (sideOk && heightOk) return item.body;
+    }
+    return null;
+  }
+
+  /** HUD için: şu an boşluğa basılsa bağlanır mı? */
+  canAttach(candidates: Grabbable[]): boolean {
+    return !this.attached && this.findGrabbable(candidates) !== null;
   }
 
   requestToggleAttach(): void {
@@ -391,15 +435,6 @@ export class Crane {
     const h = this.hook.getWorldCenter();
     return (Math.atan2(h.x - tip.x, tip.y - h.y) * 180) / Math.PI;
   }
-}
-
-function halfHeightOf(body: Body): number {
-  const fixture = body.getFixtureList();
-  const shape = fixture?.getShape();
-  // Box'ın köşelerinden yarı yüksekliği çıkar.
-  const verts = (shape as { m_vertices?: Array<{ y: number }> })?.m_vertices;
-  if (!verts || verts.length === 0) return 0.4;
-  return Math.max(...verts.map((v) => Math.abs(v.y)));
 }
 
 function clamp(v: number, lo: number, hi: number): number {

@@ -13,8 +13,20 @@ import { C } from './palette';
  * konumları kayıyor.
  */
 export const BOOM = {
-  /** Kesit boyları (m) — dipten uca. */
-  sections: [9.5, 9.0, 8.6, 8.2],
+  /**
+   * Kesit boyları (m). **Hepsi aynı olmalı.**
+   *
+   * Önce [9.5, 9.0, 8.6, 8.2] idi ve bu bir hataydı: kesitler her uzamada
+   * e·i/3 kadar ötelendiği için en içteki kesit `e + 8.2`'de bitiyor, oysa
+   * bom ucu `9.5 + e`'de. Aradaki 1.3 metre sabit bir BOŞLUK ve halat orada,
+   * havada asılı kalıyordu — sahada "teleskopik kısım bağımsız hareket
+   * ediyor" diye görünen şey buydu.
+   *
+   * Hepsi 9.5 olunca son kesit tam bom ucunda bitiyor. Bindirmeler de doğru
+   * çıkıyor: toplu halde 9.5 m (tam iç içe), tam açıkta 2.67 m — gerçek bir
+   * teleskopik bomun ihtiyaç duyduğu 2–3 m bindirme aralığı.
+   */
+  sections: [9.5, 9.5, 9.5, 9.5],
   /** Kesit yükseklikleri (m) — uca doğru incelir. */
   heights: [0.98, 0.84, 0.72, 0.60],
   /** Toplam teleskop stroku (m): 9.5 toplu → 30 tam açık. */
@@ -56,16 +68,23 @@ export class BoomView extends Container {
    * @param extensionM teleskop uzaması (0–20.5)
    */
   setPose(angleDeg: number, extensionM: number): void {
-    // Dünya katmanı y'yi ters çevirdiği için açının işareti ters.
-    this.rotation = -(angleDeg * Math.PI) / 180;
+    // Dünya katmanı (PPM, -PPM) ile aynalanmış. Yerel (1,0) noktası r kadar
+    // döndürülüp ekrana düşünce (PPM·cos r, -PPM·sin r) oluyor; ekranda yukarı
+    // çıkması için sin r > 0 gerekiyor, yani dönüş AÇININ AYNISI.
+    //
+    // Burada uzun süre -açı yazılıydı ve bom yere doğru çiziliyordu. Bom sabit
+    // ve 11°'de olduğu sürece fark edilmedi; teleskop ve luff çalışır çalışmaz
+    // bom yere gömüldü, kanca da fiziğin doğru yerinde havada kaldı — sahada
+    // "teleskopik kısım bağımsız hareket ediyor" diye görünen ikinci sebep.
+    this.rotation = (angleDeg * Math.PI) / 180;
 
     const e = Math.max(0, Math.min(BOOM.maxExtension, extensionM));
     const per = e / this.flies.length;
     this.flies.forEach((holder, i) => { holder.x = per * (i + 1); });
 
-    // Uç, fizikteki bom ucuyla aynı yerde olmalı: dip kesit boyu + uzama.
-    // Kesit uzunluklarından toplamak görsel olarak yakın ama fizikle kayıyor.
-    this.tip.x = (BOOM.sections[0] ?? 9.5) + e;
+    // Uç = en içteki kesitin bittiği yer = fizikteki bom ucu.
+    const last = this.flies[this.flies.length - 1];
+    this.tip.x = (last ? last.x : 0) + (BOOM.sections[BOOM.sections.length - 1] ?? 9.5);
     this.drawCylinder(angleDeg);
   }
 
@@ -95,10 +114,11 @@ function drawSection(len: number, h: number, isBase: boolean): Graphics {
 
   // Gövde
   g.roundRect(0, -half, len, h, half * 0.28).fill(C.amber);
+  // Yerel +y dünyada YUKARI. Bantlar bir ara tersti: gölge üstte, ışık alttaydı.
   // Alt gölge bandı — silindirik hacim hissi
-  g.rect(0, half - h * 0.30, len, h * 0.30).fill({ color: C.amberDark, alpha: 0.85 });
+  g.rect(0, -half, len, h * 0.30).fill({ color: C.amberDark, alpha: 0.85 });
   // Üst ışık bandı
-  g.rect(0, -half + h * 0.06, len, h * 0.16).fill({ color: C.amberLight, alpha: 0.7 });
+  g.rect(0, half - h * 0.22, len, h * 0.16).fill({ color: C.amberLight, alpha: 0.7 });
   // Kenar çizgisi — siluet netleşsin
   g.roundRect(0, -half, len, h, half * 0.28).stroke({ width: 0.045, color: C.frameDark, alpha: 0.85 });
 
