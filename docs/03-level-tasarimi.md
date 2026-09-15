@@ -196,50 +196,94 @@ hissettirir.
 
 # Sprint 4 — bölümün kurulan hâli
 
-Yukarısı tasarım; burası **koda giren ve ölçülen** hâli. İkisi arasındaki farklar
-tasarımın yanlışlığından değil, park konumunun ve yük tablosunun sahada
-ölçülmesinden geliyor — `npm run sahne` zarf tablosunu her çalıştırmada basıyor.
+Yukarısı tasarım; burası **koda giren ve ölçülen** hâli. Sayılar `npm run sahne`
+zarf tablosundan geliyor, tahminden değil.
+
+## Bina neden beş katlı ve neden bu ölçülerde
+
+Kat sayısı 3'ten 5'e çıkarken kademe ve kat yüksekliği KÜÇÜLMEK zorunda kaldı;
+ikisi de erişim geometrisini doğrudan belirliyor. Bom ucunun hedefin ~3 m
+üstünde olması gerektiği için gereken bom boyu şöyle çıkıyor:
+
+| Kademe | Kat yüksekliği | Çatı için gereken bom |
+|---|---|---|
+| 3.4 m | 4.4 m | 32.7 m ✗ |
+| 3.0 m | 4.0 m | 30.2 m ✗ (kıl payı) |
+| **3.0 m** | **3.8 m** | **29.6 m ✓** |
+
+Seçilen 3.0 / 3.8. Teras derinliği kademeye eşit, yani **yükler 2.4 metreden
+geniş olamıyor.**
 
 ## Ölçülen zarf
 
 Kamyon takoza (x = 57.9) dayandığında bom ayağı (51.7, 4.0) oluyor. Halat düşey
 olmak zorunda olduğu için bom ucu hedefin tam üstünde duruyor, yani
 **L·cos θ = Δx**: yarıçap yalnızca yatay mesafeye bağlı, bom boyu ve açısı onu
-değiştirmiyor. Üç hedefin de geometrisi rahat yetiyor; sınırı yük tablosu koyuyor.
+değiştirmiyor.
 
 | Hedef | x | y | R | Kapasite |
 |---|---|---|---|---|
-| 1. kat terası | 64.2 | 5.0 | 13.1 m | 4.54 t |
-| 2. kat terası | 68.7 | 10.0 | 17.6 m | 2.64 t |
-| Çatı | 72.2 | 15.0 | 21.1 m | 1.81 t |
+| K1 terası | 64.2 | 3.8 | 13.1 m | 4.54 t |
+| K2 terası | 67.2 | 7.6 | 16.1 m | 3.16 t |
+| K3 terası | 70.2 | 11.4 | 19.1 m | 2.22 t |
+| K4 terası | 73.2 | 15.2 | 22.1 m | 1.63 t |
+| Çatı | 75.2 | 19.0 | 24.1 m | 1.29 t |
 
-## Dört görev
+**Çatı bilerek hedef değil.** O yarıçapta bom ucu en fazla 22.7 metreye
+çıkabiliyor; yükü bırakabilmek içinse 2 metrelik halat payıyla 24.4 metre
+gerekiyor, yani 30 metrelik bomdan 31.1 metre isteniyor. Çatıya çıkmak daha
+büyük bir vinç işi — YV-25'in dürüst sınırı burası ve bunu gizlemek yerine
+bölüm tasarımına yazdık.
+
+## Beş görev
 
 Ağırlıklar hedeflenen LMI eğrisinden **geriye doğru** hesaplandı (kanca 0.45 t dahil):
 
-| | Yük | t | Hedef | LMI | Bölge |
-|---|---|---|---|---|---|
-| T1 | Sac bobin | 2.30 | 1. kat | %61 | yeşil |
-| T2 | CNC torna | 3.10 | 1. kat | %78 | yeşil |
-| T3 | Jeneratör 100 kVA | 1.80 | 2. kat | %85 | sarı sınırı |
-| T4 | Çatı klima santrali | 1.25 | Çatı | %94 | sarı |
+| | Yük | t | Hedef | LMI |
+|---|---|---|---|---|
+| T1 | Sac bobin | 2.30 | K1 | %61 |
+| T2 | CNC torna | 3.10 | K1 | %78 |
+| T3 | Jeneratör 125 kVA | 2.20 | K2 | %84 |
+| T4 | Vidalı kompresör | 1.50 | K3 | %88 |
+| T5 | Klima santrali | 1.05 | K4 | %92 |
 
 T1 ile T2 aynı terasa gidiyor, tek değişen ağırlık: tablonun *yer* değil
-*yarıçaptaki yük* ile ilgili olduğunu anlatmanın en ucuz yolu.
+*yarıçaptaki yük* ile ilgili olduğunu anlatmanın en ucuz yolu. Yukarı çıktıkça
+yük hafifliyor — sahadaki kuralın ta kendisi.
 
-**Malzeme tek noktadan geliyor (x = 60.1).** Dördü aynı anda sahaya sığmıyor:
-takozun sağ kenarı 58.25, fabrika cephesi 62.0, arada 3.75 metre var ve en geniş
-yük 3 metre. Dördünü yan yana dizmek 12 metre ister, o da binayı 12 metre uzağa
-iter ve bütün bırakma yarıçapları erişilemez olur.
+**Malzeme tek noktadan geliyor (x = 60.1).** Beşi aynı anda sahaya sığmıyor:
+takozun sağ kenarı 58.25, fabrika cephesi 62.0, arada 3.75 metre var. Slew
+gelince yükler kamyonun ARKASINA dizilebilecek ve bu kısıt tamamen kalkacak.
 
-## Puanlama
+## Puanlama — zirve değil, kırmızıda geçen SÜRE
 
-Süre · en yüksek LMI · en geniş salınım · çarpma · yerleştirme sapması. Ağırlıklar
-başsız rigin gerçek turuna göre ayarlandı — dört görev tamam, LMI kısa süre %109,
-salınım 33°, yerleştirme 15 cm, 688 saniye → **C (66)**. Kusursuz bir tur A veriyor.
+İlk sürüm en yüksek LMI'yi cezalandırıyordu ve haksızdı: salınan bir yükte halat
+gerilimi saliselik olarak statiğin 1.7 katına çıkıyor, ibre %140 okuyor. Ölçüm
+bunun ne kadar geçici olduğunu gösterdi — **862 saniyelik bir turda kırmızıda
+geçen toplam süre 1.2 saniye.** Bu, kırmızıda park etmiş bir vinçle aynı şey
+değil; gerçek bir değerlendirme de "aşırı yükte ne kadar kaldın" diye sorar.
 
-Çarpma sayarken **sadece yük ve kanca** dikkate alınıyor. Şasi de sayılınca takoza
-yanaşmak — yani park etmenin tek yolu — her turda bir çarpma yazıyordu.
+Şimdi: kırmızıda geçen her saniye 2 puan, zirve cezası yalnızca %120'nin
+üstünde ve hafif. Referans tur (beş görev tamam, 1.2 sn kırmızı, salınım 27°,
+yerleştirme ~35 cm, 862 sn) → **B (77)**.
+
+Çarpma sayarken **sadece yük ve kanca** dikkate alınıyor. Şasi de sayılınca
+takoza yanaşmak — yani park etmenin tek yolu — her turda bir çarpma yazıyordu.
+
+## Kamera artık çalışma zarfını kadrajlıyor
+
+Sabit yakınlaştırmada bom 30 metreye açılınca yük kadrajın dışında kalıyordu:
+oyuncu yükü bıraktığı yeri göremiyordu. Kamera artık şasiyi, bom ucunu, kancayı
+ve (yük havadayken) hedefi çevreleyen kutuyu hesaplayıp ölçeği ona göre
+seçiyor — 30 ile 15 piksel/metre arasında. Sürerken kutu küçük olduğu için
+ölçek en yakında kalıyor, yani sürüş hissi değişmiyor.
+
+## Yerleştirme onayı
+
+Yük terasa oturduğunda dört saniyelik bir panel çıkıyor: sapma (cm), o görevde
+görülen en yüksek LMI, süre ve sırada kaç görev kaldığı. Kör kaldırmada yük
+bırakıldığı an oyuncunun görüş açısının dışında kalıyor, dolayısıyla başarının
+ayrıca SÖYLENMESİ gerekiyor.
 
 ## Devrilme şu an ERİŞİLEMEZ — ölçülmüş bir boşluk
 

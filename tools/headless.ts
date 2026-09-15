@@ -10,7 +10,7 @@
  * terasına koy. Dördü de konmazsa sıfırdan farklı kodla çıkıyor.
  */
 import { Scene, IDLE, type SceneInput } from '../src/sim/scene';
-import { SIM, factoryTerraces } from '../src/sim/world';
+import { SIM, factoryTerraces, FACTORY } from '../src/sim/world';
 import { CRANE } from '../src/sim/crane';
 import { capacityAt, OutriggerState } from '../src/sim/loadChart';
 import { Mission } from '../src/game/mission';
@@ -93,6 +93,25 @@ class Rig {
       telescope: band(L - c.lengthM, 0.8),
     };
   }
+
+  /**
+   * Aynı servo, ama kanca ucun altından kaçtıkça yavaşlıyor.
+   *
+   * Bom tam hızda toplanınca sarkaç geride kalıyor ve kanca en yakın terasa
+   * düşüyor; beş katlı binada bu her dönüşte oluyordu (rijit halat 2 metreyken
+   * kanca uçtan 11.5 metre uzakta kalıp 4. kat terasına oturdu). Gerçek
+   * operatör de kancayı savurarak bom toplamaz.
+   */
+  boomToDamped(tx: number, ty: number): { luff: number; telescope: number } {
+    const c = this.scene.crane;
+    const kayma = Math.hypot(
+      c.hook.getPosition().x - c.tipWorld.x,
+      c.tipWorld.y - c.hook.getPosition().y - c.ropeM,
+    );
+    const kazanc = Math.max(0.10, Math.min(1, 1 - kayma / 1.2));
+    const b = this.boomTo(tx, ty);
+    return { luff: b.luff * kazanc, telescope: b.telescope * kazanc };
+  }
 }
 
 const out: string[] = [];
@@ -123,8 +142,7 @@ function main(): void {
   factoryTerraces().forEach((t, i) => {
     const R = CRANE.pivotOffsetM + (t.x - pivot.x);
     const cap = capacityAt(R, OutriggerState.Full);
-    const gorevler = TASKS.filter((g) => g.hedef === i);
-    const detay = gorevler
+    const detay = TASKS.filter((g) => g.hedef === i)
       .map((g) => `${g.kod} %${(((g.tonnes + CRANE.hookTonnes) / cap) * 100).toFixed(0)}`)
       .join(' ');
     say(`  hedef${i}  x ${t.x.toFixed(1)} y ${t.y.toFixed(1)}  R ${R.toFixed(1)}m`
@@ -165,10 +183,27 @@ function main(): void {
     // operatör de yükü bırakır bırakmaz kancayı kafaya toplar.
     r.run(20, () => ({ crane: { luff: 0, telescope: 0, winch: 1 } }));
     iz('kanca-toplandi');
-    r.run(26, (rig) => ({ crane: { ...rig.boomTo(loadX, almaUcY()), winch: 0 } }));
+    // **Önce binanın üstüne çık, sonra in.**
+    //
+    // Doğrudan malzeme alanına dönmek beş katlı binada çalışmıyor: bom
+    // toplanırken uç aşağı iniyor, kanca 4. kat terasına değiyor ve teras
+    // korkuluğunun (0.9 m) arkasında sıkışıyor. Halat rijit olduğu için
+    // kısıt 11 metre ihlal ediliyor ama kanca korkuluğu aşamıyor — fizik
+    // doğru, hamle yanlış. Operatör de yükü bıraktıktan sonra bomu dikleştirip
+    // binanın üstünden döner.
+    const temizY = FACTORY.floorHeight * FACTORY.floors + 4.0;
+    r.runUntil(60,
+      (rig) => rig.scene.crane.tipWorld.y > temizY - 0.6
+        && Math.abs(rig.scene.crane.tipWorld.x - loadX) < 1.5,
+      (rig) => ({ crane: { ...rig.boomToDamped(loadX, temizY), winch: 0 } }));
+    iz('bom-yukseldi');
+    r.runUntil(60,
+      (rig) => Math.abs(rig.scene.crane.tipWorld.x - loadX) < 0.12
+        && rig.scene.crane.tipWorld.y < almaUcY() + 1.0,
+      (rig) => ({ crane: { ...rig.boomToDamped(loadX, almaUcY()), winch: 0 } }));
     iz('bom-dondu');
     r.run(26, (rig) => ({ crane: {
-      ...rig.boomTo(loadX, almaUcY()),
+      ...rig.boomToDamped(loadX, almaUcY()),
       winch: toward(rig.scene.crane.hook.getPosition().y, asili, 0.05),
     } }));
     iz('kanca-indi');
@@ -195,9 +230,18 @@ function main(): void {
     // 10 dereceye denk geliyor, salınım kapısı kapanıp bomu durduruyor, bom
     // durunca uç yükselmiyor ve halat kısa kalıyor. Vinç artık sadece halat
     // boyunu 4 metrede tutuyor.
-    const calismaHalati = 4.0;
+    // Çalışma halatı 4 metre, ama uç o yüksekliğe çıkamıyorsa halatı kısaltmak
+    // gerekiyor: üst teraslarda bomun 30 metrelik sınırı bağlayıcı oluyor ve
+    // ulaşılamaz bir uç yüksekliği istemek rigi sonsuza kadar bekletiyordu.
     const tasimaY = hedef.y + task.halfHeight + 1.8;
-    const ucY = tasimaY + task.halfHeight + CRANE.hookThroatM + calismaHalati;
+    const istenenUc = tasimaY + task.halfHeight + CRANE.hookThroatM + 4.0;
+    const pivotN = r.scene.truck.chassis.getWorldPoint(CRANE.pivot);
+    const dxN = hedef.x - pivotN.x;
+    const enUstUc = pivotN.y + Math.sqrt(Math.max(
+      (CRANE.boomBaseLengthM + CRANE.maxExtensionM) ** 2 - dxN ** 2, 0));
+    const ucY = Math.min(istenenUc, enUstUc - 0.4);
+    const calismaHalati = Math.max(CRANE.minRopeM + 0.3,
+      ucY - (tasimaY + task.halfHeight + CRANE.hookThroatM));
     // Bom hedefe OTURANA KADAR sür — sabit süre yetmiyordu: salınım kapısı
     // bomu sık sık durdurduğu için 80 saniyede yol yarıda kalıyor, yük de bir
     // alt terasa bırakılıyordu.
@@ -214,12 +258,13 @@ function main(): void {
         // kazancı sürekli kısmak hem mümkün hem de operatörün yaptığı şey.
         const c = rig.scene.crane;
         const kayma = Math.abs(c.hook.getPosition().x - c.tipWorld.x);
-        const kazanc = Math.max(0.12, Math.min(1, 1 - kayma / 1.2));
+        const kazanc = Math.max(0.10, Math.min(1, 1 - kayma / 1.2));
         const b = rig.boomTo(hedef.x, ucY);
+        void c;
         return { crane: {
           luff: b.luff * kazanc,
           telescope: b.telescope * kazanc,
-          winch: Math.max(-1, Math.min(1, (c.ropeM - calismaHalati) / 1.0)),
+          winch: Math.max(-1, Math.min(1, (rig.scene.crane.ropeM - calismaHalati) / 1.0)),
         } };
       });
     iz(vardi ? 'vardi' : 'VARAMADI');
@@ -234,10 +279,16 @@ function main(): void {
     iz('kondu');
     r.tap('toggleHook', 3.0);
     durum(r, `${task.kod} KOY`);
+    const ok = r.mission.sonTamamlanan;
+    if (ok && ok.sira === r.mission.score.sapmalar.length) {
+      say(`         ONAY PANELI: ${ok.kod} ${ok.ad} · sapma ${ok.sapmaCm.toFixed(0)} cm`
+        + ` · maxLMI %${ok.maxLmi.toFixed(0)} · sure ${ok.sure.toFixed(0)}s · kalan ${ok.kalan}`);
+    }
     const s = r.mission.score;
     say(`         tamamlanan ${s.sapmalar.length}/${TASKS.length}`
       + `  sapma ${(s.sapmalar[s.sapmalar.length - 1] ?? NaN).toFixed(2)} m`
-      + `  maxLMI %${s.maxLmi.toFixed(0)}  salinim ${s.maxSalinim.toFixed(0)}°  carpma ${s.carpma}`);
+      + `  maxLMI %${s.maxLmi.toFixed(0)}  kirmizi ${s.kirmiziSn.toFixed(1)}s`
+      + `  salinim ${s.maxSalinim.toFixed(0)}°  carpma ${s.carpma}`);
   }
 
   const res = r.mission.result;

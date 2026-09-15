@@ -82,6 +82,7 @@ async function boot(): Promise<void> {
     sure: document.getElementById('sure'),
     sonuc: document.getElementById('sonuc'),
     sonucIc: document.getElementById('sonuc-ic'),
+    kondu: document.getElementById('kondu'),
   };
 
   const step = (dt: number): void => {
@@ -148,7 +149,18 @@ async function boot(): Promise<void> {
 
     outriggerView.update(outriggers.geometry(truck.chassis));
 
-    camera.follow(c.x, c.y + 3, truck.chassis.getLinearVelocity().x, frameDt);
+    // Kadraja girmesi gerekenler: araç, bom ucu, kanca ve varsa hedef teras.
+    // Hedefi de katmak şart — çatıya uzanırken oyuncu yükü bıraktığı yeri
+    // göremiyordu.
+    const bakilacak: Array<{ x: number; y: number }> = [
+      { x: c.x, y: c.y + 2.2 }, crane.tipWorld, { x: h.x, y: h.y },
+    ];
+    const hedefNoktasi = mission.target;
+    if (hedefNoktasi && crane.hasLoad) bakilacak.push(hedefNoktasi);
+    camera.follow(
+      bakilacak, truck.chassis.getLinearVelocity().x,
+      stage.app.screen.width, stage.app.screen.height, frameDt,
+    );
     camera.apply(stage.world, stage.far, stage.app.screen.width, stage.app.screen.height);
 
     updateHud();
@@ -169,9 +181,12 @@ async function boot(): Promise<void> {
       hud.sure.textContent =
         `${Math.floor(sn / 60)}:${(sn % 60).toFixed(0).padStart(2, '0')}`
         + ` · çarpma ${mission.score.carpma}`
-        + ` · en yüksek LMI %${mission.score.maxLmi.toFixed(0)}`;
+        + ` · en yüksek LMI %${mission.score.maxLmi.toFixed(0)}`
+        + (mission.score.kirmiziSn > 0.05
+          ? ` · kırmızıda ${mission.score.kirmiziSn.toFixed(1)} sn` : '');
     }
     sonucGoster();
+    konduGoster();
 
     if (hud.rig) {
       const label = { [OutriggerState.Stowed]: 'TOPLU',
@@ -221,6 +236,42 @@ async function boot(): Promise<void> {
     }
   }
 
+  /**
+   * Yük terasa oturduğunda onay paneli.
+   *
+   * Sahadan gelen ihtiyaç: "doğru yerleştirdim mi bilmek istiyorum". Kör
+   * kaldırmada yük bırakıldığı an oyuncunun görüş açısının dışında kalıyor,
+   * dolayısıyla başarının ayrıca SÖYLENMESİ gerekiyor. Panel oyunu durdurmuyor
+   * ve dört saniyede kendi kapanıyor — akışı kesmeden onay veriyor.
+   */
+  let konduSira = 0;
+  let konduBitis = 0;
+  function konduGoster(): void {
+    const t = mission.sonTamamlanan;
+    if (t && t.sira !== konduSira && hud.kondu) {
+      konduSira = t.sira;
+      konduBitis = performance.now() + 4000;
+      const yakin = t.sapmaCm <= 60;
+      const lmiIyi = t.maxLmi <= 90;
+      hud.kondu.innerHTML = [
+        '<div class="tik">✓ YERİNE KONDU</div>',
+        `<div class="ad">${t.kod} · ${t.ad}</div>`,
+        '<dl>',
+        `<dt>hedeften sapma</dt><dd data-iyi="${yakin ? 'evet' : 'hayir'}">${t.sapmaCm.toFixed(0)} cm</dd>`,
+        `<dt>bu görevde en yüksek LMI</dt><dd data-iyi="${lmiIyi ? 'evet' : 'hayir'}">%${t.maxLmi.toFixed(0)}</dd>`,
+        `<dt>süre</dt><dd>${Math.floor(t.sure / 60)}:${(t.sure % 60).toFixed(0).padStart(2, '0')}</dd>`,
+        '</dl>',
+        `<p class="sonraki">${t.kalan > 0
+          ? `sırada ${t.kalan} görev var · yeni yük malzeme alanında`
+          : 'bölümdeki son yük — toparlayabilirsin'}</p>`,
+      ].join('');
+      hud.kondu.hidden = false;
+    }
+    if (hud.kondu && !hud.kondu.hidden && performance.now() > konduBitis) {
+      hud.kondu.hidden = true;
+    }
+  }
+
   /** Bölüm bitince ya da devrilince sonuç panelini bir kez yaz. */
   let sonucYazildi = false;
   function sonucGoster(): void {
@@ -241,6 +292,7 @@ async function boot(): Promise<void> {
       '<table>',
       `<tr><td>süre</td><td>${Math.floor(s.sure / 60)}:${(s.sure % 60).toFixed(0).padStart(2, '0')}</td></tr>`,
       `<tr><td>en yüksek LMI</td><td>%${s.maxLmi.toFixed(0)}</td></tr>`,
+      `<tr><td>kırmızıda geçen süre</td><td>${s.kirmiziSn.toFixed(1)} sn</td></tr>`,
       `<tr><td>en geniş salınım</td><td>${s.maxSalinim.toFixed(0)}°</td></tr>`,
       `<tr><td>çarpma</td><td>${s.carpma}</td></tr>`,
       `<tr><td>yerleştirme sapması</td><td>${(ortSapma * 100).toFixed(0)} cm</td></tr>`,

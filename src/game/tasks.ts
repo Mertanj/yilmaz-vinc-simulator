@@ -18,7 +18,7 @@
  */
 
 /** Yükün nasıl çizileceği. */
-export type LoadKind = 'bobin' | 'tezgah' | 'jenerator' | 'klima';
+export type LoadKind = 'bobin' | 'tezgah' | 'jenerator' | 'kompresor' | 'klima';
 
 export interface Task {
   kod: string;
@@ -27,12 +27,35 @@ export interface Task {
   halfWidth: number;
   halfHeight: number;
   kind: LoadKind;
-  /** factoryTerraces() indeksi: 0 = 1. kat, 1 = 2. kat, 2 = çatı. */
+  /**
+   * factoryTerraces() indeksi. Hedefler 0..3, yani dört teras.
+   *
+   * **Çatı (indeks 4) bilerek hedef DEĞİL** ve bu ölçümle karara bağlandı:
+   * çatının yarıçapında (24.1 m) bom ucu en fazla 22.7 metreye çıkıyor, oysa
+   * yükü bırakabilmek için 2 metrelik halat payıyla 24.4 metre gerekiyor —
+   * 30 metrelik bom 31.1 metrelik bir konfigürasyon istiyor. Çatıya çıkmak
+   * daha büyük bir vinç işi; YV-25'in dürüst sınırı burası.
+   */
   hedef: number;
   /** Oyuncuya görevin ne olduğunu söyleyen tek cümle. */
   brif: string;
 }
 
+/**
+ * Beş görev, beş katlı bina, dört teras.
+ *
+ * Ağırlıklar yine geriye doğru: her hedefin ölçülen kapasitesinden hedeflenen
+ * LMI'ye bölünüp kanca (0.45 t) düşülerek. Eğri %60 → %78 → %83 → %87 → %90 →
+ * %94; yani her kat bir öncekinden gergin ve yük yukarı çıktıkça hafifliyor —
+ * sahadaki kuralın ta kendisi.
+ *
+ * İlk iki görev aynı terasa gidiyor ve tek değişen ağırlık. Tekrar değil,
+ * kontrollü deney: oyuncu tablonun *yer* değil *yarıçaptaki yük* ile ilgili
+ * olduğunu kendi üstünde görüyor.
+ *
+ * **Genişlik sınırı 2.4 m** (yarı genişlik 1.2): teras derinliği kademeye eşit
+ * ve kademe 3.0 m. Daha geniş bir yük terasa sığmıyor.
+ */
 export const TASKS: readonly Task[] = [
   {
     kod: 'T1', ad: 'Sac bobin', tonnes: 2.3,
@@ -41,18 +64,23 @@ export const TASKS: readonly Task[] = [
   },
   {
     kod: 'T2', ad: 'CNC torna', tonnes: 3.1,
-    halfWidth: 1.5, halfHeight: 0.95, kind: 'tezgah', hedef: 0,
+    halfWidth: 1.2, halfHeight: 0.95, kind: 'tezgah', hedef: 0,
     brif: 'Ağır CNC tezgâhı — aynı terasa, ama 800 kilo daha ağır',
   },
   {
-    kod: 'T3', ad: 'Jeneratör', tonnes: 1.8,
-    halfWidth: 1.6, halfHeight: 0.8, kind: 'jenerator', hedef: 1,
-    brif: '100 kVA kabinli jeneratör — 2. kat terasına',
+    kod: 'T3', ad: 'Jeneratör', tonnes: 2.2,
+    halfWidth: 1.2, halfHeight: 0.8, kind: 'jenerator', hedef: 1,
+    brif: '125 kVA kabinli jeneratör — 2. kat terasına',
   },
   {
-    kod: 'T4', ad: 'Klima santrali', tonnes: 1.25,
-    halfWidth: 1.3, halfHeight: 0.75, kind: 'klima', hedef: 2,
-    brif: 'Çatı klima santrali — en uzak nokta, ibre %94',
+    kod: 'T4', ad: 'Vidalı kompresör', tonnes: 1.5,
+    halfWidth: 1.05, halfHeight: 0.85, kind: 'kompresor', hedef: 2,
+    brif: 'Vidalı kompresör — 3. kat, yarıçap 19 metre',
+  },
+  {
+    kod: 'T5', ad: 'Klima santrali', tonnes: 1.05,
+    halfWidth: 1.1, halfHeight: 0.7, kind: 'klima', hedef: 3,
+    brif: 'Klima santrali — en üst teras, bomun sonu, ibre %92',
   },
 ];
 

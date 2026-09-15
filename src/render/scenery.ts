@@ -1,6 +1,7 @@
 import { Container, Graphics } from 'pixi.js';
 import { C } from './palette';
 import { worldText } from './text';
+import { FACTORY } from '../sim/world';
 
 /** Gökyüzü — ekran uzayında, kameradan bağımsız. Bantlı geçiş. */
 export function drawSky(width: number, height: number): Graphics {
@@ -96,10 +97,10 @@ export function drawGround(left: number, right: number): Graphics {
 export function drawFactory(x0: number): Container {
   const c = new Container();
   const g = new Graphics();
-  const right = 96.0;
-  const setback = 4.5;
-  const floorH = 5.0;
-  const floors = 3;
+  // Ölçüler FABRİKA sabitinden okunuyor. Bir ara burada kopyaları duruyordu ve
+  // bina beş kata çıkarıldığında çizim üç katta kaldı: çarpışma gövdesi ile
+  // görüntü ayrı şeyler anlatıyordu.
+  const { right, setback, floorHeight: floorH, floors, parapetHeight } = FACTORY;
 
   for (let f = floors - 1; f >= 0; f--) {
     const left = x0 + setback * f;
@@ -120,31 +121,34 @@ export function drawFactory(x0: number): Container {
 
     // Terasa açılan yükleme kapısı
     if (f > 0) {
-      const dx = left + 2.2;
-      g.rect(dx, floorH * f, 5.2, floorH - 1.0).fill(C.frameDark);
-      g.rect(dx, floorH * f, 5.2, 0.26).fill({ color: C.hazardY, alpha: 0.85 });
+      const dx = left + 1.0;
+      const dw = Math.min(4.2, right - left - 1.6);
+      g.rect(dx, floorH * f, dw, floorH - 0.9).fill(C.frameDark);
+      g.rect(dx, floorH * f, dw, 0.26).fill({ color: C.hazardY, alpha: 0.85 });
     }
     // Pencereler
-    for (let i = 0; i < Math.floor((w - 10) / 4.6); i++) {
-      g.rect(left + 9 + i * 4.6, floorH * f + 1.6, 2.5, 2.1)
+    for (let i = 0; i < Math.floor((w - 9) / 4.6); i++) {
+      g.rect(left + 7.5 + i * 4.6, floorH * f + 1.2, 2.5, floorH * 0.42)
         .fill({ color: C.glass, alpha: 0.85 });
-      g.rect(left + 9 + i * 4.6, floorH * f + 1.6, 2.5, 0.65)
+      g.rect(left + 7.5 + i * 4.6, floorH * f + 1.2, 2.5, 0.55)
         .fill({ color: C.glassLight, alpha: 0.4 });
     }
-    // Korkuluk
+    // Korkuluk — teras kadar uzun.
     if (f < floors - 1) {
       const px = x0 + setback * f;
-      g.rect(px, top, 0.24, 0.9).fill(C.chrome);
-      for (let i = 1; i <= 4; i++) {
-        g.rect(px + i * 0.95, top, 0.1, 0.9).fill({ color: C.chrome, alpha: 0.85 });
+      g.rect(px, top, 0.24, parapetHeight).fill(C.chrome);
+      const n = Math.max(2, Math.round(setback / 0.95));
+      for (let i = 1; i <= n; i++) {
+        g.rect(px + (i * setback) / (n + 1), top, 0.1, parapetHeight)
+          .fill({ color: C.chrome, alpha: 0.85 });
       }
-      g.rect(px, top + 0.82, 4.4, 0.12).fill(C.chrome);
+      g.rect(px, top + parapetHeight - 0.08, setback, 0.12).fill(C.chrome);
     }
   }
 
   // Zemin kat kepengi
-  g.rect(x0 + 2.2, 0.1, 6.5, floorH - 1.2).fill(C.frameLight);
-  for (let y = 0.4; y < floorH - 1.2; y += 0.45) {
+  g.rect(x0 + 2.2, 0.1, 6.5, floorH - 1.0).fill(C.frameLight);
+  for (let y = 0.4; y < floorH - 1.0; y += 0.45) {
     g.moveTo(x0 + 2.3, y).lineTo(x0 + 8.6, y)
       .stroke({ width: 0.12, color: C.frameDark, alpha: 0.5 });
   }

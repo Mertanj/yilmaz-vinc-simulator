@@ -2,50 +2,108 @@ import type { Container } from 'pixi.js';
 import { PPM } from '../render/stage';
 
 /**
- * Hedefi takip eden kamera, hız yönünde öne bakışlı.
+ * Çalışma zarfını kadrajlayan kamera.
  *
- * İki hata bunun bugünkü halini şekillendirdi:
+ * Üç hata bunun bugünkü halini şekillendirdi:
  *
  * 1. İlk sürümde geniş ölü bölge + yavaş yumuşatma vardı; kamyon 40 km/sa'e
  *    çıkınca kamera yetişemedi, araç ekrandan çıktı.
  * 2. İkinci sürümde yumuşatma kare BAŞINA sabit katsayıydı (x += d * 0.1).
  *    Bu kare hızına bağlıdır: 60 fps'te doğru, 10 fps'te kamera 11 metre
  *    geride kalıyordu. Ölçümle yakalandı — düşük kare hızında oyun bozuluyordu.
+ * 3. Üçüncü sürüm kamyonu takip ediyordu ama YAKINLAŞTIRMA SABİTTİ. Bom 27
+ *    metreye açılıp çatıya uzandığında yük 15.8 metrede kalıyor, sabit
+ *    ölçekte görüş ise 15 metrede bitiyordu: oyuncu yükü bıraktığı yeri
+ *    göremiyordu. Bir vinç oyununda kadrajın kamyona değil, ARACIN VE
+ *    KANCANIN İKİSİNE birden bakması gerekiyor.
  *
- * Çözüm: zaman sabitli üstel yaklaşma. k = 1 - exp(-dt/tau) her kare hızında
- * aynı yerleşme süresini verir.
+ * Şimdi: verilen ilgi noktalarını (şasi, bom ucu, kanca) çevreleyen kutu
+ * hesaplanıyor ve ölçek o kutuyu sığdıracak şekilde seçiliyor. Sürerken kutu
+ * küçük, ölçek en yakında kalıyor — yani sürüş hissi değişmiyor; bom açıldıkça
+ * kamera kendiliğinden geri çekiliyor.
  */
 export class Camera {
   x = 0;
   y = 6;
+  /** Metre başına piksel — artık değişken. */
+  ppm = PPM;
 
   /** Yatay yerleşme zaman sabiti (s). Küçük = daha sıkı takip. */
   private readonly tauX = 0.16;
   /** Dikey daha gevşek — süspansiyon zıplamaları kamerayı sallamasın. */
-  private readonly tauY = 0.5;
+  private readonly tauY = 0.45;
+  /** Yakınlaştırma en gevşeği: ani ölçek değişimi mide bulandırıyor. */
+  private readonly tauZoom = 0.7;
   /** Hız başına öne bakış (s). Oyuncu gittiği yeri görsün. */
   private readonly lookAheadSec = 0.8;
   private readonly maxLookAhead = 9;
-  /** Araç hiçbir koşulda bu kadar metreden fazla merkezden sapamaz. */
   private readonly maxOffset = 11;
   private readonly minY = 5.5;
 
   /**
+   * En yakın ölçek. 34'ten 30'a indirildi — sahada "kamera biraz dar"
+   * geri bildirimi geldi ve sürüş kadrajı da bir tık açıldı.
+   */
+  private readonly maxPpm = 30;
+  /** En uzak ölçek. Bomun tamamen açık hali bu ölçekte rahat sığıyor. */
+  private readonly minPpm = 15;
+  /** Kutunun çevresinde bırakılan pay (m). */
+  private readonly padX = 5;
+  private readonly padY = 3.5;
+
+  /**
+   * @param points görünmesi gereken noktalar (şasi, bom ucu, kanca…)
    * @param dt gerçek kare süresi (s) — fizik adımı değil.
    */
-  follow(targetX: number, targetY: number, velX: number, dt: number): void {
-    const look = clamp(velX * this.lookAheadSec, -this.maxLookAhead, this.maxLookAhead);
+  follow(
+    points: ReadonlyArray<{ x: number; y: number }>,
+    velX: number,
+    screenW: number,
+    screenH: number,
+    dt: number,
+  ): void {
+    const first = points[0];
+    if (!first) return;
 
-    this.x = approach(this.x, targetX + look, this.tauX, dt);
-    this.x = clamp(this.x, targetX - this.maxOffset, targetX + this.maxOffset);
+    let minX = first.x, maxX = first.x, minY = first.y, maxY = first.y;
+    for (const p of points) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y;
+      if (p.y > maxY) maxY = p.y;
+    }
+    // Zemin çizgisi hep kadrajda kalsın: aracın neyin üstünde durduğunu
+    // görmeden eğimi okumak imkânsız.
+    if (minY > 0) minY = 0;
 
-    this.y = approach(this.y, Math.max(targetY, this.minY), this.tauY, dt);
+    const w = maxX - minX + this.padX * 2;
+    const h = maxY - minY + this.padY * 2;
+    const fit = Math.min(
+      screenW > 0 ? screenW / Math.max(w, 1) : this.maxPpm,
+      screenH > 0 ? screenH / Math.max(h, 1) : this.maxPpm,
+    );
+    const hedefPpm = clamp(fit, this.minPpm, this.maxPpm);
+    this.ppm = approach(this.ppm, hedefPpm, this.tauZoom, dt);
+
+    // Öne bakış sadece sürerken anlamlı; bom çalışırken kutu zaten hedefi
+    // içeriyor ve öne bakış kadrajı kaydırıp bom ucunu dışarı atıyordu.
+    const look = h > 14
+      ? 0
+      : clamp(velX * this.lookAheadSec, -this.maxLookAhead, this.maxLookAhead);
+
+    const hedefX = (minX + maxX) / 2;
+    const hedefY = (minY + maxY) / 2;
+
+    this.x = approach(this.x, hedefX + look, this.tauX, dt);
+    this.x = clamp(this.x, hedefX - this.maxOffset, hedefX + this.maxOffset);
+    this.y = approach(this.y, Math.max(hedefY, this.minY), this.tauY, dt);
     if (this.y < this.minY) this.y = this.minY;
   }
 
   snapTo(x: number, y: number): void {
     this.x = x;
     this.y = Math.max(y, this.minY);
+    this.ppm = this.maxPpm;
   }
 
   /**
@@ -55,8 +113,10 @@ export class Camera {
   apply(world: Container, far: Container, screenW: number, screenH: number): void {
     const cx = screenW / 2;
     const cy = screenH / 2;
-    world.position.set(cx - this.x * PPM, cy + this.y * PPM);
-    far.position.set(cx - this.x * PPM * 0.45, cy + this.y * PPM);
+    world.scale.set(this.ppm, -this.ppm);
+    far.scale.set(this.ppm, -this.ppm);
+    world.position.set(cx - this.x * this.ppm, cy + this.y * this.ppm);
+    far.position.set(cx - this.x * this.ppm * 0.45, cy + this.y * this.ppm);
   }
 }
 

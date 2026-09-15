@@ -39,6 +39,36 @@
   #gorev { color: #E4E9EB; }
   #sure { color: #6C7C84; }
 
+  /* --- yerleştirme onay paneli --- */
+  #kondu {
+    position: fixed; left: 50%; top: 26%; transform: translateX(-50%);
+    z-index: 25; pointer-events: none; text-align: center; padding: 18px 26px;
+    background: rgba(14, 20, 23, 0.94); border: 1px solid #2C7A52; border-radius: 4px;
+    font-family: "IBM Plex Mono", ui-monospace, monospace; color: #E4E9EB;
+    min-width: 17rem; max-width: calc(100vw - 32px);
+    animation: konduGir 0.22s ease-out;
+  }
+  #kondu[hidden] { display: none; }
+  @keyframes konduGir {
+    from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+  #kondu .tik {
+    font-family: "Barlow Condensed", Impact, sans-serif; font-weight: 700;
+    font-size: 1.7rem; color: #5FB07C; letter-spacing: 0.04em;
+    text-transform: uppercase; line-height: 1;
+  }
+  #kondu .ad { font-size: 13px; color: #E8A62C; margin-top: 6px; font-weight: 600; }
+  #kondu dl {
+    display: grid; grid-template-columns: auto auto; gap: 3px 16px;
+    margin: 12px 0 0; font-size: 12px; justify-content: center;
+  }
+  #kondu dt { color: #8E9BA2; text-align: left; margin: 0; }
+  #kondu dd { margin: 0; text-align: right; font-weight: 600; }
+  #kondu dd[data-iyi="evet"] { color: #5FB07C; }
+  #kondu dd[data-iyi="hayir"] { color: #E8A62C; }
+  #kondu .sonraki { font-size: 11px; color: #6C7C84; margin: 10px 0 0; }
+
   /* --- sonuç paneli --- */
   #sonuc {
     position: fixed; inset: 0; z-index: 30; display: flex;
@@ -97,6 +127,8 @@
       <kbd>→</kbd> gaz &nbsp; <kbd>←</kbd> geri &nbsp; <kbd>boşluk</kbd> el freni &nbsp; <kbd>Q</kbd> ayak aç/kapa &nbsp; <kbd>R</kbd> sıfırla
     </div>
   </div>
+
+  <div id="kondu" hidden></div>
 
   <div id="sonuc" hidden><div id="sonuc-ic"></div></div>
 

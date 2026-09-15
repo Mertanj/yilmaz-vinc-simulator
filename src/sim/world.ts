@@ -116,12 +116,28 @@ export function createKerb(world: World, x: number): Body {
  * Her kademe 4.5 m geri çekiliyor, altındakinin çatısı üsttekinin terası
  * oluyor — vincin yükü bırakacağı yer orası.
  */
+/**
+ * Beş katlı, kademeli fabrika.
+ *
+ * Kat sayısı 3'ten 5'e çıkarken kademe ve kat yüksekliği KÜÇÜLMEK zorundaydı;
+ * ikisi de erişim geometrisini doğrudan belirliyor. Çatı hedefi için bom ucunun
+ * hedefin ~3 m üstünde olması gerekiyor ve gereken bom boyu şöyle çıkıyor:
+ *
+ *   kademe 3.4 / kat 4.4 → çatı 32.7 m  ✗ (bom 30 m)
+ *   kademe 3.0 / kat 4.0 → çatı 30.2 m  ✗ kıl payı
+ *   kademe 3.0 / kat 3.8 → çatı 29.6 m  ✓
+ *
+ * Seçilen: 3.0 / 3.8. Kapasiteler sırayla 4.56 · 3.18 · 2.23 · 1.64 · 1.29 t —
+ * yukarı çıktıkça yük hafiflemek zorunda, ki sahadaki kural da bu.
+ *
+ * Teras derinliği kademeye eşit, yani 3.0 m: yükler 2.4 metreden geniş olamaz.
+ */
 export const FACTORY = {
   left: 62.0,
   right: 96.0,
-  setback: 4.5,
-  floorHeight: 5.0,
-  floors: 3,
+  setback: 3.0,
+  floorHeight: 3.8,
+  floors: 5,
   parapetHeight: 0.9,
 } as const;
 
@@ -134,7 +150,10 @@ export function factoryTerraces(): Array<{ x: number; y: number }> {
       y: FACTORY.floorHeight * f,
     });
   }
-  out.push({ x: FACTORY.left + FACTORY.setback * 2 + 1.2, y: FACTORY.floorHeight * FACTORY.floors });
+  out.push({
+    x: FACTORY.left + FACTORY.setback * (FACTORY.floors - 1) + 1.2,
+    y: FACTORY.floorHeight * FACTORY.floors,
+  });
   return out;
 }
 

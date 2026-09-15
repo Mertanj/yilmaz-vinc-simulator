@@ -56,6 +56,20 @@ export function drawLoad(t: Task): Container {
       g.rect(hw * 0.62, hh, 0.14, 0.45).fill(C.frame);
       break;
     }
+    case 'kompresor': {
+      // Vidalı kompresör: mavi kabin, soğutucu ızgarası, hava tankı.
+      g.roundRect(-hw, -hh, hw * 2, hh * 2, 0.07).fill(0x2E5C86);
+      g.rect(-hw, hh - hh * 0.24, hw * 2, hh * 0.24).fill({ color: 0x3F76A6, alpha: 0.9 });
+      g.rect(-hw, -hh, hw * 2, hh * 0.22).fill({ color: 0x1E3E5C, alpha: 0.9 });
+      g.roundRect(-hw * 0.85, -hh * 0.35, hw * 0.7, hh * 0.9, 0.05).fill(0x1B2A36);
+      for (let i = 0; i < 5; i++) {
+        g.rect(-hw * 0.8, -hh * 0.28 + i * hh * 0.17, hw * 0.6, hh * 0.08)
+          .fill({ color: 0x5C8DB8, alpha: 0.7 });
+      }
+      g.roundRect(hw * 0.1, -hh * 0.45, hw * 0.8, hh * 0.55, 0.22).fill(0x8C959B);
+      g.circle(hw * 0.5, hh * 0.45, Math.min(hw * 0.3, hh * 0.35)).fill(0x1B2A36);
+      break;
+    }
     case 'klima': {
       // Klima santrali: açık gri panel, fan ızgarası, kaide profili.
       g.roundRect(-hw, -hh, hw * 2, hh * 2, 0.06).fill(0xA9B3B8);

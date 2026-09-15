@@ -18,11 +18,36 @@ export interface Score {
   sure: number;
   /** Görülen en yüksek LMI yüzdesi. */
   maxLmi: number;
+  /**
+   * Kırmızıda (LMI > %100) geçirilen süre (s).
+   *
+   * Puanlamanın asıl ölçüsü bu, zirve değil. Salınan bir yükte halat gerilimi
+   * saliseler için statiğin 1.7 katına çıkabiliyor ve zirve %140 okuyor; oysa
+   * bu, kırmızıda park etmiş bir vinçle aynı şey değil. Gerçek bir değerlendirme
+   * de "aşırı yükte ne kadar kaldın" diye sorar.
+   */
+  kirmiziSn: number;
   /** Halatın düşeyden en fazla saptığı açı (derece) — salınım ölçüsü. */
   maxSalinim: number;
   carpma: number;
   /** Her görevde hedef merkezine uzaklık (m). */
   sapmalar: number[];
+}
+
+/** Biten bir görevin özeti — yerleştirme onay ekranı bunu gösteriyor. */
+export interface Tamamlanan {
+  kod: string;
+  ad: string;
+  /** Hedef merkezine yatay uzaklık (cm). */
+  sapmaCm: number;
+  /** Bu görev boyunca görülen en yüksek LMI. */
+  maxLmi: number;
+  /** Bu göreve harcanan süre (s). */
+  sure: number;
+  /** Sırada kaç görev kaldı. */
+  kalan: number;
+  /** Kaçıncı görev — aynı özetin iki kez gösterilmemesi için. */
+  sira: number;
 }
 
 export interface Result {
@@ -38,22 +63,28 @@ const DEVRILME_DEG = 8;
 /**
  * Bu süreyi aşan her saniye puandan düşüyor.
  *
- * Başsız rigin dikkatli (salınımı söndüren, halatı dibe vurdurmayan) bir turu
- * 688 saniye sürüyor; dört kaldırma için gerçekçi taban bu. 300 saniyeyken
- * ceza tek başına 97 puandı ve her tamamlanmış tur D'ye düşüyordu.
+ * Başsız rigin dikkatli (salınımı söndüren, halatı dibe vurdurmayan) turunda
+ * görev başına yaklaşık 170 saniye geçiyor; altı kaldırma için taban bu.
+ * Dört görevlik sürümde 300 saniyeydi ve ceza tek başına 97 puandı — her
+ * tamamlanmış tur D'ye düşüyordu.
  */
-const HEDEF_SURE = 480;
+const HEDEF_SURE = 720;
 
 export class Mission {
   private index = 0;
   private durulmaSn = 0;
+  /** Bu görevin başladığı an ve o andan beri görülen en yüksek LMI. */
+  private gorevBasi = 0;
+  private gorevMaxLmi = 0;
+  /** Son biten görevin özeti. main.ts `sira` değişince paneli gösteriyor. */
+  sonTamamlanan: Tamamlanan | null = null;
   private bitti = false;
   private devrildi = false;
   /** Oyuncu R'ye bastıysa "tek seferde" rozeti yanar. */
   private sifirlandi = false;
 
   readonly score: Score = {
-    sure: 0, maxLmi: 0, maxSalinim: 0, carpma: 0, sapmalar: [],
+    sure: 0, maxLmi: 0, kirmiziSn: 0, maxSalinim: 0, carpma: 0, sapmalar: [],
   };
 
   private readonly teraslar = factoryTerraces();
@@ -92,10 +123,14 @@ export class Mission {
     this.durulmaSn = 0;
     this.score.sure = 0;
     this.score.maxLmi = 0;
+    this.score.kirmiziSn = 0;
     this.score.maxSalinim = 0;
     this.score.carpma = 0;
     this.score.sapmalar.length = 0;
     this.scene.carpma = 0;
+    this.gorevBasi = 0;
+    this.gorevMaxLmi = 0;
+    this.sonTamamlanan = null;
     this.scene.spawnLoad(TASKS[0] ?? null);
   }
 
@@ -112,8 +147,10 @@ export class Mission {
 
     if (this.scene.craneMode) {
       const lmi = this.scene.crane.lmi.percent;
-      if (Number.isFinite(lmi) && lmi > this.score.maxLmi) {
-        this.score.maxLmi = Math.min(999, lmi);
+      if (Number.isFinite(lmi)) {
+        if (lmi > this.score.maxLmi) this.score.maxLmi = Math.min(999, lmi);
+        if (lmi > this.gorevMaxLmi) this.gorevMaxLmi = Math.min(999, lmi);
+        if (lmi > 100) this.score.kirmiziSn += dt;
       }
       const s = Math.abs(this.salinimDeg());
       if (s > this.score.maxSalinim) this.score.maxSalinim = s;
@@ -159,9 +196,23 @@ export class Mission {
   }
 
   private tamamla(hedef: { x: number; y: number }): void {
-    this.score.sapmalar.push(Math.abs(this.scene.load.getPosition().x - hedef.x));
+    const sapma = Math.abs(this.scene.load.getPosition().x - hedef.x);
+    const biten = TASKS[this.index];
+    this.score.sapmalar.push(sapma);
     this.durulmaSn = 0;
     this.index++;
+    if (biten) {
+      this.sonTamamlanan = {
+        kod: biten.kod, ad: biten.ad,
+        sapmaCm: sapma * 100,
+        maxLmi: this.gorevMaxLmi,
+        sure: this.score.sure - this.gorevBasi,
+        kalan: TASKS.length - this.index,
+        sira: this.index,
+      };
+    }
+    this.gorevBasi = this.score.sure;
+    this.gorevMaxLmi = 0;
     const sonraki = TASKS[this.index];
     if (sonraki) {
       // Konan yük sahnede kalsın istiyoruz ama malzeme alanı tek gövde
@@ -184,8 +235,11 @@ export class Mission {
  */
 function degerlendir(score: Score, devrildi: boolean, sifirlandi: boolean): Result {
   let puan = 100;
-  // Sarının üstü pahalı — %100'ü geçmek gerçek vinçte kilitlenme demek.
-  puan -= Math.max(0, score.maxLmi - 90) * 1.0;
+  // Asıl ceza KIRMIZIDA GEÇEN SÜRE. Zirve cezası sadece uç değerlerde ve
+  // hafif: 140'lık anlık bir diken salınan bir yükte fizik gereği oluşuyor,
+  // kırmızıda on saniye durmak ise operatör hatası.
+  puan -= score.kirmiziSn * 2.0;
+  puan -= Math.max(0, score.maxLmi - 120) * 0.4;
   puan -= score.carpma * 6;
   // Ortalama yerleştirme sapması — metre başına 12 puan.
   const ortSapma = score.sapmalar.length
@@ -197,7 +251,7 @@ function degerlendir(score: Score, devrildi: boolean, sifirlandi: boolean): Resu
   // çünkü sarkaç oyunun becerisi, hatası değil.
   puan -= Math.max(0, score.maxSalinim - 30) * 0.6;
   // Yarım kalan bölüm tamamlanmış sayılmaz.
-  puan -= (4 - score.sapmalar.length) * 20;
+  puan -= (TASKS.length - score.sapmalar.length) * 20;
   if (devrildi) puan = Math.min(puan, 15);
 
   puan = Math.max(0, Math.min(100, puan));
