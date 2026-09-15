@@ -45,11 +45,20 @@ export class Truck {
       new Box(TRUCK.chassisHalfLength, TRUCK.chassisHalfHeight),
       { density: 1, friction: 0.6, filterGroupIndex: TRUCK_GROUP },
     );
-    // Kütleyi elle veriyoruz: yoğunluktan gelen değer gerçekçi değil, ve ağırlık
-    // merkezini kabine doğru kaydırmak devrilme davranışını doğru yere oturtuyor.
+    // Kütleyi elle veriyoruz: yoğunluktan gelen değer gerçekçi değil.
+    //
+    // Ağırlık merkezi arkada — arka uçtaki karşı ağırlık modellenmiş oluyor.
+    // Değer ölçümle seçildi: askı noktaları [3.4, -2.2, -3.5], yani yaylar
+    // ancak merkez bunların ortasına yakınken eşit basıyor. Boşta duran aracın
+    // eğimi -0.4'te +1.56°, -0.7'de +0.78°, -1.0'de -0.08°.
+    //
+    // NOT: "araç öne baskı yapıyor" şikâyetinin asıl sebebi bu DEĞİLDİ — yol
+    // konumunda bomun ağırlığı şasinin 4 metre önüne biniyordu. Onun çözümü
+    // crane.ts'teki bom yatağı (boom rest). Burada sadece aracın kendi
+    // süspansiyonunda düz oturmasını sağlıyoruz.
     this.chassis.setMassData({
       mass: TRUCK.chassisTonnes * 1000,
-      center: { x: -0.4, y: -0.15 },
+      center: { x: -1.0, y: -0.15 },
       I: 150_000,
     });
     snaps.track(this.chassis);

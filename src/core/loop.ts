@@ -8,6 +8,8 @@
  * İnterpolasyon burada özellikle önemli: 60 Hz'de simüle edilip 120 Hz'de
  * çizilen bir sarkaç, interpolasyonsuz gözle görülür şekilde titrer.
  */
+import { SIM } from '../sim/world';
+
 export class FixedLoop {
   /** Kare süresi bunu aşarsa kırpılır — "spiral of death" koruması. */
   private static readonly MAX_FRAME = 0.25;
@@ -20,7 +22,7 @@ export class FixedLoop {
   constructor(
     private readonly onStep: (dt: number) => void,
     private readonly onRender: (alpha: number, frameDt: number) => void,
-    readonly dt: number = 1 / 60,
+    readonly dt: number = 1 / SIM.hz,
   ) {}
 
   start(): void {

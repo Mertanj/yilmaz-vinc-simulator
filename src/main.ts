@@ -1,16 +1,11 @@
 import { Container } from 'pixi.js';
-import { Box } from 'planck';
 import { createStage } from './render/stage';
 import { FixedLoop } from './core/loop';
 import { Camera } from './core/camera';
 import { Keyboard } from './input/keyboard';
-import {
-  createWorld, createGround, createFactoryBody, createKerb, scatterProps,
-  Snapshotter, SIM,
-} from './sim/world';
-import { Truck, TRUCK } from './sim/truck';
-import { Outriggers } from './sim/outriggers';
-import { Crane, NEUTRAL, type Grabbable } from './sim/crane';
+import { SIM } from './sim/world';
+import { Scene, SCENE } from './sim/scene';
+import { TRUCK } from './sim/truck';
 import { OutriggerState } from './sim/loadChart';
 import { TruckView, drawWheel, drawContactShadow } from './render/truckView';
 import { OutriggerView } from './render/outriggerView';
@@ -20,17 +15,7 @@ import {
   drawSetupZone, drawKerb,
 } from './render/scenery';
 
-const FACTORY_X = 62;
-/** Yük, kamyonun önünde yerde — kısa yarıçapta, tıpkı gerçek bir alma gibi. */
-/**
- * Yük, kamyonun önünde yerde. Level tasarımındaki kurulum konumu Xc = 53;
- * oradan alma yarıçapı 6.3 m (çok kısa, yüksek kapasite) ve K1 terasına
- * bırakma yarıçapı 11.2 m oluyor.
- */
-const LOAD = { x: 59.5, halfWidth: 1.15, halfHeight: 0.85, tonnes: 3.2 };
-const SETUP_X = 52;
-/** Takoz kamyonu burada durduruyor; ön tampon 56.8'de kalıyor, yüke 1.5 m var. */
-const KERB_X = 57.2;
+const { factoryX: FACTORY_X, setupX: SETUP_X, kerbX: KERB_X, load: LOAD } = SCENE;
 
 async function boot(): Promise<void> {
   const host = document.getElementById('game');
@@ -38,23 +23,9 @@ async function boot(): Promise<void> {
   const stage = await createStage(host);
 
   // --- fizik ---
-  const world = createWorld();
-  const snaps = new Snapshotter();
-  createGround(world);
-  createFactoryBody(world);
-  createKerb(world, KERB_X);
-  const truck = new Truck(world, snaps);
-  const outriggers = new Outriggers(world, truck.chassis, snaps);
-  const crane = new Crane(world, truck.chassis, snaps);
-  const props = scatterProps(world, snaps);
-
-  const load = world.createDynamicBody({ x: LOAD.x, y: LOAD.halfHeight + 0.05 });
-  load.createFixture(new Box(LOAD.halfWidth, LOAD.halfHeight), {
-    density: 1, friction: 0.85, restitution: 0.02,
-  });
-  load.setMassData({ mass: LOAD.tonnes * 1000, center: { x: 0, y: 0 }, I: 1400 });
-  load.setAngularDamping(0.5);
-  snaps.track(load);
+  // Dünyanın kurulumu Scene'in içinde; başsız test de aynı sınıfı sürüyor.
+  const scene = new Scene();
+  const { truck, outriggers, crane, props, load } = scene;
 
   // --- sabit dekor ---
   // NOT: burada cacheAsTexture DENENDİ ve geri alındı. Dekor metre biriminde
@@ -87,12 +58,6 @@ async function boot(): Promise<void> {
   stage.world.addChild(actors);
 
   // --- girdi ve kamera ---
-  /** Kancalanabilir her şey, yarı yükseklikleriyle. */
-  const grabbables: Grabbable[] = [
-    { body: load, halfWidth: LOAD.halfWidth, halfHeight: LOAD.halfHeight },
-    ...props.map((p) => ({ body: p.body, halfWidth: p.hw, halfHeight: p.hh })),
-  ];
-
   const keys = new Keyboard();
   const camera = new Camera();
   camera.snapTo(truck.position.x, truck.position.y + 3);
@@ -106,43 +71,20 @@ async function boot(): Promise<void> {
     hint: document.getElementById('hint'),
   };
 
-  /** Ayaklar yerdeyse vinç fazındayız: sürüş kilitli, vinç açık. */
-  const inCraneMode = (): boolean => outriggers.fraction > 0.15;
-
   const step = (dt: number): void => {
-    if (keys.consumeReset()) {
-      truck.reset();
-      outriggers.reset(truck.chassis);
-      camera.snapTo(TRUCK.spawnX, 6);
-    }
-    if (keys.consumeOutriggerToggle()) outriggers.toggle();
-
-    const craneMode = inCraneMode();
-    crane.setStowed(!craneMode);
-    if (keys.consumeHookToggle() && craneMode) crane.requestToggleAttach();
-
-    snaps.capture();
-
-    // Ayaklar yerdeyken sürüş kilitli — gerçekte de öyle.
-    truck.drive(craneMode ? { throttle: 0, handbrake: true } : keys.readDrive());
-    outriggers.update();
-
-    crane.update(craneMode ? keys.readCrane() : NEUTRAL, dt, crane.lmi);
-    // Kinematik bomu konumlandır ve yükü şasiye aktar — adımdan hemen önce.
-    crane.applyToWorld(dt);
-
-    world.step(dt, SIM.velocityIterations, SIM.positionIterations);
-    world.clearForces();
-
-    // Tepki kuvveti ancak çözümden sonra tanımlı.
-    crane.sampleLmi(dt, outriggers.state);
-
-    // Joint yaratma/yok etme adımın DIŞINDA — planck world.step() içinde kilitli.
-    crane.flushJointQueue(grabbables);
+    const reset = keys.consumeReset();
+    scene.step({
+      drive: keys.readDrive(),
+      crane: keys.readCrane(),
+      toggleOutriggers: keys.consumeOutriggerToggle(),
+      toggleHook: keys.consumeHookToggle(),
+      reset,
+    }, dt);
+    if (reset) camera.snapTo(TRUCK.spawnX, 6);
   };
 
   const render = (alpha: number, frameDt: number): void => {
-    const c = snaps.interpolate(truck.chassis, alpha);
+    const c = scene.snaps.interpolate(truck.chassis, alpha);
     truckView.position.set(c.x, c.y);
     truckView.rotation = c.a;
     shadow.position.set(c.x, 0.05);
@@ -152,7 +94,7 @@ async function boot(): Promise<void> {
     truck.wheels.forEach((body, i) => {
       const view = wheelViews[i];
       if (!view) return;
-      const w = snaps.interpolate(body, alpha);
+      const w = scene.snaps.interpolate(body, alpha);
       view.position.set(w.x, w.y);
       view.rotation = w.a;
     });
@@ -160,16 +102,16 @@ async function boot(): Promise<void> {
     props.forEach((p, i) => {
       const view = propViews[i];
       if (!view) return;
-      const s = snaps.interpolate(p.body, alpha);
+      const s = scene.snaps.interpolate(p.body, alpha);
       view.position.set(s.x, s.y);
       view.rotation = s.a;
     });
 
-    const l = snaps.interpolate(load, alpha);
+    const l = scene.snaps.interpolate(load, alpha);
     loadView.position.set(l.x, l.y);
     loadView.rotation = l.a;
 
-    const h = snaps.interpolate(crane.hook, alpha);
+    const h = scene.snaps.interpolate(crane.hook, alpha);
     hookView.position.set(h.x, h.y);
     hookView.rotation = h.a;
     cableView.update(crane.tipWorld, { x: h.x, y: h.y });
@@ -183,7 +125,7 @@ async function boot(): Promise<void> {
   };
 
   function updateHud(): void {
-    const craneMode = inCraneMode();
+    const craneMode = scene.craneMode;
     if (hud.speed) hud.speed.textContent = `${truck.speedKmh.toFixed(0)} km/sa`;
 
     if (hud.rig) {
@@ -194,7 +136,7 @@ async function boot(): Promise<void> {
       hud.rig.dataset['state'] = outriggers.state;
     }
     if (hud.tilt) {
-      const deg = (-truck.chassis.getAngle() * 180) / Math.PI;
+      const deg = scene.tiltDeg;
       hud.tilt.textContent = `eğim: ${deg >= 0 ? '+' : ''}${deg.toFixed(1)}°`;
       hud.tilt.dataset['warn'] = Math.abs(deg) > 3 ? 'yes' : 'no';
     }
@@ -216,14 +158,20 @@ async function boot(): Promise<void> {
       } else if (crane.hasLoad) {
         hud.hint.textContent = 'yük bağlı · boşluk ile bırak';
         hud.hint.dataset['mode'] = 'crane';
-      } else if (crane.canAttach(grabbables)) {
-        // Menzile girdiğini söylemek şart: oyuncu aksi halde kancanın neden
-        // tutmadığını anlayamıyor.
-        hud.hint.textContent = 'KANCA MENZİLDE · boşluk ile bağla';
-        hud.hint.dataset['mode'] = 'ready';
       } else {
-        hud.hint.textContent = 'kancayı yükün üstüne indir';
-        hud.hint.dataset['mode'] = 'crane';
+        // Kancanın neden tutmadığını söylemek şart: oyuncu aksi halde
+        // tahmin oyunu oynuyor.
+        const { reason } = crane.attachCheck(scene.grabbables);
+        const say: Record<typeof reason, string> = {
+          hazir: 'KANCA MENZİLDE · boşluk ile bağla',
+          sallaniyor: 'kanca sallanıyor · dursun, sonra bağla',
+          'yan-cekme': 'halat eğik · yan çekme olur, bomu yükün üstüne getir',
+          ortala: 'kancayı yükün TAM ORTASINA getir',
+          yukseklik: 'kancayı biraz daha indir',
+          uzak: 'kancayı yükün üstüne indir',
+        };
+        hud.hint.textContent = say[reason];
+        hud.hint.dataset['mode'] = reason === 'hazir' ? 'ready' : 'crane';
       }
     }
   }

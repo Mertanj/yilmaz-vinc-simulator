@@ -17,6 +17,8 @@ export const TRUCK_GROUP = -1;
 
 export const SIM = {
   gravity: -9.81,
+  /** Sabit fizik adımı. Döngü de, başsız test de bunu kullanır. */
+  hz: 60,
   // planck'in tavsiyesi 8/3, örnekleri 10/8. Vinç zinciri uzun ve yük ağır
   // olduğu için biraz daha yüksek: kritik kural küçük adımı yüksek iterasyona
   // takas etmemek, 60 Hz'de kalıp iterasyonu artırmak sorun değil.

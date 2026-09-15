@@ -84,6 +84,15 @@ export const CRANE = {
   maxTelescopeForce: 6.0e6,
   /** Vinç hızının sıfırdan tama çıkma süresi (s). Anlık basamak darbe yaratıyor. */
   winchRampSec: 0.45,
+  /**
+   * İki-blok koruması (anti two-block): halat strok sonuna bu kadar kala vinç
+   * yavaşlar. Gerçek vinçlerde bunu bir limit anahtarı yapar.
+   *
+   * Ölçümle geldi: tam hızda minRope'a çarpınca kanca bom ucuna tokatlanıyor,
+   * darbe yükü savuruyordu — düzgün ilerleyen bir kaldırmada yük 3.5 saniyede
+   * -0.8 dereceye oturmuşken çarpma anında yeniden -13.7 dereceye açılıyordu.
+   */
+  winchLimitFadeM: 1.6,
 
   hookTonnes: 0.45,
   /** Kanca boğazının blok merkezine göre düşey ofseti (m) — görselle aynı. */
@@ -104,16 +113,62 @@ export const CRANE = {
    * ile epey üstü arası. Gerçekte kancayı yüke geçiren bir sapancı var, bu
    * kadar cömert olması gerçekçi de.
    */
-  attachSideMarginM: 0.75,
+  /**
+   * Yatay pencere — yükün KENARINA değil, MERKEZİNE göre.
+   *
+   * Önce yükün yarı genişliği + pay kullanılıyordu; 2.3 m genişliğindeki yükte
+   * bu 1.7 metrelik bir tolerans demekti ve bağlanma anında yük kancanın altına
+   * 1.06 m ışınlanıyordu. Ekranda yük yan sıçrıyor, sonra sarkaç gibi savrulup
+   * 29 derece yatıyordu.
+   *
+   * Sapancı da kancayı gözüyle ağırlık merkezinin üstüne getirir; tek noktadan
+   * asılan bir yük başka türlü dengelenmez. Dolayısıyla doğru kural dar bir
+   * merkez penceresi: oyuncu kancayı yükün ortasına getirmek zorunda, karşılığında
+   * yük dengeli kalkıyor ve kalan 45 santimlik düzeltme sapanın gerilmesi gibi
+   * görünüyor.
+   */
+  attachCentreToleranceM: 0.45,
+
+  /**
+   * Bağlıyken yükün açısal sönümü — tek pimle iki noktalı sapanı taklit eder.
+   *
+   * Gerçekte yük iki noktadan sapanlanır ve sapan takımı yükü dönmeye karşı
+   * kilitler; düzgün asılmış bir yük sallanır ama TAKLA ATMAZ. Oyunda tek pim
+   * olduğu için yük pimin altında serbest bir sarkaç: ölçümde ±17° yalpalıyordu
+   * ve "dengelemiyor" hissi veriyordu. Yüksek açısal sönüm, sapanın yaptığı işi
+   * yapıyor — yatay sarkaç (oyunun asıl becerisi) hiç etkilenmiyor, çünkü o
+   * doğrusal harekette.
+   */
+  slungAngularDamping: 6.0,
   attachBelowTopM: 0.7,
   attachAboveTopM: 1.7,
   attachMaxSpeedMps: 1.2,
+  /**
+   * Yan çekme (side pull) sınırı: halat düşeyden bu kadar sapabilir.
+   *
+   * Gerçekte yükü eğik halatla kaldırmak yasaktır — yük kalkar kalkmaz düşeye
+   * savrulur, bom yanal zorlanır. Ölçümde tam olarak bu oldu: kanca yükün
+   * üstüne oturunca halat eğik kalıyor, kaldırınca yük 2.4 metre savrulup
+   * dönüyordu. Sınır koymak hem gerçekçi hem de oyuncuya asıl beceriyi
+   * öğretiyor: önce sarkacı söndür, sonra bağla.
+   */
+  maxSidePullM: 0.7,
 } as const;
 
 /** Yol konumunda kancanın sönümü — savrulmasın diye. */
 const STOW_DAMPING = 7.0;
-/** Çalışma konumunda neredeyse sönüm yok: sarkaç oyunun asıl becerisi. */
-const WORK_DAMPING = 0.05;
+/**
+ * Çalışma konumunda sönüm — sarkaç oyunun asıl becerisi, onu bastırmıyoruz.
+ *
+ * Bir ara sıfıra yakındı (0.05) ve bu yanlış çıktı: sarkaç HİÇ sönmüyordu, yani
+ * "salınım dursun, sonra bağla" diye bir hamle yoktu; ölçümde kanca 1.8 metre
+ * genlikle sonsuza kadar gidiyordu. Gerçek kanca bloğu makara ve halat
+ * sürtünmesiyle söner. 0.4 ile genlik ~3.5 saniyede yarıya iniyor: salınım hâlâ
+ * bütün ağırlığıyla orada ama oyuncu bekleyip söndürebiliyor.
+ */
+const WORK_LINEAR_DAMPING = 0.4;
+/** Kanca zaten setFixedRotation ile sabit; bu sadece bütünlük için. */
+const WORK_ANGULAR_DAMPING = 0.05;
 
 export interface CraneInput {
   /** -1 indir, +1 kaldır. */
@@ -134,6 +189,15 @@ export const NEUTRAL: CraneInput = { luff: 0, telescope: 0, winch: 0 };
  * yüksekliği 0.85. Bağlanma noktası 45 santim yanlış hesaplanıyor ve kanca
  * doğru yerde dururken "yakalamıyordu".
  */
+/** Kancanın neden tutmadığı — HUD bunu cümleye çeviriyor. */
+export type AttachReason =
+  | 'hazir'       // her şey tamam
+  | 'sallaniyor'  // kanca çok hızlı
+  | 'yan-cekme'   // halat düşeyden fazla sapmış
+  | 'ortala'      // yükün üstünde ama merkezde değil
+  | 'yukseklik'   // merkezde ama yükseklik tutmuyor
+  | 'uzak';       // ortada yük yok
+
 export interface Grabbable {
   body: Body;
   halfWidth: number;
@@ -155,6 +219,8 @@ export class Crane {
 
   private attached: Body | null = null;
   private attachJoint: RevoluteJoint | null = null;
+  /** Yükün bağlanmadan önceki açısal sönümü — bırakınca geri veriliyor. */
+  private releasedAngularDamping = 0.5;
   /** world.step() içinde joint yaratılamaz; istekler kuyruğa alınıp sonra işlenir. */
   private pendingAttach = false;
   private pendingDetach = false;
@@ -193,6 +259,17 @@ export class Crane {
     const tip = this.boomFly.getWorldPoint(this.tipLocal);
     this.hook = world.createDynamicBody({ x: tip.x, y: tip.y - this.ropeLength });
     this.hook.createFixture(new Box(0.3, 0.34), { density: 1, friction: 0.8 });
+
+    // Kanca bloğu HİÇ dönmez: ucunda ağırlık var gibi hep aşağı bakar. Gerçek
+    // kanca bloğu da ağırdır ve halat ekseninde asılı kalır.
+    //
+    // **SIRA ÖNEMLİ.** setFixedRotation içeride resetMassData() çağırıyor, o da
+    // kütleyi fikstür yoğunluğundan yeniden hesaplıyor. Önce setMassData yazıp
+    // sonra bunu çağırdığımızda 450 kiloluk kanca sessizce 0.408 kiloya düştü;
+    // 2.4 tonluk yükün karşısında 5882:1 kütle oranı kaldı ve planck'in
+    // "hafif gövde ağırını taşıyamaz" kuralı devreye girdi — halat 8 metre
+    // kısaldığı halde yük yerinden kıpırdamadı. Kütleyi EN SON yazıyoruz.
+    this.hook.setFixedRotation(true);
     this.hook.setMassData({
       mass: CRANE.hookTonnes * 1000, center: { x: 0, y: 0 }, I: 90,
     });
@@ -222,8 +299,8 @@ export class Crane {
   setStowed(stowed: boolean): void {
     if (stowed === this.stowed) return;
     this.stowed = stowed;
-    this.hook.setLinearDamping(stowed ? STOW_DAMPING : 0);
-    this.hook.setAngularDamping(stowed ? STOW_DAMPING : WORK_DAMPING);
+    this.hook.setLinearDamping(stowed ? STOW_DAMPING : WORK_LINEAR_DAMPING);
+    this.hook.setAngularDamping(stowed ? STOW_DAMPING : WORK_ANGULAR_DAMPING);
   }
 
   /** Her fizik adımında, world.step()'ten ÖNCE. */
@@ -262,8 +339,13 @@ export class Crane {
     this.winchRate += clamp(target - this.winchRate, -maxDelta, maxDelta);
 
     if (Math.abs(this.winchRate) > 1e-4) {
+      // Strok sonuna yaklaşırken yavaşla — sert duruş kancayı bom ucuna çarpıyor.
+      const headroom = this.winchRate < 0
+        ? this.ropeLength - CRANE.minRopeM
+        : CRANE.maxRopeM - this.ropeLength;
+      const fade = clamp(headroom / CRANE.winchLimitFadeM, 0, 1);
       this.ropeLength = clamp(
-        this.ropeLength + this.winchRate * dt, CRANE.minRopeM, CRANE.maxRopeM,
+        this.ropeLength + this.winchRate * fade * dt, CRANE.minRopeM, CRANE.maxRopeM,
       );
       this.cable.setLength(this.ropeLength);
     }
@@ -272,6 +354,7 @@ export class Crane {
   /** world.step()'ten SONRA. Joint yaratma/yok etme burada güvenli. */
   flushJointQueue(candidates: Grabbable[]): void {
     if (this.pendingDetach && this.attachJoint) {
+      this.attached?.setAngularDamping(this.releasedAngularDamping);
       this.world.destroyJoint(this.attachJoint);
       this.attachJoint = null;
       this.attached = null;
@@ -279,12 +362,40 @@ export class Crane {
     this.pendingDetach = false;
 
     if (this.pendingAttach && !this.attached) {
-      const target = this.findGrabbable(candidates);
-      if (target) {
+      const { item } = this.attachCheck(candidates);
+      if (item) {
+        const p = item.body.getWorldCenter();
+
+        // **Yük kancanın tam altına hizalanır ve düzleştirilir.**
+        //
+        // Gerçekte yük iki noktadan sapanlanır ve ağırlık merkezinin üstünden
+        // asılır; oyunda tek noktadan tuttuğumuz için dengeyi açıkça kurmak
+        // gerekiyor. Sapan gerilirken yükün kendini toparlaması zaten olan bir
+        // şey, o yüzden bu kaydırma sahada da doğal görünüyor.
+        //
+        // Bağlanma noktası olarak yükün üst ortası DENENDİ ve olmadı: kanca ile
+        // pim arasında 1.5 metreye varan bir kol oluşuyor, kısıt esniyor ve yük
+        // hiç kalkmıyordu (halat kuvveti sadece kancayı okuyordu). Pim kancanın
+        // boğazında kalmalı; dengeyi yükü hizalayarak sağlıyoruz.
+        const g = this.grabPoint;
+        item.body.setTransform({ x: g.x, y: p.y }, 0);
+        item.body.setLinearVelocity({ x: 0, y: 0 });
+        item.body.setAngularVelocity(0);
+        // **Uyandırmak şart.** planck'te ne setTransform ne de sıfır hız ataması
+        // gövdeyi uyandırır; yerde duran yük uyku modunda kalıp joint'e hiç
+        // tepki vermiyordu. Kanca yükseliyor, yük yerde kalıyor, halat boşta —
+        // LMI 0.16 t okuyordu.
+        item.body.setAwake(true);
+        this.hook.setAwake(true);
+
+        // Sapan takımı: yük bağlıyken dönmeye karşı direnir, bırakınca serbest.
+        this.releasedAngularDamping = item.body.getAngularDamping();
+        item.body.setAngularDamping(CRANE.slungAngularDamping);
+
         this.attachJoint = this.world.createJoint(
-          new RevoluteJoint({}, this.hook, target, this.grabPoint),
+          new RevoluteJoint({}, this.hook, item.body, g),
         ) as RevoluteJoint;
-        this.attached = target;
+        this.attached = item.body;
       }
     }
     this.pendingAttach = false;
@@ -296,26 +407,40 @@ export class Crane {
     return { x: c.x, y: c.y - CRANE.hookThroatM };
   }
 
-  private findGrabbable(candidates: Grabbable[]): Body | null {
+  /**
+   * Bağlanma denetimi — sadece evet/hayır değil, GEREKÇE de veriyor.
+   *
+   * Önce yalnız boolean dönüyordu ve oyuncu kancanın neden tutmadığını
+   * anlayamıyordu; üç ayrı koşulun hangisinin tutmadığını söylemek, kancayı
+   * yükün üstüne indirmeyi tahmin oyunu olmaktan çıkarıyor.
+   */
+  attachCheck(candidates: Grabbable[]): { item: Grabbable | null; reason: AttachReason } {
     const v = this.hook.getLinearVelocity();
-    if (Math.hypot(v.x, v.y) > CRANE.attachMaxSpeedMps) return null;
+    if (Math.hypot(v.x, v.y) > CRANE.attachMaxSpeedMps) {
+      return { item: null, reason: 'sallaniyor' };
+    }
+    // Halat düşeyden ne kadar sapmış? Bom ucu ile kanca arasındaki yatay fark.
+    if (Math.abs(this.tipWorld.x - this.hook.getPosition().x) > CRANE.maxSidePullM) {
+      return { item: null, reason: 'yan-cekme' };
+    }
 
     const g = this.grabPoint;
+    let nearMiss: AttachReason = 'uzak';
     for (const item of candidates) {
       const p = item.body.getWorldCenter();
       const topY = p.y + item.halfHeight;
-      const sideOk =
-        Math.abs(p.x - g.x) <= item.halfWidth + CRANE.attachSideMarginM;
+      const sideOk = Math.abs(p.x - g.x) <= CRANE.attachCentreToleranceM;
       const heightOk =
         g.y >= topY - CRANE.attachBelowTopM && g.y <= topY + CRANE.attachAboveTopM;
-      if (sideOk && heightOk) return item.body;
+      if (sideOk && heightOk) return { item, reason: 'hazir' };
+      if (heightOk && Math.abs(p.x - g.x) <= item.halfWidth + 1.0) nearMiss = 'ortala';
+      else if (sideOk) nearMiss = 'yukseklik';
     }
-    return null;
+    return { item: null, reason: nearMiss };
   }
 
-  /** HUD için: şu an boşluğa basılsa bağlanır mı? */
   canAttach(candidates: Grabbable[]): boolean {
-    return !this.attached && this.findGrabbable(candidates) !== null;
+    return !this.attached && this.attachCheck(candidates).item !== null;
   }
 
   requestToggleAttach(): void {
@@ -354,12 +479,31 @@ export class Crane {
     // Bomun kendi ağırlığı — merkezi bom uzadıkça dışarı kayıyor, yani
     // teleskop açmak devrilme momentini kendiliğinden artırıyor.
     const boomTonnes = CRANE.boomBaseTonnes + CRANE.boomFlyTonnes;
-    const boomCentre = (CRANE.boomBaseLengthM + this.extension) * 0.42;
-    this.chassis.applyForce(
-      { x: 0, y: -boomTonnes * 1000 * 9.81 },
-      { x: pivot.x + dir.x * boomCentre, y: pivot.y + dir.y * boomCentre },
-      true,
-    );
+    const boomWeight = boomTonnes * 1000 * 9.81;
+    if (this.stowed) {
+      // **Yol konumunda bom yatağa oturur.**
+      //
+      // Gerçek bom kamyonunda bom, kabinin üstündeki mesnede (boom rest)
+      // yaslanır; ağırlığı taretle mesnet arasında paylaşılır ve araç yolda
+      // düz durur. Bunu modellemeyince 5.2 tonluk bom şasi ağırlık merkezinin
+      // 4 metre önünde asılı kalıyordu: araç DURURKEN BİLE burnu 1.83° aşağıda
+      // duruyor, sürerken öne bastırıyordu. ("Vinç hareket ederken öne doğru
+      // baskı yapıyor" şikâyetinin sebebi buydu; ağırlık merkezini arkaya
+      // kaydırmak -0.4'ten -1.0'e- semptomu azaltmış ama sebebi çözmemişti.)
+      //
+      // Yatak devredeyken ağırlığı doğrudan şasi ağırlık merkezine bindiriyoruz:
+      // moment sıfır, araç düz. Ayaklar inip çalışma moduna geçince bom yataktan
+      // kalkar ve aşağıdaki gerçek moment devreye girer — devrilme fiziği
+      // olduğu gibi kalıyor.
+      this.chassis.applyForce({ x: 0, y: -boomWeight }, this.chassis.getWorldCenter(), true);
+    } else {
+      const boomCentre = (CRANE.boomBaseLengthM + this.extension) * 0.42;
+      this.chassis.applyForce(
+        { x: 0, y: -boomWeight },
+        { x: pivot.x + dir.x * boomCentre, y: pivot.y + dir.y * boomCentre },
+        true,
+      );
+    }
 
     // Halattaki gerçek kuvvet — kanca ve yük ne kadar çekiyorsa o.
     //
