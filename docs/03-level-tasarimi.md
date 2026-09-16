@@ -306,3 +306,98 @@ kaldır, devril" senaryosu oyuncuya hiç sunulmuyor.
 **Sprint 5 önerisi:** bacak çekmede serbest bıraksın (tek yönlü kriko), seviye
 düzeltmesi kurulumdan sonra kilitlensin, ayak açma kademeli olsun. Üçü birlikte
 devrilmeyi tasarımdaki yerine — emergent bir sonuç olarak — geri getiriyor.
+
+---
+
+# Bölüm 2 — Depo, sevkiyat rampası (YF-25 Forklift)
+
+İkinci araç forklift. Seçilme sebebi yeni bir fizik motoru gerektirmemesi:
+yük tablosu mantığı vinçle birebir aynı (moment / izin verilen moment), ama
+devrilme ekseni ÖN AKS ve araç lastik üstünde duruyor — yani vinçte ayaklar
+yüzünden erişilemeyen devrilme burada gerçekten oluyor.
+
+Sınırı koyan iki şey var ve ikisi de vinçtekinden farklı:
+
+| | Yük | Ton | Yük merkezi | Raf | LMI |
+|---|---|---|---|---|---|
+| D1 | Çimento paleti | 1.35 | 0.60 m | R1 (1.80 m) | %63 |
+| D2 | Fayans paleti | 1.55 | 0.62 m | R2 (3.20 m) | %77 |
+| D3 | Boya varilleri | 1.32 | 0.85 m | R2 (3.20 m) | %85 |
+| D4 | Yalıtım balyası | 0.90 | 1.05 m | R3 (4.60 m) | %91 |
+| D5 | Çelik profil | 1.72 | 0.55 m | R3 (4.60 m) | %99 |
+
+D4 tasarımın özeti: bölümün **en hafif** yükü, ama en yüksek ibreyi okuyan
+ikinci yük. Sebebi geniş palet (yük merkezi 1.05 m) ve 3.3 metrenin üstünde
+eriyen kapasite. Oyuncunun "ağır = zor" sezgisini kıran yer burası.
+
+## Devrilme artık ölçülebilir bir şey
+
+Vinçte devrilme erişilemiyordu; forkliftte erişiliyor ve göstergesi de var.
+Panelde **arka aks** satırı, arka tekerin zemine bastığı kuvvetin boş makinedeki
+payını gösteriyor — solverın o temasa verdiği normal impulstan okunuyor, yani
+uydurma değil ölçüm. Başsız turda en düşük değer %13; yani bölüm devrilmenin
+kıyısından geçiyor ama devrilmiyor.
+
+`WheelJoint.getReactionForce` önce denendi ve hep 0 döndü: yayın taşıdığı kuvvet
+mafsalın kendi impulsunda görünmüyor. Temasın kendisini ölçmek hem doğru hem de
+oyuncuya anlatması kolay.
+
+## Takla atan forklift — ve onu durduran şey
+
+İlk sürümde aşırı yükte makine 180° takla atıp sırtüstü kalıyordu. Ölçüm
+patlamayı değil, **hiç durmayan bir devrilmeyi** gösterdi: 1.4 saniyede
+0° → 180°, arada yükün ve şasinin zemine 9 kN·s'lik vuruşları.
+
+Sebep basitti: direk ve çatal birer gövde değil, sadece sayı. Dolayısıyla makine
+öne yatarken solverın göreceği hiçbir şey yoktu. Oysa gerçekte devrilen bir
+forklift **çatalının üstüne oturur**.
+
+Çözüm, bomun "yatakta dururken ağırlık şasiden geçer" kuralının aynısı: çatalın
+topuğu, ucu ve yüklüyken yükün ön-alt köşesi zemine değdiğinde şasiye elle temas
+impulsu uygulanıyor. Penaltı yayı önce denendi ve makineyi trambolin gibi
+zıplattı (±300°/s); Box2D'nin kendi yaptığı gibi hız düzeltmesi + küçük Baumgarte
+itmesi kullanınca sonuç kararlı: aşırı yükte makine **2.09° öne yatıp çatalının
+üstünde duruyor**, oradan geri gidip kurtulabiliyor.
+
+Bu yüzden forkliftin devrilme eşiği 22°, vinçin 8°: burnunu çatalına dayamak
+kaza değil, kurtarılabilir bir hata.
+
+## Koridor — 2B'de dönemeyen makinenin level tasarımı
+
+Forklift yan görünümde dönemiyor, çatalı hep doğuya bakıyor. Dolayısıyla paleti
+alabilmek için **hep onun batısında** olmalı. İlk yerleşimde paletler rafın
+batısında bekliyordu ve bölüm D2'de kilitlendi: makine rafa yükü bırakıp geri
+dönerken paletin doğusunda kalıyor, batısına geçmek için paletin içinden geçmesi
+gerekiyordu.
+
+Yerleşim buna göre yeniden kuruldu: **paletler rafın DOĞUSUNDA**, en alt raf
+kirişi şasinin üstünde (kiriş altı 1.62 m, şasi tavanı 1.48 m). Makine her turda
+rafın önünden geçip paleti alıyor, yüklü olarak geri geçip rafın batısında
+duruyor ve yükü içeri uzatıyor. Tur kapanıyor, hiçbir hile gerekmiyor.
+
+Yan görünümde raf dikmeleri koridorun ARKASINDA kalır; çizim de onları
+aktörlerin arkasına koyuyor, fizikte ise koridorda dikme yok — sadece kirişler
+ve her katın arkasında kısa bir dayanak.
+
+## Tekerlerin motoru makineyi frenliyordu
+
+Forklift ilk sürümde `applyForceToCenter` ile sürülüyor, tekerlerin motoru ise
+`motorSpeed: 0` ile AÇIK duruyordu. Ölçüm: yarım gazda 18 saniyede 0.5 metre.
+2600 N·m fren torku 0.32 m yarıçapta 16 kN'a karşılık geliyor, gazın verdiği
+13 kN'dan fazla — makine kendi kendini frenliyordu.
+
+Kamyonda doğru olan desen burada da doğru: süspansiyon, tahrik ve fren tek
+mafsalda. Tahrik ön tekerde (karşı ağırlıklı forklift önden çekişli). Yan
+kazanç: çekiş artık lastik sürtünmesiyle sınırlı, yani burnu yere değen makine
+gerçekten patinaj yapıyor.
+
+## Araç seçimi
+
+Oyun artık bir kararla başlıyor: hangi makine. Kartlar makineyi tanıtıyor ve
+**neyin zor olduğunu** söylüyor, çünkü iki araç aynı oyunu oynamıyor — biri
+yarıçapla, diğeri yük merkeziyle sınırlı. Üçüncü kart (dirsekli bom) "yakında"
+olarak duruyor; yol haritası oyuncudan saklanmıyor.
+
+Teknik tarafta araç bir kayıt: `ARACLAR` listesinde bir satır. `Mission`,
+kamera, puanlama ve HUD kabuğu hangi makineyi sürdüğünü bilmiyor — `OyunSahnesi`
+arayüzü sınırı çiziyor, `SahneGorunumu` da çizim tarafında aynısını yapıyor.

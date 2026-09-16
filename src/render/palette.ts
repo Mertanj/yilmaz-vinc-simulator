@@ -45,6 +45,28 @@ export const C = {
   hazardY:    0xF2C21A,
   hazardK:    0x16191B,
 
+  // Forklift — depo makinesi. Kasıtlı olarak vinçten BAŞKA bir renk: oyuncu
+  // araç seçtiğini ilk bakışta anlasın diye. Sahadaki karşılığı Linde turuncusu.
+  fork:       0xE2701C,
+  forkLight:  0xF59B4E,
+  forkDark:   0xA84D0D,
+  forkLine:   0x7A3708,
+  mast:       0x2E333B,
+  mastLight:  0x474D57,
+  blade:      0x9BA3AA,
+  bladeDark:  0x6B7278,
+
+  // Depo
+  depoFloor:  0x7C8288,
+  depoFloorD: 0x646A70,
+  depoWall:   0xB4BABE,
+  depoWallD:  0x949BA0,
+  rack:       0x2F6FB0,
+  rackLight:  0x4A8CCB,
+  rackDark:   0x1E4E80,
+  pallet:     0xB08A56,
+  palletDark: 0x8A6A3C,
+
   // Saha
   sky:        0x8FA6B4,
   skyLow:     0xC3D0D6,

@@ -1,7 +1,8 @@
 # Yılmaz Vinç
 
-2D, web tabanlı mobil vinç simülasyonu. Kamyonu sahaya sür, ayakları aç, yerdeki
-yükü kancala ve beş katlı sanayi binasının teraslarına yerleştir. Kurulum yok —
+2D, web tabanlı ağır makine simülasyonu. **İki araç:** 25 tonluk teleskopik
+vinçle sanayi binasının teraslarına yük çıkar, ya da forkliftle depoda paletleri
+raflara koy. Oyun hangisiyle oynayacağını sormakla başlıyor. Kurulum yok —
 tarayıcıda açılır.
 
 ### ▶ Oyna: **https://mertanj.github.io/yilmaz-vinc-simulator/**
@@ -10,6 +11,8 @@ Her push'ta kendiliğinden yayınlanıyor. Oynamak için klonlamaya, node kurmay
 gerek yok — linki aç ve başla.
 
 ## Kontroller
+
+### YV-25 Teleskopik Vinç
 
 | Faz | Tuş | İşlev |
 |---|---|---|
@@ -21,6 +24,21 @@ gerek yok — linki aç ve başla.
 | Vinç | `↑` / `↓` | Kancayı topla / sal |
 | Vinç | `boşluk` | Kancayı bağla / bırak |
 | Genel | `R` | Bölümü baştan başlat |
+
+### YF-25 Forklift
+
+| Faz | Tuş | İşlev |
+|---|---|---|
+| Sürüş | `→` / `←` | Gaz / geri |
+| Sürüş | `boşluk` | El freni |
+| Çatal | `W` / `S` | Kaldır / indir |
+| Çatal | `Shift+W` / `Shift+S` | Direği geriye / öne yatır |
+| Çatal | `boşluk` | Yükü al / bırak |
+| Genel | `R` | Bölümü baştan başlat |
+
+**Yük merkezi uzadıkça kapasite erir** — geniş bir paleti 4.60 metreye çıkarmak,
+ondan ağır ama dar bir paleti aynı rafa koymaktan zordur. Aşırı yükte makine
+burnunu çatalına dayıyor ve ön tekerler yönlendirmeyi bırakıyor.
 
 **Bomu kaldırmak yarıçapı KISALTIR** — gerçek vinçte de öyle. Uzağa ulaşmak
 için bomu indirip teleskobu açmak gerekiyor, ve tam o anda ibre tırmanıyor.

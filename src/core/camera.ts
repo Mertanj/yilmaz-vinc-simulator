@@ -42,12 +42,23 @@ export class Camera {
   private readonly zeminPayiPx = 46;
 
   /**
-   * En yakın ölçek. 34'ten 30'a indirildi — sahada "kamera biraz dar"
-   * geri bildirimi geldi ve sürüş kadrajı da bir tık açıldı.
+   * Ölçek sınırları ARACA GÖRE veriliyor.
+   *
+   * Vinçte 30/15: 34'ten 30'a indirildi, sahada "kamera biraz dar" geri
+   * bildirimi geldi ve sürüş kadrajı bir tık açıldı; en uzakta bomun tamamen
+   * açık hali sığıyor. Forklift ise 9.6 metrelik kamyonun yanında 2.7
+   * metrelik bir makine — aynı ölçekte ekranın ortasında bir leke gibi
+   * duruyordu, o yüzden kendi sınırları var.
    */
-  private readonly maxPpm = 30;
-  /** En uzak ölçek. Bomun tamamen açık hali bu ölçekte rahat sığıyor. */
-  private readonly minPpm = 15;
+  private maxPpm = 30;
+  private minPpm = 15;
+
+  /** Aracın kendi ölçek sınırlarını uygula. */
+  olcekSiniri(yakin: number, uzak: number): void {
+    this.maxPpm = yakin;
+    this.minPpm = uzak;
+    this.ppm = Math.min(yakin, Math.max(uzak, this.ppm));
+  }
   /** Kutunun çevresinde bırakılan pay (m). */
   private readonly padX = 5;
   private readonly padY = 3.5;

@@ -170,7 +170,7 @@ function main(): void {
         + ` uc ${c.tipWorld.x.toFixed(1)},${c.tipWorld.y.toFixed(1)} halat ${c.ropeM.toFixed(1)}`
         + ` kanca ${c.hook.getPosition().x.toFixed(1)},${c.hook.getPosition().y.toFixed(1)}`
         + ` yuk ${l.x.toFixed(2)},${l.y.toFixed(2)} bagli ${c.hasLoad ? 'E' : 'H'}`
-        + ` salinim ${r.mission.salinimDeg().toFixed(0)}°`
+        + ` salinim ${r.scene.salinimDeg().toFixed(0)}°`
         + ` LMI %${Math.min(999, c.lmi.percent).toFixed(0)}`);
     };
 

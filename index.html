@@ -86,12 +86,14 @@
   #p-egim[data-warn="yes"], #p-halat[data-warn="yes"] { color: #E2645A; }
   /* Sınırı hangi şeyin koyduğu ve halat katı, listenin altında kendi
      satırlarında — grid hücresine sığdırmaya çalışmak etiketleri sarıyordu. */
-  #p-sinir-et, #p-kat {
+  #p-alt1, #p-alt2 {
     font-size: 11px; line-height: 1.5; color: #8E9BA2; white-space: nowrap;
     overflow: hidden; text-overflow: ellipsis;
   }
-  #p-sinir-et[data-baglayan="halat"] { color: #E8A62C; }
-  #p-kat { margin-bottom: 8px; color: #C7D1D6; }
+  #p-alt2 { margin-bottom: 8px; color: #C7D1D6; }
+  #panel dd[data-vurgu="iyi"] { color: #5FB07C; }
+  #panel dd[data-vurgu="uyari"] { color: #E8A62C; }
+  #panel dd[data-vurgu="kotu"] { color: #E2645A; }
 
   #hint {
     font-size: 11.5px; line-height: 1.45; color: #8E9BA2;
@@ -217,10 +219,81 @@
   }
   #sonuc-ic .puan { font-size: 14px; color: #8E9BA2; margin: 14px 0 4px; }
   #sonuc-ic .note { font-size: 11px; color: #6C7C84; margin: 0; }
+
+  /* --- açılış: araç seçimi ---
+     Oyun bir ayar menüsüyle değil, bir KARARLA başlıyor: hangi makine.
+     Kartlar makineyi tanıtıyor ve neyin zor olduğunu söylüyor, çünkü iki araç
+     aynı oyunu oynamıyor — biri yarıçapla, diğeri yük merkeziyle sınırlı. */
+  #secim {
+    position: fixed; inset: 0; z-index: 40; overflow-y: auto;
+    background:
+      radial-gradient(120% 90% at 50% -10%, #223039 0%, #0E1417 62%);
+    font-family: "IBM Plex Mono", ui-monospace, monospace; color: #C7D1D6;
+    display: grid; place-items: center; padding: 24px 16px;
+  }
+  #secim[hidden] { display: none; }
+  .secim-ic { width: min(1040px, 100%); }
+  #secim header { text-align: center; margin-bottom: 28px; }
+  #secim h1 {
+    font-family: "Barlow Condensed", system-ui, sans-serif; font-size: 44px;
+    letter-spacing: 0.1em; color: #E8A62C; margin: 0 0 6px;
+  }
+  #secim header p { margin: 0; color: #8E9BA2; font-size: 14px; }
+  #secim .kartlar {
+    display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
+  }
+  #secim .kart {
+    position: relative; text-align: left; cursor: pointer;
+    background: #161D23; border: 1px solid #2A343C; border-radius: 12px;
+    padding: 18px 18px 16px; color: inherit; font: inherit;
+    transition: border-color .14s, transform .14s, background .14s;
+  }
+  #secim .kart:hover:not([disabled]) {
+    border-color: #E8A62C; background: #1B242B; transform: translateY(-2px);
+  }
+  #secim .kart:focus-visible { outline: 2px solid #E8A62C; outline-offset: 2px; }
+  #secim .kart[disabled] { opacity: .42; cursor: not-allowed; }
+  #secim .simge { color: #E8A62C; height: 56px; margin-bottom: 10px; }
+  #secim .kart[disabled] .simge { color: #6D777E; }
+  #secim .simge svg { height: 100%; width: auto; }
+  #secim .kart h2 {
+    font-family: "Barlow Condensed", system-ui, sans-serif; font-size: 23px;
+    margin: 0; letter-spacing: 0.04em; color: #E4E9EB;
+  }
+  #secim .sinif { color: #8E9BA2; font-size: 11.5px; margin: 2px 0 10px; }
+  #secim .kart p { margin: 0 0 12px; font-size: 12.5px; line-height: 1.55; color: #AEBAC1; }
+  #secim .zorluk {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; color: #7C878E; text-transform: uppercase; letter-spacing: .08em;
+  }
+  #secim .noktalar { display: flex; gap: 4px; }
+  #secim .noktalar i {
+    width: 8px; height: 8px; border-radius: 50%; background: #2F3A42; display: block;
+  }
+  #secim .noktalar i.dolu { background: #E8A62C; }
+  #secim .ipucu {
+    margin-top: 10px; padding-top: 10px; border-top: 1px solid #242E35;
+    font-size: 11.5px; color: #7C878E; line-height: 1.5;
+  }
+  #secim .rozet {
+    position: absolute; top: 12px; right: 12px; font-size: 10px;
+    letter-spacing: .08em; text-transform: uppercase;
+    background: #2A343C; color: #AEBAC1; border-radius: 99px; padding: 3px 9px;
+  }
+  #secim .rozet.son { background: #E8A62C; color: #16191B; }
+  #secim footer {
+    margin-top: 22px; text-align: center; color: #6D777E; font-size: 11.5px;
+    line-height: 1.6;
+  }
+  #secim footer kbd {
+    background: #222B31; border-radius: 3px; padding: 1px 5px; color: #C7D1D6;
+  }
 </style>
 </head>
 <body>
   <div id="game"></div>
+  <div id="secim" hidden></div>
   <div id="ust">
     <b>YILMAZ VİNÇ</b>
     <span id="gorev">T1/5 · yük hazırlanıyor</span>
@@ -229,24 +302,15 @@
   </div>
 
   <div id="panel">
-    <div class="baslik">KALDIRMA MOMENTİ</div>
+    <div class="baslik" id="p-baslik">KALDIRMA MOMENTİ</div>
     <div class="bar"><i id="bar-dolu"></i><i class="bar-sinir"></i></div>
     <div id="moment-yuzde">%0</div>
     <div id="moment-durum" data-zone="green">GÜVENLİ</div>
 
-    <dl>
-      <dt>kancada</dt><dd id="p-yuk">0.00 t</dd>
-      <dt>sınır</dt><dd id="p-sinir">0.00 t</dd>
-      <dt>yarıçap</dt><dd id="p-yaricap">0.0 m</dd>
-      <dt>bom</dt><dd id="p-bom">9.5 m · 11°</dd>
-      <dt>halat</dt><dd id="p-halat" data-warn="no">3.0 m</dd>
-      <dt>ayaklar</dt><dd id="p-ayak" data-state="stowed">TOPLU</dd>
-      <dt>eğim</dt><dd id="p-egim" data-warn="no">+0.0°</dd>
-      <dt>hız</dt><dd id="p-hiz">0 km/sa</dd>
-    </dl>
+    <dl id="p-satirlar"></dl>
 
-    <div id="p-sinir-et">sınırı yük tablosu koyuyor</div>
-    <div id="p-kat">2 kat · 3.9 t · K ile değiştir</div>
+    <div id="p-alt1"></div>
+    <div id="p-alt2"></div>
 
     <div id="hint" data-mode="drive">çalışma alanına yanaş, sonra Q ile ayakları aç</div>
   </div>

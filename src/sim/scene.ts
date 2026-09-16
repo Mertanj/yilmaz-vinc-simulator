@@ -1,13 +1,15 @@
 import { Box, type Body, type World, type Contact } from 'planck';
 import {
   createWorld, createGround, createFactoryBody, createKerb, scatterProps,
-  Snapshotter, SIM,
+  factoryTerraces, Snapshotter, SIM,
 } from './world';
 import { Truck } from './truck';
 import { Outriggers } from './outriggers';
 import { Crane, NEUTRAL, type CraneInput, type Grabbable } from './crane';
 import type { DriveInput } from '../input/keyboard';
 import { TASKS, MALZEME_X, type Task } from '../game/tasks';
+import { OutriggerState } from './loadChart';
+import type { Gosterge, OyunSahnesi, PanelSatiri, Uyari } from './sahne';
 
 /**
  * Sahnenin fizik tarafı — tek kaynak.
@@ -58,7 +60,7 @@ export const IDLE: SceneInput = {
   reset: false,
 };
 
-export class Scene {
+export class Scene implements OyunSahnesi {
   readonly world = createWorld();
   readonly snaps = new Snapshotter();
   readonly truck: Truck;
@@ -138,11 +140,170 @@ export class Scene {
   }
 
   /** Güncel yükün tanımı — boyutları puanlama ve çizim için gerekiyor. */
+  /** Bölüm 1 — sanayi sitesi. Hedefler binanın terasları. */
+  readonly gorevler = TASKS;
+  /** Vinçin ölçülmüş kalibrasyonu: başsız turda görev başına 139–215 s. */
+  readonly hizEsikleri = { tam: 90, sifir: 240 };
+  private readonly teraslar = factoryTerraces();
+  hedefNoktasi(t: Task): { x: number; y: number } | null {
+    return this.teraslar[t.hedef] ?? null;
+  }
+  get sasiHizi(): number { return this.truck.chassis.getLinearVelocity().x; }
+  readonly kameraOlcegi = { yakin: 30, uzak: 15 };
+  /** Vinçte 8° zaten kaza: ayaklar açıkken şasi hiç eğilmemeli. */
+  get devrildiMi(): boolean { return Math.abs(this.tiltDeg) > 8; }
+
   get loadTask(): Task | null { return this.loadSpec; }
 
   /** Ayaklar yerdeyse vinç fazındayız: sürüş kilitli, vinç açık. */
   get craneMode(): boolean {
     return this.outriggers.fraction > 0.15;
+  }
+
+  // --- OyunSahnesi arayüzü ---
+  get calismaModunda(): boolean { return this.craneMode; }
+  get olcum() { return this.crane.lmi; }
+  get hasLoad(): boolean { return this.crane.hasLoad; }
+  get yukNoktasi(): { x: number; y: number } {
+    const p = this.crane.hook.getPosition();
+    return { x: p.x, y: p.y };
+  }
+
+  /**
+   * Halatın düşeyden sapma açısı — salınımın doğrudan ölçüsü.
+   *
+   * Halat 1.5 metrenin altındaysa sıfır sayılıyor: kanca bom ucuna dayanmışken
+   * 11 santimlik bir kayma 5 dereceye denk geliyor, yani ölçü anlamını
+   * yitiriyor.
+   */
+  salinimDeg(): number {
+    const tip = this.crane.tipWorld;
+    const h = this.crane.hook.getPosition();
+    const dy = tip.y - h.y;
+    if (dy < 1.5) return 0;
+    return (Math.atan2(h.x - tip.x, dy) * 180) / Math.PI;
+  }
+
+  odakNoktalari(): Array<{ x: number; y: number }> {
+    const c = this.truck.chassis.getPosition();
+    return [{ x: c.x, y: c.y + 2.2 }, this.crane.tipWorld, this.yukNoktasi];
+  }
+
+  private get tabloDisi(): boolean { return this.crane.lmi.capacityTonnes <= 0; }
+
+  gosterge(): Gosterge {
+    const r = this.crane.lmi;
+    const pct = this.tabloDisi || !Number.isFinite(r.percent)
+      ? null : Math.min(999, r.percent);
+    return {
+      baslik: 'KALDIRMA MOMENTİ',
+      yuzde: pct,
+      durum: this.tabloDisi ? 'YARIÇAP TABLO DIŞI'
+        : r.zone === 'red' ? 'AŞIRI YÜK'
+        : r.zone === 'amber' ? 'DİKKAT · SINIRA YAKIN' : 'GÜVENLİ',
+      zone: r.zone,
+      dolu: Math.min(1, (pct ?? 999) / 150),
+      altSatirlar: [
+        r.limitedBy === 'halat'
+          ? `sınırı HALAT koyuyor (tablo ${r.chartTonnes.toFixed(1)} t)`
+          : `sınırı TABLO koyuyor (halat ${r.ropeTonnes.toFixed(1)} t)`,
+        this.crane.reevingSuresi > 0
+          ? `halat geçiriliyor… ${this.crane.reevingSuresi.toFixed(0)} sn`
+          : `${this.crane.katSayisi} kat · ${this.crane.halatKapasiteTon.toFixed(1)} t`
+            + ` · K → ${this.crane.sonrakiKat} kat`,
+      ],
+    };
+  }
+
+  panelSatirlari(): PanelSatiri[] {
+    const r = this.crane.lmi;
+    const egim = this.tiltDeg;
+    return [
+      { etiket: 'kancada', deger: `${r.loadTonnes.toFixed(2)} t` },
+      { etiket: 'sınır', deger: this.tabloDisi ? 'tablo dışı' : `${r.capacityTonnes.toFixed(2)} t` },
+      { etiket: 'yarıçap', deger: `${this.crane.radiusM.toFixed(1)} m` },
+      { etiket: 'bom', deger: `${this.crane.lengthM.toFixed(1)} m · ${this.crane.angleDeg.toFixed(0)}°` },
+      { etiket: 'halat', deger: `${this.crane.ropeM.toFixed(1)} m`,
+        ...(this.crane.ikiBlokta ? { vurgu: 'kotu' as const } : {}) },
+      { etiket: 'ayaklar',
+        deger: { [OutriggerState.Stowed]: 'TOPLU', [OutriggerState.Half]: 'YARI AÇIK',
+                 [OutriggerState.Full]: 'TAM AÇIK' }[this.outriggers.state],
+        vurgu: this.outriggers.state === OutriggerState.Full ? 'iyi'
+          : this.outriggers.state === OutriggerState.Half ? 'uyari' : undefined },
+      { etiket: 'eğim', deger: `${egim >= 0 ? '+' : ''}${egim.toFixed(1)}°`,
+        ...(Math.abs(egim) > 3 ? { vurgu: 'kotu' as const } : {}) },
+      { etiket: 'hız', deger: `${this.truck.speedKmh.toFixed(0)} km/sa` },
+    ];
+  }
+
+  uyari(): Uyari | null {
+    const r = this.crane.lmi;
+    const kilitli = this.crane.kilitliDenendi;
+    if (!this.craneMode) return null;
+
+    // İki-blok, yük momentinden ÖNCE gelir: kanca kafaya dayanmışsa mesele
+    // ağırlık değil, halatın bitmiş olması. Ama SADECE oyuncuyu fiilen
+    // engellediğinde uyarıyoruz — kurulumda kanca zaten kafaya toplu duruyor.
+    if (this.crane.ikiBlokta && (kilitli || this.crane.hasLoad)) {
+      return {
+        zone: 'red', carpiyor: kilitli,
+        bas: '⚠ İKİ-BLOK — KANCA BOM KAFASINA DAYANDI',
+        govde: 'Halat bitti. Vinci yukarı almak ve teleskobu açmak <b>KİLİTLİ</b>;'
+          + ' ikisi de halatı daha da kısaltır ve kancayı kafaya çarpar.',
+        cozum: '↓ ile halatı sal. Teleskobu açarken vinci de salman gerekir —'
+          + ' bom uzadıkça halat kısalır.',
+      };
+    }
+    if (this.tabloDisi) {
+      return {
+        zone: 'red', carpiyor: kilitli,
+        bas: '⚠ YARIÇAP TABLO DIŞI',
+        govde: `<b>${this.crane.radiusM.toFixed(1)} m</b> mesafede bu vinç`
+          + ' <b>hiçbir yük</b> kaldıramaz — yük tablosu 28 metrede bitiyor.',
+        cozum: 'W ile bomu kaldır ya da ⇧S ile teleskobu topla.',
+      };
+    }
+    if (r.zone === 'red') {
+      return {
+        zone: 'red', carpiyor: kilitli,
+        bas: '⚠ AŞIRI YÜK — BU YÜKÜ BURADA KALDIRAMAZSIN',
+        govde: `Kancadaki <b>${r.loadTonnes.toFixed(2)} t</b>,`
+          + ` <b>${this.crane.radiusM.toFixed(1)} m</b> mesafede izin verilen`
+          + ` <b>${r.capacityTonnes.toFixed(2)} t</b> sınırının üstünde.`,
+        cozum: kilitli
+          ? 'Bom indirme ve teleskop açma KİLİTLİ. W ile bomu kaldır ya da ⇧S ile'
+            + ' teleskobu topla — yarıçap kısalır, sınır yükselir.'
+          : 'W ile bomu kaldır: yarıçap kısalır, sınır yükselir.',
+      };
+    }
+    if (r.zone === 'amber') {
+      return {
+        zone: 'amber', carpiyor: false,
+        bas: 'SINIRA YAKLAŞIYORSUN',
+        govde: `${r.loadTonnes.toFixed(2)} t / ${r.capacityTonnes.toFixed(2)} t`
+          + ` · yarıçap ${this.crane.radiusM.toFixed(1)} m.`
+          + ' Yarıçapı büyütürsen kollar kilitlenir.',
+        cozum: '',
+      };
+    }
+    return null;
+  }
+
+  ipucu(): { metin: string; mod: 'drive' | 'crane' | 'ready' } {
+    if (!this.craneMode) {
+      return { metin: 'çalışma alanına yanaş, sonra Q ile ayakları aç', mod: 'drive' };
+    }
+    if (this.crane.hasLoad) return { metin: 'yük bağlı · boşluk ile bırak', mod: 'crane' };
+    const { reason } = this.crane.attachCheck(this.grabbables);
+    const say: Record<typeof reason, string> = {
+      hazir: 'KANCA MENZİLDE · boşluk ile bağla',
+      sallaniyor: 'kanca sallanıyor · dursun, sonra bağla',
+      'yan-cekme': 'halat eğik · yan çekme olur, bomu yükün üstüne getir',
+      ortala: 'kancayı yükün TAM ORTASINA getir',
+      yukseklik: 'kancayı biraz daha indir',
+      uzak: 'kancayı yükün üstüne indir',
+    };
+    return { metin: say[reason], mod: reason === 'hazir' ? 'ready' : 'crane' };
   }
 
   /** Son kat değiştirme denemesinin sonucu — HUD gerekçeyi gösteriyor. */

@@ -1,6 +1,5 @@
-import { factoryTerraces } from '../sim/world';
-import type { Scene } from '../sim/scene';
-import { TASKS, type Task } from './tasks';
+import type { OyunSahnesi } from '../sim/sahne';
+import type { Task } from './tasks';
 
 /**
  * Bölüm akışı, puanlama ve not.
@@ -71,8 +70,6 @@ export interface Result {
   devrildi: boolean;
 }
 
-/** Devrilme sayılan eğim. Ayaklar yarım açıkken ağır yükte gerçekten oluyor. */
-const DEVRILME_DEG = 8;
 /**
  * Yerleştirme başına puan.
  *
@@ -88,10 +85,6 @@ export const PUAN = {
   isabetTam: 600,
   /** Bu sapmada (m) isabet bonusu sıfırlanır. */
   isabetSifir: 2.0,
-  /** Bu süreden (s) hızlı bitirirsen tam hız bonusu. */
-  hizTamSn: 90,
-  /** Bu süreden yavaşsa hız bonusu sıfır. */
-  hizSifirSn: 240,
   hizTam: 400,
   /** Kırmızıda geçen saniye başına kesinti. */
   kirmiziCezasi: 40,
@@ -122,32 +115,31 @@ export class Mission {
     sure: 0, maxLmi: 0, kirmiziSn: 0, maxSalinim: 0, carpma: 0, sapmalar: [], puan: 0,
   };
 
-  private readonly teraslar = factoryTerraces();
+  constructor(private readonly scene: OyunSahnesi) {}
 
-  constructor(private readonly scene: Scene) {}
+  private get gorevler(): readonly Task[] { return this.scene.gorevler; }
 
-  get task(): Task | null { return TASKS[this.index] ?? null; }
-  get taskNo(): number { return Math.min(this.index + 1, TASKS.length); }
-  get taskCount(): number { return TASKS.length; }
+  get task(): Task | null { return this.gorevler[this.index] ?? null; }
+  get taskNo(): number { return Math.min(this.index + 1, this.gorevler.length); }
+  get taskCount(): number { return this.gorevler.length; }
 
   /** Güncel görevin bırakma noktası. */
   get target(): { x: number; y: number } | null {
     const t = this.task;
-    if (!t) return null;
-    return this.teraslar[t.hedef] ?? null;
+    return t ? this.scene.hedefNoktasi(t) : null;
   }
 
   get phase(): Phase {
     if (this.devrildi) return 'devrildi';
     if (this.bitti) return 'bitti';
-    if (!this.scene.craneMode) return this.index === 0 ? 'surus' : 'gorev';
+    if (!this.scene.calismaModunda) return this.index === 0 ? 'surus' : 'gorev';
     return 'gorev';
   }
 
   /** Bölüm bittiyse sonuç, yoksa null. */
   get result(): Result | null {
     if (!this.bitti && !this.devrildi) return null;
-    return degerlendir(this.score, this.devrildi, this.sifirlandi);
+    return degerlendir(this.score, this.gorevler.length, this.devrildi, this.sifirlandi);
   }
 
   markReset(): void {
@@ -169,7 +161,7 @@ export class Mission {
     this.gorevCarpmaBasi = 0;
     this.score.puan = 0;
     this.sonTamamlanan = null;
-    this.scene.spawnLoad(TASKS[0] ?? null);
+    this.scene.spawnLoad(this.gorevler[0] ?? null);
   }
 
   /** Her fizik adımında, scene.step()'ten SONRA. */
@@ -178,13 +170,13 @@ export class Mission {
     this.score.sure += dt;
     this.score.carpma = this.scene.carpma;
 
-    if (Math.abs(this.scene.tiltDeg) > DEVRILME_DEG) {
+    if (this.scene.devrildiMi) {
       this.devrildi = true;
       return;
     }
 
-    if (this.scene.craneMode) {
-      const lmi = this.scene.crane.lmi.percent;
+    if (this.scene.calismaModunda) {
+      const lmi = this.scene.olcum.percent;
       if (Number.isFinite(lmi)) {
         if (lmi > this.score.maxLmi) this.score.maxLmi = Math.min(999, lmi);
         if (lmi > this.gorevMaxLmi) this.gorevMaxLmi = Math.min(999, lmi);
@@ -193,7 +185,7 @@ export class Mission {
           this.gorevKirmiziSn += dt;
         }
       }
-      const s = Math.abs(this.salinimDeg());
+      const s = Math.abs(this.scene.salinimDeg());
       if (s > this.score.maxSalinim) this.score.maxSalinim = s;
     }
 
@@ -210,25 +202,8 @@ export class Mission {
     }
   }
 
-  /**
-   * Halatın düşeyden sapma açısı — salınımın doğrudan ölçüsü.
-   *
-   * Halat 1.5 metrenin altındaysa sıfır sayılıyor. Sebebi geometrik: kanca bom
-   * ucuna dayanmışken (iki-blok, halat 1.2 m) 11 santimlik bir kayma 5 dereceye
-   * denk geliyor, yani ölçü anlamını yitiriyor. Bir kontrol döngüsü tam da bu
-   * yüzden kilitlendi — "salınım geniş" deyip beklemeye geçti, oysa kanca
-   * ucun dibindeydi ve bekleyerek değişecek bir şey yoktu.
-   */
-  salinimDeg(): number {
-    const tip = this.scene.crane.tipWorld;
-    const h = this.scene.crane.hook.getPosition();
-    const dy = tip.y - h.y;
-    if (dy < 1.5) return 0;
-    return (Math.atan2(h.x - tip.x, dy) * 180) / Math.PI;
-  }
-
   private yerinde(t: Task, hedef: { x: number; y: number }): boolean {
-    if (this.scene.crane.hasLoad) return false;
+    if (this.scene.hasLoad) return false;
     const p = this.scene.load.getPosition();
     const v = this.scene.load.getLinearVelocity();
     return Math.abs(p.x - hedef.x) <= 2.0
@@ -238,14 +213,16 @@ export class Mission {
 
   private tamamla(hedef: { x: number; y: number }): void {
     const sapma = Math.abs(this.scene.load.getPosition().x - hedef.x);
-    const biten = TASKS[this.index];
+    const biten = this.gorevler[this.index];
     const gorevSure = this.score.sure - this.gorevBasi;
     const gorevCarpma = this.scene.carpma - this.gorevCarpmaBasi;
     this.score.sapmalar.push(sapma);
     this.durulmaSn = 0;
     this.index++;
     if (biten) {
-      const puan = puanla(sapma, gorevSure, this.gorevKirmiziSn, gorevCarpma);
+      const puan = puanla(
+        sapma, gorevSure, this.gorevKirmiziSn, gorevCarpma, this.scene.hizEsikleri,
+      );
       this.score.puan += puan.toplam;
       this.sonTamamlanan = {
         puan,
@@ -253,7 +230,7 @@ export class Mission {
         sapmaCm: sapma * 100,
         maxLmi: this.gorevMaxLmi,
         sure: gorevSure,
-        kalan: TASKS.length - this.index,
+        kalan: this.gorevler.length - this.index,
         sira: this.index,
       };
     }
@@ -261,7 +238,7 @@ export class Mission {
     this.gorevMaxLmi = 0;
     this.gorevKirmiziSn = 0;
     this.gorevCarpmaBasi = this.scene.carpma;
-    const sonraki = TASKS[this.index];
+    const sonraki = this.gorevler[this.index];
     if (sonraki) {
       // Konan yük sahnede kalsın istiyoruz ama malzeme alanı tek gövde
       // tutuyor; konan yükü artık kancalanabilir olmaktan çıkarıp yenisini
@@ -284,12 +261,13 @@ export class Mission {
 /** Bir yerleştirmenin puan dökümü. */
 function puanla(
   sapmaM: number, sureSn: number, kirmiziSn: number, carpma: number,
+  hiz_: { tam: number; sifir: number },
 ): Puan {
   const temel = PUAN.temel;
   const isabet = Math.round(
     PUAN.isabetTam * Math.max(0, 1 - sapmaM / PUAN.isabetSifir),
   );
-  const hizOran = (PUAN.hizSifirSn - sureSn) / (PUAN.hizSifirSn - PUAN.hizTamSn);
+  const hizOran = (hiz_.sifir - sureSn) / (hiz_.sifir - hiz_.tam);
   const hiz = Math.round(PUAN.hizTam * Math.max(0, Math.min(1, hizOran)));
   const ceza = Math.round(kirmiziSn * PUAN.kirmiziCezasi + carpma * PUAN.carpmaCezasi);
   // Yerleştirme asla eksi puan yazmıyor: bitirmek her zaman ilerleme demek.
@@ -304,13 +282,15 @@ function puanla(
  * şimdi not doğrudan kazanılan puanın yüzdesi. Yarım kalan bölüm kendiliğinden
  * düşük not alıyor, ayrıca ceza vermeye gerek yok — konulmayan yükün puanı yok.
  */
-function degerlendir(score: Score, devrildi: boolean, sifirlandi: boolean): Result {
-  const enYuksek = GOREV_MAX * TASKS.length;
+function degerlendir(
+  score: Score, gorevSayisi: number, devrildi: boolean, sifirlandi: boolean,
+): Result {
+  const enYuksek = GOREV_MAX * gorevSayisi;
   let oran = enYuksek > 0 ? (score.puan / enYuksek) * 100 : 0;
   if (devrildi) oran = Math.min(oran, 15);
   const puan = Math.max(0, Math.min(100, oran));
   const not = puan >= 85 ? 'A' : puan >= 70 ? 'B' : puan >= 55 ? 'C' : 'D';
   const usta = !devrildi && !sifirlandi && score.carpma === 0
-    && score.kirmiziSn === 0 && score.sapmalar.length === TASKS.length;
+    && score.kirmiziSn === 0 && score.sapmalar.length === gorevSayisi;
   return { not, puan, usta, score, devrildi };
 }

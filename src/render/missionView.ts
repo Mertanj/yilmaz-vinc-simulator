@@ -116,7 +116,13 @@ export class TargetMarker extends Container {
     this.addChild(this.g);
   }
 
-  update(hedef: { x: number; y: number } | null, hw: number, aktif: boolean): void {
+  /**
+   * @param boy direklerin yüksekliği (m). Terasta 1.15 doğru, rafta değil:
+   *   raf katları 1.4 metre arayla ve 1.15'lik direk bir üst kata girip
+   *   oku yanlış katta gösteriyordu.
+   */
+  update(hedef: { x: number; y: number } | null, hw: number, aktif: boolean,
+         boy = 1.15): void {
     this.g.clear();
     this.visible = hedef !== null;
     if (!hedef) return;
@@ -132,14 +138,15 @@ export class TargetMarker extends Container {
     this.g.rect(-w, 0.02, w * 2, 0.1).fill({ color: renk, alpha: alpha * 0.85 });
     // İki yan direk
     for (const sx of [-w, w - 0.12]) {
-      this.g.rect(sx, 0, 0.12, 1.15).fill({ color: renk, alpha });
-      for (let i = 0; i < 3; i++) {
-        this.g.rect(sx, 0.18 + i * 0.36, 0.12, 0.18).fill({ color: C.hazardK, alpha: alpha * 0.8 });
+      this.g.rect(sx, 0, 0.12, boy).fill({ color: renk, alpha });
+      for (let i = 0; i * 0.36 + 0.18 < boy; i++) {
+        this.g.rect(sx, 0.18 + i * 0.36, 0.12, Math.min(0.18, boy - 0.18 - i * 0.36))
+          .fill({ color: C.hazardK, alpha: alpha * 0.8 });
       }
     }
     // Ok — aşağı bakan üçgen, bırakma noktası. Yük havadayken büyüyor.
     const k = aktif ? 1.35 : 1;
-    this.g.moveTo(-0.3 * k, 1.1 + 0.5 * k).lineTo(0.3 * k, 1.1 + 0.5 * k).lineTo(0, 1.1)
+    this.g.moveTo(-0.3 * k, boy + 0.5 * k).lineTo(0.3 * k, boy + 0.5 * k).lineTo(0, boy)
       .fill({ color: renk, alpha });
   }
 }
