@@ -27,18 +27,16 @@ import type { Task } from './tasks';
  * gidip geliyor, arada hiçbir şey yok. Raf makinenin hep BATISINDA, paletler
  * hep DOĞUSUNDA — çatal doğuya baktığı için ikisi de doğru tarafta.
  */
-export const RAF_X = 20.0;
+export const RAF_X = 24.0;
 /** Rafın derinliği (m): ön yüzü `RAF_X`, arkası `RAF_X + RAF_DERINLIK`. */
 export const RAF_DERINLIK = 2.6;
 /**
- * Kat kotları (m). İki sayı da ölçümden çıktı:
+ * Kat kotları (m).
  *
- * **En alt kat 1.70.** Raf, makinenin iki çalışma noktası ARASINDA duruyor
- * (giriş doğuda, bırakma yeri rafın hemen batısında), dolayısıyla yüklü
- * makine her turda rafın önünden geçiyor. Taşıma kotunda paletin üstü 1.31
- * metrede kalıyor; 1.40'ta kiriş altı 1.24'tü ve palet kirişi sıyırıp çatalın
- * ucuna doğru 60 santim kayıyordu — ölçülen yük merkezi 0.63'ten 1.20'ye
- * çıkıp makineyi kendi kendine aşırı yüke sokuyordu. 1.70'te 23 cm boşluk var.
+ * **En alt kat artık alçak olabiliyor.** Önceki yerleşimde raf makinenin iki
+ * çalışma noktası ARASINDAYDI, dolayısıyla yüklü makine her turda rafın
+ * önünden geçiyordu ve en alt kirişin taşınan paleti sıyırmaması gerekiyordu.
+ * Yeni düzende makine rafın batısında kalıyor, hiç geçmiyor.
  *
  * **Aralık 1.70.** Paletin üstü bir üstteki kirişin altında kalmalı: taban
  * kirişin 0.36 m üstünde, palet en çok 0.90 m boyunda, yerleştirirken 0.12 m
@@ -46,7 +44,7 @@ export const RAF_DERINLIK = 2.6;
  * altında 1.4° öne yattığı için çatal ucunda oluşan 6 santimlik düşüşü de bu
  * pay karşılıyor.
  */
-export const RAF_KATLARI = [1.70, 3.40, 5.10] as const;
+export const RAF_KATLARI = [1.30, 3.00, 4.70] as const;
 
 /** Bir katın adı — depo raflarında gerçekten yazar. */
 export function katAdi(i: number): string { return `R${i + 1}`; }
@@ -54,13 +52,25 @@ export function katAdi(i: number): string { return `R${i + 1}`; }
 /**
  * Paletlerin geldiği yer — koridorun DOĞU ucu.
  *
- * Konum keyfi değil, makinenin kısıtından çıkıyor: forklift yan görünümde
- * dönemiyor, çatalı hep doğuya bakıyor, dolayısıyla paleti alabilmek için hep
- * onun batısında olmalı. Paletler rafın batısında olsaydı makine her turda
- * yeni paletin içinden geçmek zorunda kalırdı ve bölüm ikinci görevde
- * kilitlenirdi (ölçüldü).
+ * Sıra artık sahadan gelen tarife göre: **makine → palet → raf.** Çatal doğuya
+ * baktığı için hedefin de doğuda olması gerekiyor; önceki yerleşimde raf
+ * makinenin batısında kalıyordu ve oyuncu rafa koymak için onun ÖNÜNDEN GEÇİP
+ * arkasına dolanmak zorundaydı. Şimdi raf hep ileride: paleti al, aynı yöne
+ * devam et, rafa koy.
  */
-export const GIRIS_X = 29.0;
+export const GIRIS_X = 17.0;
+/**
+ * Paletin teslim edildiği kot (m) — mal kabul konveyörünün ağzı.
+ *
+ * Palet oraya asılı duruyor ve makine yükleme karesinin BATISINA geçtiği an
+ * iniyor. Sebebi makinenin kısıtı: forklift dönemediği için paleti alabilmek
+ * hep onun batısında olmak zorunda, ama önceki paleti rafa bıraktığında
+ * doğuda kalıyor. Palet önceden yerde duruyorsa makine batıya dönerken onu
+ * önüne katıyor. Konveyör bunu çözüyor ve sahada da olan bir şey: mal kabul
+ * paleti sen yerine geçtikten sonra indirir.
+ */
+export const TESLIM_KOTU = 3.6;
+export const TESLIM_HIZI = 1.4;
 /** Depo duvarları — koridorun iki ucu. */
 export const DEPO_BATI = -12;
 export const DEPO_DOGU = 44;
@@ -84,25 +94,25 @@ export const FORKLIFT_TASKS: readonly Task[] = [
   {
     kod: 'D1', ad: 'Çimento paleti', tonnes: 1.29,
     halfWidth: 0.58, halfHeight: 0.42, kind: 'tezgah', hedef: 0,
-    brif: 'R1, 1.40 m — ısınma turu: çatalı paletin cebine dibine kadar sok',
+    brif: 'R1, 1.30 m — ısınma turu: çatalı paletin cebine dibine kadar sok',
   },
   {
-    kod: 'D2', ad: 'Fayans paleti', tonnes: 1.49,
+    kod: 'D2', ad: 'Fayans paleti', tonnes: 1.45,
     halfWidth: 0.60, halfHeight: 0.38, kind: 'bobin', hedef: 1,
-    brif: 'R2, 3.10 m — kapasite tam burada erimeye başlıyor',
+    brif: 'R2, 3.00 m — kapasite tam burada erimeye başlıyor',
   },
   {
-    kod: 'D3', ad: 'Boya varilleri', tonnes: 1.23,
+    kod: 'D3', ad: 'Boya varilleri', tonnes: 1.20,
     halfWidth: 0.88, halfHeight: 0.45, kind: 'jenerator', hedef: 1,
     brif: 'Geniş palet — çatal az girerse yük merkezi uzar, ibre tırmanır',
   },
   {
     kod: 'D4', ad: 'Yalıtım balyası', tonnes: 1.02,
     halfWidth: 0.95, halfHeight: 0.45, kind: 'klima', hedef: 2,
-    brif: 'Bölümün en hafifi ama en genişi — en üst kat, 4.80 m',
+    brif: 'Bölümün en hafifi ama en genişi — en üst kat, 4.70 m',
   },
   {
-    kod: 'D5', ad: 'Çelik profil', tonnes: 1.62,
+    kod: 'D5', ad: 'Çelik profil', tonnes: 1.78,
     halfWidth: 0.52, halfHeight: 0.30, kind: 'kompresor', hedef: 2,
     brif: 'Bölümün en ağırı, en üst kat — ibre sınıra dayanır',
   },

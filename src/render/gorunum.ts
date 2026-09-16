@@ -12,7 +12,9 @@ import { TruckView, drawWheel, drawContactShadow } from './truckView';
 import { OutriggerView } from './outriggerView';
 import { CableView, drawHookBlock } from './craneView';
 import { ForkliftView, drawForkliftWheel } from './forkliftView';
-import { drawRaf, drawDepoZemin, drawDepoIci, drawPalet, drawDepoArkaPlan } from './depo';
+import {
+  drawRaf, drawDepoZemin, drawDepoIci, drawPalet, drawDepoArkaPlan, drawKonveyor,
+} from './depo';
 import {
   drawGround, drawFactory, drawFarSkyline, drawEntranceSign, drawPropBox,
   drawSetupZone, drawKerb, drawSky,
@@ -177,7 +179,10 @@ export class ForkliftGorunumu extends SahneGorunumu {
   }
 
   dekor(): Container[] {
-    return [drawDepoIci(DEPO_BATI, DEPO_DOGU), drawDepoZemin(DEPO_BATI, DEPO_DOGU), drawRaf()];
+    return [
+      drawDepoIci(DEPO_BATI, DEPO_DOGU), drawDepoZemin(DEPO_BATI, DEPO_DOGU),
+      drawRaf(), drawKonveyor(),
+    ];
   }
 
   /** Kapalı mekân: gökyüzü yok, deponun loş iç hacmi var. */

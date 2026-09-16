@@ -73,7 +73,7 @@ async function boot(): Promise<void> {
   };
 
   const render = (alpha: number, frameDt: number): void => {
-    gorunum.ciz(alpha, mission.target, mission.task?.halfWidth ?? 1);
+    gorunum.ciz(alpha, mission.marker, mission.task?.halfWidth ?? 1);
 
     // Kadraja girmesi gerekenleri makine söylüyor; hedefi biz ekliyoruz.
     const bakilacak = scene.odakNoktalari();

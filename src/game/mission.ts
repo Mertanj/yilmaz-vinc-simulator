@@ -129,6 +129,13 @@ export class Mission {
     return t ? this.scene.hedefNoktasi(t) : null;
   }
 
+  /** Hedef işaretinin çizileceği nokta — bırakma noktasından farklı olabilir. */
+  get marker(): { x: number; y: number } | null {
+    const t = this.task;
+    if (!t) return null;
+    return this.scene.isaretNoktasi?.(t) ?? this.scene.hedefNoktasi(t);
+  }
+
   get phase(): Phase {
     if (this.devrildi) return 'devrildi';
     if (this.bitti) return 'bitti';

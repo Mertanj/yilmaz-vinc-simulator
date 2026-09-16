@@ -4,7 +4,8 @@ import { Forklift, forkliftKapasitesi, FORKLIFT_NEUTRAL } from './forklift';
 import type { Grabbable } from './crane';
 import { LmiZone, type LmiReading } from './loadChart';
 import {
-  FORKLIFT_TASKS, GIRIS_X, PALET_AYAK, RAF_DERINLIK, RAF_KATLARI, RAF_X, katKotu,
+  FORKLIFT_TASKS, GIRIS_X, PALET_AYAK, RAF_DERINLIK, RAF_KATLARI, RAF_X,
+  TESLIM_HIZI, TESLIM_KOTU, katKotu,
 } from '../game/forkliftTasks';
 import type { Task } from '../game/tasks';
 import type { SceneInput } from './scene';
@@ -65,6 +66,8 @@ export class ForkliftSahnesi implements OyunSahnesi {
   grabbables: Grabbable[] = [];
   carpma = 0;
   private olcumTon = 0;
+  /** Palet konveyörde mi, iniyor mu, yerde mi? */
+  private teslim: 'bekliyor' | 'iniyor' | 'hazir' = 'hazir';
 
   constructor() {
     createGround(this.world);
@@ -89,9 +92,19 @@ export class ForkliftSahnesi implements OyunSahnesi {
     if (this.load) this.world.destroyBody(this.load);
     this.loadSpec = spec;
     if (!spec) { this.grabbables = []; return; }
+    // **Palet ancak makine yükleme karesinin BATISINDAYKEN iniyor.**
+    // Forklift dönemediği için paleti alabilmek hep onun batısında olmak
+    // demek; oysa önceki paleti rafa bırakınca makine doğuda kalıyor. Palet
+    // önceden yerde dursaydı makine batıya dönerken onu önüne katardı
+    // (ölçüldü: palet 1.7 metre süründü, çatal cebe hiç girmedi). Mal kabul
+    // konveyörü sahada da tam olarak bunu yapıyor: sen yerine geçince indirir.
+    const yerKotu = spec.halfHeight + PALET_AYAK;
+    const acik = this.forklift.forkTip.x < this.teslimKapisi(spec.halfWidth);
+    this.teslim = acik ? 'hazir' : 'bekliyor';
     const body = this.world.createDynamicBody({
-      x: GIRIS_X, y: spec.halfHeight + PALET_AYAK,
+      x: GIRIS_X, y: acik ? yerKotu : TESLIM_KOTU + spec.halfHeight,
     });
+    if (!acik) body.setType('kinematic');
     // Yükün kendisi: her şeye değiyor.
     body.createFixture(new Box(spec.halfWidth, spec.halfHeight), {
       density: 1, friction: 0.9, restitution: 0.01,
@@ -110,13 +123,10 @@ export class ForkliftSahnesi implements OyunSahnesi {
           filterMaskBits: MASKE.paletAyagi & MASKE.yuk },
       );
     }
-    body.setMassData({
-      mass: spec.tonnes * 1000, center: { x: 0, y: 0 },
-      I: (spec.tonnes * 1000 * (spec.halfWidth ** 2 + spec.halfHeight ** 2)) / 3,
-    });
+    this.load = body;
+    this.kutleyiYaz(spec);
     body.setAngularDamping(0.6);
     this.snaps.track(body);
-    this.load = body;
     this.grabbables = [{
       body, halfWidth: spec.halfWidth, halfHeight: spec.halfHeight, ayakM: PALET_AYAK,
     }];
@@ -136,6 +146,11 @@ export class ForkliftSahnesi implements OyunSahnesi {
     // Palet rafa AYAKLARIYLA oturuyor: tabanı kirişin `PALET_AYAK` üstünde.
     return { x: RAF_X + t.halfWidth + 0.06, y: kot + PALET_AYAK };
   }
+  /** Hedef işareti kirişin ÜSTÜNDE dursun, paletin tabanında değil. */
+  isaretNoktasi(t: Task): { x: number; y: number } | null {
+    const kot = katKotu(t.hedef);
+    return kot === undefined ? null : { x: RAF_X + t.halfWidth + 0.06, y: kot };
+  }
   /**
    * Rafın içine oturmalı. Vinçteki 2 metrelik pencere burada anlamsız olurdu
    * — teras geniş bir düzlem, raf katı ise paletten birkaç on santim büyük.
@@ -154,6 +169,13 @@ export class ForkliftSahnesi implements OyunSahnesi {
    * Gerçek devrilme yük yukarıdayken oluyor ve çok daha büyük bir açı.
    */
   get devrildiMi(): boolean { return Math.abs(this.tiltDeg) > 22; }
+
+  private kutleyiYaz(spec: Task): void {
+    this.load.setMassData({
+      mass: spec.tonnes * 1000, center: { x: 0, y: 0 },
+      I: (spec.tonnes * 1000 * (spec.halfWidth ** 2 + spec.halfHeight ** 2)) / 3,
+    });
+  }
 
   get loadTask(): Task | null { return this.loadSpec; }
   /** Forkliftte kurulum yok: makine indiği an çalışır. */
@@ -209,6 +231,8 @@ export class ForkliftSahnesi implements OyunSahnesi {
       dt, this.olcum.blockRadiusIncrease, this.grabbables,
     );
 
+    this.teslimiYurut();
+
     this.world.step(dt, SIM.velocityIterations, SIM.positionIterations);
     this.world.clearForces();
 
@@ -216,6 +240,36 @@ export class ForkliftSahnesi implements OyunSahnesi {
     const ham = this.forklift.yukTonu;
     this.olcumTon += (ham - this.olcumTon) * Math.min(1, dt / 0.2);
   }
+
+  /** Yükleme karesine palet indirme akışı. */
+  private teslimiYurut(): void {
+    const spec = this.loadSpec;
+    if (!spec || this.teslim === 'hazir') return;
+    if (this.teslim === 'bekliyor') {
+      if (this.forklift.forkTip.x >= this.teslimKapisi(spec.halfWidth)) return;
+      this.load.setLinearVelocity({ x: 0, y: -TESLIM_HIZI });
+      this.teslim = 'iniyor';
+      return;
+    }
+    const yerKotu = spec.halfHeight + PALET_AYAK;
+    if (this.load.getPosition().y > yerKotu) return;
+    // Yere değdi: artık normal dinamik gövde. setType kütleyi sıfırladığı
+    // için kütle verisi yeniden yazılıyor — vinçteki kanca hatasının aynısı.
+    this.load.setTransform({ x: GIRIS_X, y: yerKotu }, 0);
+    this.load.setType('dynamic');
+    this.load.setLinearVelocity({ x: 0, y: 0 });
+    this.load.setAngularVelocity(0);
+    this.kutleyiYaz(spec);
+    this.teslim = 'hazir';
+  }
+
+  /** Paletin inebilmesi için çatal ucunun batısında kalması gereken çizgi. */
+  private teslimKapisi(halfWidth: number): number {
+    return GIRIS_X - halfWidth - 0.45;
+  }
+
+  /** Palet yere indi mi? HUD ve rig bunu soruyor. */
+  get paletHazir(): boolean { return this.teslim === 'hazir'; }
 
   gosterge(): Gosterge {
     const r = this.olcum;
@@ -309,6 +363,14 @@ export class ForkliftSahnesi implements OyunSahnesi {
   }
 
   ipucu(): { metin: string; mod: 'drive' | 'crane' | 'ready' } {
+    if (!this.paletHazir) {
+      return {
+        metin: this.teslim === 'iniyor'
+          ? 'palet iniyor · konveyörün önünde bekle'
+          : 'yeni palet için yükleme karesinin batısına geç',
+        mod: 'drive',
+      };
+    }
     const durum = this.forklift.durum(this.grabbables);
     const say: Record<typeof durum, string> = {
       yuklu: 'yük çatalda · gözün önüne gel, kaldır, içeri sür, indir',

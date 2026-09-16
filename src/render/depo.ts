@@ -2,7 +2,7 @@ import { Container, Graphics } from 'pixi.js';
 import { C } from './palette';
 import { worldText } from './text';
 import {
-  RAF_KATLARI, RAF_X, RAF_DERINLIK, GIRIS_X, PALET_AYAK, katAdi,
+  RAF_KATLARI, RAF_X, RAF_DERINLIK, GIRIS_X, PALET_AYAK, TESLIM_KOTU, katAdi,
 } from '../game/forkliftTasks';
 
 /**
@@ -46,8 +46,10 @@ export function drawRaf(): Container {
     // Arka dayanak
     g.rect(arka - 0.07, kot, 0.14, 0.52).fill(C.rackDark);
     // Kat adresi ve kotu: depo raflarında gerçekten yazar
+    // Etiket rafın ARKA yarısında: ön yarıda hedef işaretiyle üst üste
+    // biniyordu ve ikisi de okunmuyordu.
     const et = worldText(`${katAdi(i)} · ${kot.toFixed(2)} m`, 0.26, { fill: 0xD6E2EA });
-    et.position.set(on + 0.14, kot - 0.62);
+    et.position.set(on + RAF_DERINLIK - 1.25, kot - 0.58);
     c.addChild(et);
   });
 
@@ -68,10 +70,11 @@ export function drawDepoZemin(left: number, right: number): Graphics {
   for (let x = left + 1; x < right; x += 0.9) {
     g.rect(x, 0.01, 0.5, 0.06).fill({ color: C.hazardY, alpha: 0.55 });
   }
-  // Giriş (mal kabul) kutusu: paletler buraya geliyor
-  g.rect(GIRIS_X - 2.2, 0.01, 4.4, 0.07).fill({ color: C.hazardY, alpha: 0.9 });
-  g.rect(GIRIS_X - 2.2, 0.01, 0.07, 1.1).fill({ color: C.hazardY, alpha: 0.9 });
-  g.rect(GIRIS_X + 2.13, 0.01, 0.07, 1.1).fill({ color: C.hazardY, alpha: 0.9 });
+  // Yükleme karesi: paletler buraya iniyor
+  g.rect(GIRIS_X - 1.6, 0.01, 3.2, 0.07).fill({ color: C.hazardY, alpha: 0.9 });
+  for (const x of [GIRIS_X - 1.6, GIRIS_X + 1.53]) {
+    g.rect(x, 0.01, 0.07, 1.0).fill({ color: C.hazardY, alpha: 0.9 });
+  }
   return g;
 }
 
@@ -134,6 +137,38 @@ export function drawDepoIci(left: number, right: number): Container {
   tabela.position.set(left + 6.4, 5.0);
   c.addChild(tabela);
 
+  c.addChildAt(g, 0);
+  return c;
+}
+
+/**
+ * Mal kabul konveyörü — paletler buradan iniyor.
+ *
+ * Oyuncuya "yeni palet nereden gelecek" sorusunun cevabını veriyor. Palet
+ * makine yükleme karesinin batısına geçince iniyor; ağzın altındaki sarı kare
+ * de nereye ineceğini söylüyor.
+ */
+export function drawKonveyor(): Container {
+  const c = new Container();
+  const g = new Graphics();
+  const y = TESLIM_KOTU + 0.5;
+  // Tavandan sarkan askılar
+  for (const x of [GIRIS_X - 1.5, GIRIS_X + 1.5]) {
+    g.rect(x - 0.05, y + 0.3, 0.1, 2.6).fill(C.roof);
+  }
+  // Konveyör gövdesi ve rulolar
+  g.rect(GIRIS_X - 1.7, y, 3.4, 0.34).fill(C.mast);
+  g.rect(GIRIS_X - 1.7, y + 0.28, 3.4, 0.06).fill(C.mastLight);
+  for (let x = GIRIS_X - 1.5; x < GIRIS_X + 1.5; x += 0.34) {
+    g.circle(x, y + 0.14, 0.1).fill(C.mastLight);
+    g.circle(x, y + 0.14, 0.04).fill(C.mast);
+  }
+  // Ağız: paletin çıktığı boşluk
+  g.rect(GIRIS_X - 0.75, y - 0.12, 1.5, 0.12).fill(C.rackDark);
+
+  const et = worldText('MAL KABUL', 0.3, { fill: C.hazardY });
+  et.position.set(GIRIS_X - 1.55, y + 0.45);
+  c.addChild(et);
   c.addChildAt(g, 0);
   return c;
 }

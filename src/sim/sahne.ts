@@ -64,6 +64,14 @@ export interface OyunSahnesi {
    */
   yerlestirmeToleransi(t: Task): { x: number; y: number };
   /**
+   * Hedef işaretinin ÇİZİLECEĞİ nokta; yoksa `hedefNoktasi` kullanılıyor.
+   *
+   * İkisi aynı olmak zorunda değil: forkliftte mantıksal hedef paletin
+   * tabanı (raf kirişinin 36 cm üstü), oysa işaret kirişin kendisinde
+   * durmalı — yoksa rafın ortasında havada asılı duruyor.
+   */
+  isaretNoktasi?(t: Task): { x: number; y: number } | null;
+  /**
    * Makine kurtarılamayacak şekilde devrildi mi?
    *
    * Eşik makineye ait, çünkü aynı açı iki araçta aynı şeyi anlatmıyor:
