@@ -4,6 +4,7 @@ import { worldText } from './text';
 import {
   RAF_KATLARI, RAF_X, RAF_DERINLIK, GIRIS_X, PALET_AYAK, TESLIM_KOTU, katAdi,
 } from '../game/forkliftTasks';
+import { M } from '../ui/dil';
 
 /**
  * Depo dekoru.
@@ -133,7 +134,7 @@ export function drawDepoIci(left: number, right: number): Container {
     g.rect(left + 1.5, y, 3.4, 0.34).fill({ color: 0x9AA2A7, alpha: 0.95 });
   }
 
-  const tabela = worldText('YILMAZ LOJİSTİK · SEVKİYAT', 0.5, { fill: C.liveryRed });
+  const tabela = worldText(M.dekor.sevkiyat, 0.5, { fill: C.liveryRed });
   tabela.position.set(left + 6.4, 5.0);
   c.addChild(tabela);
 
@@ -166,7 +167,7 @@ export function drawKonveyor(): Container {
   // Ağız: paletin çıktığı boşluk
   g.rect(GIRIS_X - 0.75, y - 0.12, 1.5, 0.12).fill(C.rackDark);
 
-  const et = worldText('MAL KABUL', 0.3, { fill: C.hazardY });
+  const et = worldText(M.dekor.malKabul, 0.3, { fill: C.hazardY });
   et.position.set(GIRIS_X - 1.55, y + 0.45);
   c.addChild(et);
   c.addChildAt(g, 0);

@@ -2,6 +2,7 @@ import { Container, Graphics } from 'pixi.js';
 import { C } from './palette';
 import { worldText } from './text';
 import { FACTORY } from '../sim/world';
+import { M } from '../ui/dil';
 
 /** Gökyüzü — ekran uzayında, kameradan bağımsız. Bantlı geçiş. */
 export function drawSky(width: number, height: number): Graphics {
@@ -154,7 +155,7 @@ export function drawFactory(x0: number): Container {
   }
 
   c.addChild(g);
-  const sign = worldText('SANAYİ SİTESİ · C BLOK', 0.8, { fill: C.frameDark });
+  const sign = worldText(M.dekor.sanayi, 0.8, { fill: C.frameDark });
   sign.position.set(x0 + 16, floorH * floors + 1.4);
   c.addChild(sign);
   return c;
@@ -198,7 +199,7 @@ export function drawSetupZone(centreX: number): Container {
   c.addChild(g);
   // Yazı yere değil YUKARI yazılıyor: kamyon tam bu alana park ediyor, 2.1
   // metrede kalan etiketin yarısı kasanın arkasında kalıp "LANI" diye okunuyordu.
-  const t = worldText('KURULUM ALANI', 0.62, { fill: C.hazardY });
+  const t = worldText(M.dekor.kurulum, 0.62, { fill: C.hazardY });
   t.position.set(centreX, 6.4);
   t.alpha = 0.7;
   c.addChild(t);

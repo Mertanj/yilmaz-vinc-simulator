@@ -10,6 +10,8 @@ import {
 import type { Task } from '../game/tasks';
 import type { SceneInput } from './scene';
 import type { Gosterge, OyunSahnesi, PanelSatiri, Uyari } from './sahne';
+import { imzaliDerece } from './sahne';
+import { M } from '../ui/dil';
 
 /**
  * Rafın çarpışma gövdesi.
@@ -273,89 +275,88 @@ export class ForkliftSahnesi implements OyunSahnesi {
 
   gosterge(): Gosterge {
     const r = this.olcum;
+    const d = M.forklift;
     const pct = Number.isFinite(r.percent) ? Math.min(999, r.percent) : 999;
     const devrilme = Math.abs(this.tiltDeg);
     return {
-      baslik: 'DEVRİLME PAYI',
+      baslik: d.baslik,
       yuzde: pct,
-      durum: r.zone === LmiZone.Red ? 'DEVRİLİR — ÇOK AĞIR'
-        : r.zone === LmiZone.Amber ? 'DİKKAT · ARKA TEKER HAFİFLİYOR'
-        : devrilme > 2 ? 'ÖNE YATIYOR' : 'GÜVENLİ',
+      durum: r.zone === LmiZone.Red ? d.durum.devrilir
+        : r.zone === LmiZone.Amber ? d.durum.dikkat
+        : this.arkaAksPayi < 0.25 ? d.durum.bosaliyor
+        : devrilme > 1.5 ? d.durum.oneYatiyor : d.durum.guvenli,
       zone: r.zone === LmiZone.Red ? 'red' : r.zone === LmiZone.Amber ? 'amber' : 'green',
       dolu: Math.min(1, pct / 150),
       altSatirlar: [
-        `yük merkezi ${r.radiusM.toFixed(2)} m · ön akstan`,
+        d.alt.merkez(r.radiusM.toFixed(2)),
         this.forklift.liftM > 3.3
-          ? `3.3 m üstü: kapasite düşüyor (×${(forkliftKapasitesi(r.radiusM, this.forklift.liftM)
-              / Math.max(forkliftKapasitesi(r.radiusM, 0), 0.01)).toFixed(2)})`
-          : 'yük alçakken taşı — yükseldikçe kapasite düşer',
+          ? d.alt.ustuDusuyor((forkliftKapasitesi(r.radiusM, this.forklift.liftM)
+              / Math.max(forkliftKapasitesi(r.radiusM, 0), 0.01)).toFixed(2))
+          : d.alt.alcakTasi,
       ],
     };
   }
 
   panelSatirlari(): PanelSatiri[] {
     const r = this.olcum;
+    const d = M.forklift;
     const egim = this.tiltDeg;
     const f = this.forklift;
     return [
-      { etiket: 'çatalda', deger: `${r.loadTonnes.toFixed(2)} t` },
-      { etiket: 'sınır', deger: `${r.capacityTonnes.toFixed(2)} t` },
-      { etiket: 'yük merkezi', deger: `${r.radiusM.toFixed(2)} m` },
-      { etiket: 'çatal kotu', deger: `${f.liftM.toFixed(2)} m`,
-        ...(f.liftM > 3.3 ? { vurgu: 'uyari' as const } : {}) },
-      { etiket: 'direk eğimi', deger: `${f.tiltDeg >= 0 ? '+' : ''}${f.tiltDeg.toFixed(0)}°`,
-        ...(f.tiltDeg < 0 && f.hasLoad ? { vurgu: 'kotu' as const } : {}) },
-      { etiket: 'arka aks', deger: `%${(this.arkaAksPayi * 100).toFixed(0)}`,
+      // Her zaman görünen üç satır: çatalda ne var, sınır ne, payın ne kadar.
+      { etiket: d.satir.catalda, deger: `${r.loadTonnes.toFixed(2)} t` },
+      { etiket: M.panel.sinir, deger: `${r.capacityTonnes.toFixed(2)} t` },
+      { etiket: d.satir.arkaAks, deger: M.yuzde((this.arkaAksPayi * 100).toFixed(0)),
         ...(this.arkaAksPayi < 0.25 ? { vurgu: 'kotu' as const }
           : this.arkaAksPayi < 0.45 ? { vurgu: 'uyari' as const } : {}) },
-      { etiket: 'araç eğimi', deger: `${egim >= 0 ? '+' : ''}${egim.toFixed(1)}°`,
+      // Gerisi detay.
+      { detay: true, etiket: d.satir.yukMerkezi, deger: `${r.radiusM.toFixed(2)} m` },
+      { detay: true, etiket: d.satir.catalKotu, deger: `${f.liftM.toFixed(2)} m`,
+        ...(f.liftM > 3.3 ? { vurgu: 'uyari' as const } : {}) },
+      { detay: true, etiket: d.satir.direkEgimi,
+        deger: imzaliDerece(f.tiltDeg),
+        ...(f.tiltDeg < 0 && f.hasLoad ? { vurgu: 'kotu' as const } : {}) },
+      { detay: true, etiket: M.panel.egim, deger: imzaliDerece(egim, 1),
         ...(Math.abs(egim) > 1.5 ? { vurgu: 'kotu' as const } : {}) },
-      { etiket: 'hız', deger: `${f.speedKmh.toFixed(0)} km/sa` },
+      { detay: true, etiket: M.panel.hiz, deger: `${f.speedKmh.toFixed(0)} ${M.panel.hizBirimi}` },
     ];
   }
 
   uyari(): Uyari | null {
     const r = this.olcum;
+    const u = M.forklift.uyari;
     const kilitli = this.forklift.kilitliDenendi;
     const egim = this.tiltDeg;
 
     if (this.forklift.burunYerde) {
       return {
         zone: 'red', carpiyor: true,
-        bas: '⚠ BURUN YERE DÜŞTÜ — ÇATALIN ÜSTÜNDESİN',
-        govde: `Araç <b>${egim.toFixed(1)}°</b> öne devrildi ve çatalının`
-          + ' üstüne oturdu. Ön tekerler artık yönlendirmiyor.',
-        cozum: 'Geriye git ve yükü bırak: ⇧W ile direği geriye yatır, S ile indir.',
+        bas: u.burunBas, govde: u.burunGovde(egim.toFixed(1)), cozum: u.burunCozum,
       };
     }
     if (this.arkaAksPayi < 0.2 && this.forklift.hasLoad) {
       return {
         zone: 'red', carpiyor: true,
-        bas: '⚠ ARKA TEKER HAVALANIYOR — DEVRİLİYORSUN',
-        govde: `Arka aksta yükün yalnızca <b>%${(this.arkaAksPayi * 100).toFixed(0)}</b>'i`
-          + ' kaldı. Karşı ağırlık yükü dengelemeye yetmiyor.',
-        cozum: 'S ile çatalı hemen indir, ⇧W ile direği geriye yatır, yavaşla.',
+        bas: u.arkaBas,
+        govde: u.arkaGovde((this.arkaAksPayi * 100).toFixed(0)),
+        cozum: u.arkaCozum,
       };
     }
     if (r.zone === LmiZone.Red) {
       return {
         zone: 'red', carpiyor: kilitli,
-        bas: '⚠ BU YÜK BU MESAFEDE KALDIRILAMAZ',
-        govde: `Çataldaki <b>${r.loadTonnes.toFixed(2)} t</b>, yük merkezi`
-          + ` <b>${r.radiusM.toFixed(2)} m</b> ve kot <b>${this.forklift.liftM.toFixed(2)} m</b>`
-          + ` iken izin verilen <b>${r.capacityTonnes.toFixed(2)} t</b> sınırının üstünde.`,
-        cozum: kilitli
-          ? 'Kaldırma ve öne yatırma KİLİTLİ. S ile indir — alçakta kapasite yüksek.'
-          : 'Çatalı indir: 3.3 metrenin altında kapasite tam.',
+        bas: u.asiriBas,
+        govde: u.asiriGovde(r.loadTonnes.toFixed(2), r.radiusM.toFixed(2),
+          this.forklift.liftM.toFixed(2), r.capacityTonnes.toFixed(2)),
+        cozum: kilitli ? u.asiriCozumKilitli : u.asiriCozum,
       };
     }
     if (r.zone === LmiZone.Amber) {
       return {
         zone: 'amber', carpiyor: false,
-        bas: 'SINIRA YAKLAŞIYORSUN',
-        govde: `${r.loadTonnes.toFixed(2)} t / ${r.capacityTonnes.toFixed(2)} t`
-          + ` · yük merkezi ${r.radiusM.toFixed(2)} m.`
-          + ' Yükseldikçe sınır düşer; taşırken çatalı alçakta tut.',
+        bas: u.yakinBas,
+        govde: u.yakinGovde(r.loadTonnes.toFixed(2), r.capacityTonnes.toFixed(2),
+          r.radiusM.toFixed(2)),
         cozum: '',
       };
     }
@@ -363,23 +364,17 @@ export class ForkliftSahnesi implements OyunSahnesi {
   }
 
   ipucu(): { metin: string; mod: 'drive' | 'crane' | 'ready' } {
+    const i = M.forklift.ipucu;
     if (!this.paletHazir) {
       return {
-        metin: this.teslim === 'iniyor'
-          ? 'palet iniyor · konveyörün önünde bekle'
-          : 'yeni palet için yükleme karesinin batısına geç',
+        metin: this.teslim === 'iniyor' ? i.teslimIniyor : i.teslimBekle,
         mod: 'drive',
       };
     }
     const durum = this.forklift.durum(this.grabbables);
     const say: Record<typeof durum, string> = {
-      yuklu: 'yük çatalda · gözün önüne gel, kaldır, içeri sür, indir',
-      hazir: 'ÇATAL CEPTE · W ile kaldır, palet gelecek',
-      yuksek: 'çatal çok yüksek · S ile indir, cebin altına gir',
-      alcak: 'çatal çok alçak · W ile paletin cebine getir',
-      yanas: 'kot doğru · ileri sür, bıçağı cebe sok',
-      kot: 'çatalı paletin cebi hizasına getir (W/S)',
-      uzak: 'paletler koridorun doğu ucunda · sağa sür',
+      yuklu: i.yuklu, hazir: i.hazir, yuksek: i.yuksek,
+      alcak: i.alcak, yanas: i.yanas, kot: i.kot, uzak: i.uzak,
     };
     return {
       metin: say[durum],

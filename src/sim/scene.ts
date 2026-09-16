@@ -10,6 +10,8 @@ import type { DriveInput } from '../input/keyboard';
 import { TASKS, MALZEME_X, type Task } from '../game/tasks';
 import { OutriggerState } from './loadChart';
 import type { Gosterge, OyunSahnesi, PanelSatiri, Uyari } from './sahne';
+import { imzaliDerece } from './sahne';
+import { M } from '../ui/dil';
 
 /**
  * Sahnenin fizik tarafı — tek kaynak.
@@ -195,51 +197,60 @@ export class Scene implements OyunSahnesi {
 
   gosterge(): Gosterge {
     const r = this.crane.lmi;
+    const d = M.vinc;
     const pct = this.tabloDisi || !Number.isFinite(r.percent)
       ? null : Math.min(999, r.percent);
     return {
-      baslik: 'KALDIRMA MOMENTİ',
+      baslik: d.baslik,
       yuzde: pct,
-      durum: this.tabloDisi ? 'YARIÇAP TABLO DIŞI'
-        : r.zone === 'red' ? 'AŞIRI YÜK'
-        : r.zone === 'amber' ? 'DİKKAT · SINIRA YAKIN' : 'GÜVENLİ',
+      durum: this.tabloDisi ? d.durum.tabloDisi
+        : r.zone === 'red' ? d.durum.asiriYuk
+        : r.zone === 'amber' ? d.durum.dikkat : d.durum.guvenli,
       zone: r.zone,
       dolu: Math.min(1, (pct ?? 999) / 150),
       altSatirlar: [
         r.limitedBy === 'halat'
-          ? `sınırı HALAT koyuyor (tablo ${r.chartTonnes.toFixed(1)} t)`
-          : `sınırı TABLO koyuyor (halat ${r.ropeTonnes.toFixed(1)} t)`,
+          ? d.alt.halatSinir(r.chartTonnes.toFixed(1))
+          : d.alt.tabloSinir(r.ropeTonnes.toFixed(1)),
         this.crane.reevingSuresi > 0
-          ? `halat geçiriliyor… ${this.crane.reevingSuresi.toFixed(0)} sn`
-          : `${this.crane.katSayisi} kat · ${this.crane.halatKapasiteTon.toFixed(1)} t`
-            + ` · K → ${this.crane.sonrakiKat} kat`,
+          ? d.alt.reeving(this.crane.reevingSuresi.toFixed(0))
+          : d.alt.kat(this.crane.katSayisi,
+              this.crane.halatKapasiteTon.toFixed(1), this.crane.sonrakiKat),
       ],
     };
   }
 
   panelSatirlari(): PanelSatiri[] {
     const r = this.crane.lmi;
+    const d = M.vinc;
     const egim = this.tiltDeg;
     return [
-      { etiket: 'kancada', deger: `${r.loadTonnes.toFixed(2)} t` },
-      { etiket: 'sınır', deger: this.tabloDisi ? 'tablo dışı' : `${r.capacityTonnes.toFixed(2)} t` },
-      { etiket: 'yarıçap', deger: `${this.crane.radiusM.toFixed(1)} m` },
-      { etiket: 'bom', deger: `${this.crane.lengthM.toFixed(1)} m · ${this.crane.angleDeg.toFixed(0)}°` },
-      { etiket: 'halat', deger: `${this.crane.ropeM.toFixed(1)} m`,
+      // Her zaman görünen üç satır: ne taşıyorsun, sınır ne, ne kadar uzakta.
+      { etiket: d.satir.kancada, deger: `${r.loadTonnes.toFixed(2)} t` },
+      { etiket: M.panel.sinir,
+        deger: this.tabloDisi ? d.satir.tabloDisi : `${r.capacityTonnes.toFixed(2)} t` },
+      { etiket: d.satir.yaricap, deger: `${this.crane.radiusM.toFixed(1)} m` },
+      // Gerisi detay: makineyi zaten bilen için.
+      { detay: true, etiket: d.satir.bom,
+        deger: `${this.crane.lengthM.toFixed(1)} m · ${this.crane.angleDeg.toFixed(0)}°` },
+      { detay: true, etiket: d.satir.halat, deger: `${this.crane.ropeM.toFixed(1)} m`,
         ...(this.crane.ikiBlokta ? { vurgu: 'kotu' as const } : {}) },
-      { etiket: 'ayaklar',
-        deger: { [OutriggerState.Stowed]: 'TOPLU', [OutriggerState.Half]: 'YARI AÇIK',
-                 [OutriggerState.Full]: 'TAM AÇIK' }[this.outriggers.state],
+      { detay: true, etiket: d.satir.ayaklar,
+        deger: { [OutriggerState.Stowed]: d.satir.toplu,
+                 [OutriggerState.Half]: d.satir.yariAcik,
+                 [OutriggerState.Full]: d.satir.tamAcik }[this.outriggers.state],
         vurgu: this.outriggers.state === OutriggerState.Full ? 'iyi'
           : this.outriggers.state === OutriggerState.Half ? 'uyari' : undefined },
-      { etiket: 'eğim', deger: `${egim >= 0 ? '+' : ''}${egim.toFixed(1)}°`,
+      { detay: true, etiket: M.panel.egim, deger: imzaliDerece(egim, 1),
         ...(Math.abs(egim) > 3 ? { vurgu: 'kotu' as const } : {}) },
-      { etiket: 'hız', deger: `${this.truck.speedKmh.toFixed(0)} km/sa` },
+      { detay: true, etiket: M.panel.hiz,
+        deger: `${this.truck.speedKmh.toFixed(0)} ${M.panel.hizBirimi}` },
     ];
   }
 
   uyari(): Uyari | null {
     const r = this.crane.lmi;
+    const u = M.vinc.uyari;
     const kilitli = this.crane.kilitliDenendi;
     if (!this.craneMode) return null;
 
@@ -249,42 +260,32 @@ export class Scene implements OyunSahnesi {
     if (this.crane.ikiBlokta && (kilitli || this.crane.hasLoad)) {
       return {
         zone: 'red', carpiyor: kilitli,
-        bas: '⚠ İKİ-BLOK — KANCA BOM KAFASINA DAYANDI',
-        govde: 'Halat bitti. Vinci yukarı almak ve teleskobu açmak <b>KİLİTLİ</b>;'
-          + ' ikisi de halatı daha da kısaltır ve kancayı kafaya çarpar.',
-        cozum: '↓ ile halatı sal. Teleskobu açarken vinci de salman gerekir —'
-          + ' bom uzadıkça halat kısalır.',
+        bas: u.ikiBlokBas, govde: u.ikiBlokGovde, cozum: u.ikiBlokCozum,
       };
     }
     if (this.tabloDisi) {
       return {
         zone: 'red', carpiyor: kilitli,
-        bas: '⚠ YARIÇAP TABLO DIŞI',
-        govde: `<b>${this.crane.radiusM.toFixed(1)} m</b> mesafede bu vinç`
-          + ' <b>hiçbir yük</b> kaldıramaz — yük tablosu 28 metrede bitiyor.',
-        cozum: 'W ile bomu kaldır ya da ⇧S ile teleskobu topla.',
+        bas: u.tabloDisiBas,
+        govde: u.tabloDisiGovde(this.crane.radiusM.toFixed(1)),
+        cozum: u.tabloDisiCozum,
       };
     }
     if (r.zone === 'red') {
       return {
         zone: 'red', carpiyor: kilitli,
-        bas: '⚠ AŞIRI YÜK — BU YÜKÜ BURADA KALDIRAMAZSIN',
-        govde: `Kancadaki <b>${r.loadTonnes.toFixed(2)} t</b>,`
-          + ` <b>${this.crane.radiusM.toFixed(1)} m</b> mesafede izin verilen`
-          + ` <b>${r.capacityTonnes.toFixed(2)} t</b> sınırının üstünde.`,
-        cozum: kilitli
-          ? 'Bom indirme ve teleskop açma KİLİTLİ. W ile bomu kaldır ya da ⇧S ile'
-            + ' teleskobu topla — yarıçap kısalır, sınır yükselir.'
-          : 'W ile bomu kaldır: yarıçap kısalır, sınır yükselir.',
+        bas: u.asiriBas,
+        govde: u.asiriGovde(r.loadTonnes.toFixed(2), this.crane.radiusM.toFixed(1),
+          r.capacityTonnes.toFixed(2)),
+        cozum: kilitli ? u.asiriCozumKilitli : u.asiriCozum,
       };
     }
     if (r.zone === 'amber') {
       return {
         zone: 'amber', carpiyor: false,
-        bas: 'SINIRA YAKLAŞIYORSUN',
-        govde: `${r.loadTonnes.toFixed(2)} t / ${r.capacityTonnes.toFixed(2)} t`
-          + ` · yarıçap ${this.crane.radiusM.toFixed(1)} m.`
-          + ' Yarıçapı büyütürsen kollar kilitlenir.',
+        bas: u.yakinBas,
+        govde: u.yakinGovde(r.loadTonnes.toFixed(2), r.capacityTonnes.toFixed(2),
+          this.crane.radiusM.toFixed(1)),
         cozum: '',
       };
     }
@@ -292,18 +293,17 @@ export class Scene implements OyunSahnesi {
   }
 
   ipucu(): { metin: string; mod: 'drive' | 'crane' | 'ready' } {
-    if (!this.craneMode) {
-      return { metin: 'çalışma alanına yanaş, sonra Q ile ayakları aç', mod: 'drive' };
-    }
-    if (this.crane.hasLoad) return { metin: 'yük bağlı · boşluk ile bırak', mod: 'crane' };
+    const i = M.vinc.ipucu;
+    if (!this.craneMode) return { metin: i.surus, mod: 'drive' };
+    if (this.crane.hasLoad) return { metin: i.yukBagli, mod: 'crane' };
     const { reason } = this.crane.attachCheck(this.grabbables);
     const say: Record<typeof reason, string> = {
-      hazir: 'KANCA MENZİLDE · boşluk ile bağla',
-      sallaniyor: 'kanca sallanıyor · dursun, sonra bağla',
-      'yan-cekme': 'halat eğik · yan çekme olur, bomu yükün üstüne getir',
-      ortala: 'kancayı yükün TAM ORTASINA getir',
-      yukseklik: 'kancayı biraz daha indir',
-      uzak: 'kancayı yükün üstüne indir',
+      hazir: i.hazir,
+      sallaniyor: i.sallaniyor,
+      'yan-cekme': i.yanCekme,
+      ortala: i.ortala,
+      yukseklik: i.yukseklik,
+      uzak: i.uzak,
     };
     return { metin: say[reason], mod: reason === 'hazir' ? 'ready' : 'crane' };
   }

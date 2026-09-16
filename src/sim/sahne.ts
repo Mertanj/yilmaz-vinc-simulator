@@ -100,6 +100,28 @@ export interface PanelSatiri {
   deger: string;
   /** Değeri renklendirir. */
   vurgu?: 'iyi' | 'uyari' | 'kotu';
+  /**
+   * Sadece DETAY modunda görünsün mü?
+   *
+   * Sahadan gelen geri bildirim: *"şu an çok detaylı, oyuncular için fazla
+   * olabilir."* Panel sekiz satırdı ve bir operatör panosu gibi duruyordu.
+   * Oyuncunun anlık kararı için üç satır yetiyor: çatalda/kancada ne var,
+   * sınır ne, ve payın ne kadar kaldı. Kot, eğim, hız, bom boyu — bunlar
+   * makineyi zaten bilen birine hitap ediyor, `I` ile açılıyor.
+   */
+  detay?: boolean;
+}
+
+/**
+ * İşaretli derece: `+3°`, `-2.6°`, `0°`.
+ *
+ * `toFixed` sıfıra yuvarlanan negatif sayılarda "-0" üretiyor. Panelde
+ * "direk eğimi -0°" yazması, direğin öne yattığını — yani yükü düşürebilecek
+ * bir durumu — söylüyor gibi duruyordu; oysa değer sıfır.
+ */
+export function imzaliDerece(deg: number, basamak = 0): string {
+  const y = Number(deg.toFixed(basamak));
+  return `${y > 0 ? '+' : ''}${y.toFixed(basamak)}°`;
 }
 
 export interface Gosterge {

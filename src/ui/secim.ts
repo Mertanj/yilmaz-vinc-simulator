@@ -1,13 +1,18 @@
-import { ARACLAR, type AracTanimi } from '../game/araclar';
+import { araclar, type AracTanimi } from '../game/araclar';
+import { DILLER, M, dilSec, sozluk, type Dil } from './dil';
 
 /**
- * Açılış ekranı — oyuncu hangi makineyle oynayacağını seçiyor.
+ * Açılış ekranı — oyuncu önce DİLİ, sonra makineyi seçiyor.
  *
  * Sahadan gelen istek: "oyuncuların oyunun başında seçmesini istiyorum,
  * hangisiyle oynamak isterlerse." Seçim bir ayar menüsü değil, oyunun ilk
  * kararı; o yüzden tam ekran, kart hâlinde ve her kart makinenin NEYİNİN zor
  * olduğunu söylüyor. İki araç aynı oyunu oynamıyor, oyuncu bunu girmeden
  * önce bilmeli.
+ *
+ * Dil düğmesi burada duruyor çünkü oyun başladıktan sonra dil değişmiyor:
+ * bütün metinler açılışta bir kez okunuyor. Değiştirmek sayfayı yenilemek
+ * demek ve bunu yapacak tek an burası.
  *
  * Seçim `localStorage`'a yazılıyor: aynı makineyi tekrar denemek isteyen
  * oyuncu ikinci kez seçmek zorunda kalmıyor, sadece onaylıyor.
@@ -24,30 +29,50 @@ export function secimiYaz(id: string): void {
 
 /** Kartları basar ve oyuncu birine basana kadar bekler. */
 export function aracSec(host: HTMLElement): Promise<AracTanimi> {
+  host.hidden = false;
+  return new Promise((cozumle) => {
+    const ciz = (): void => {
+      host.innerHTML = govde();
+      for (const el of Array.from(host.querySelectorAll<HTMLButtonElement>('button.dil'))) {
+        el.addEventListener('click', () => {
+          const d = el.dataset['dil'];
+          if (d !== 'tr' && d !== 'en') return;
+          dilSec(d);
+          ciz();
+        });
+      }
+      for (const el of Array.from(host.querySelectorAll<HTMLButtonElement>('button.kart'))) {
+        el.addEventListener('click', () => {
+          const secilen = araclar().find((a) => a.id === el.dataset['id']);
+          if (!secilen?.hazir) return;
+          secimiYaz(secilen.id);
+          host.hidden = true;
+          cozumle(secilen);
+        });
+      }
+    };
+    ciz();
+  });
+}
+
+function govde(): string {
   const onceki = sonSecim();
-  host.innerHTML = `
+  return `
     <div class="secim-ic">
       <header>
-        <h1>YILMAZ VİNÇ</h1>
-        <p>Hangi makineyle çalışacaksın?</p>
+        <div class="diller">${DILLER.map(dilDugmesi).join('')}</div>
+        <h1>${M.secim.baslik}</h1>
+        <p>${M.secim.soru}</p>
       </header>
-      <div class="kartlar">${ARACLAR.map((a) => kart(a, a.id === onceki)).join('')}</div>
-      <footer>Her makinenin kendi bölümü, kendi yük tablosu ve kendi tehlikesi var.
-        İstediğin zaman <kbd>R</kbd> ile sıfırlayabilirsin.</footer>
+      <div class="kartlar">${araclar().map((a) => kart(a, a.id === onceki)).join('')}</div>
+      <footer>${M.secim.altBilgi}</footer>
     </div>`;
-  host.hidden = false;
+}
 
-  return new Promise((cozumle) => {
-    for (const el of Array.from(host.querySelectorAll<HTMLButtonElement>('button.kart'))) {
-      el.addEventListener('click', () => {
-        const secilen = ARACLAR.find((a) => a.id === el.dataset['id']);
-        if (!secilen?.hazir) return;
-        secimiYaz(secilen.id);
-        host.hidden = true;
-        cozumle(secilen);
-      });
-    }
-  });
+function dilDugmesi(d: Dil): string {
+  const secili = d === M.kod;
+  return `<button class="dil${secili ? ' secili' : ''}" data-dil="${d}"`
+    + `${secili ? ' aria-current="true"' : ''}>${sozluk(d).ad}</button>`;
 }
 
 function kart(a: AracTanimi, sonKullanilan: boolean): string {
@@ -55,13 +80,14 @@ function kart(a: AracTanimi, sonKullanilan: boolean): string {
     .map((n) => `<i${n <= a.seviye ? ' class="dolu"' : ''}></i>`).join('');
   return `
     <button class="kart" data-id="${a.id}"${a.hazir ? '' : ' disabled'}>
-      ${a.hazir ? '' : '<span class="rozet">yakında</span>'}
-      ${sonKullanilan ? '<span class="rozet son">son oynadığın</span>' : ''}
+      ${a.hazir ? '' : `<span class="rozet">${M.secim.yakinda}</span>`}
+      ${sonKullanilan ? `<span class="rozet son">${M.secim.sonOynadigin}</span>` : ''}
       <div class="simge">${a.simge}</div>
       <h2>${a.ad}</h2>
       <div class="sinif">${a.sinif}</div>
       <p>${a.ozet}</p>
-      <div class="zorluk"><span>zorluk</span><div class="noktalar">${noktalar}</div></div>
+      <div class="zorluk"><span>${M.secim.zorluk}</span>
+        <div class="noktalar">${noktalar}</div></div>
       <div class="ipucu">${a.zorluk}</div>
     </button>`;
 }

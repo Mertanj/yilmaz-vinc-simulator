@@ -29,6 +29,8 @@ export class Keyboard {
   hookToggled = false;
   /** K'ya basıldığı karede bir kez true olur — halat kat sayısı. */
   katToggled = false;
+  /** I'ya basıldığı karede bir kez true olur — panelin detay satırları. */
+  detayToggled = false;
 
   constructor(target: EventTarget = window) {
     target.addEventListener('keydown', (e) => {
@@ -39,6 +41,7 @@ export class Keyboard {
       if (ev.code === 'KeyQ') this.outriggerToggled = true;
       if (ev.code === 'Space') this.hookToggled = true;
       if (ev.code === 'KeyK') this.katToggled = true;
+      if (ev.code === 'KeyI') this.detayToggled = true;
       // Boşluk ve ok tuşları sayfayı kaydırmasın.
       if (ev.code === 'Space' || ev.code.startsWith('Arrow')) ev.preventDefault();
     });
@@ -94,6 +97,13 @@ export class Keyboard {
   consumeKatToggle(): boolean {
     const r = this.katToggled;
     this.katToggled = false;
+    return r;
+  }
+
+  /** Panelin detay satırlarını aç/kapa. */
+  consumeDetayToggle(): boolean {
+    const r = this.detayToggled;
+    this.detayToggled = false;
     return r;
   }
 }

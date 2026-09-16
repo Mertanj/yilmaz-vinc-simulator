@@ -91,6 +91,14 @@
     overflow: hidden; text-overflow: ellipsis;
   }
   #p-alt2 { margin-bottom: 8px; color: #C7D1D6; }
+  /* Detay satırlarının açma anahtarı. Panel varsayılan olarak üç satır —
+     *"şu an çok detaylı, oyuncular için fazla olabilir."* Kot, eğim, hız gibi
+     satırlar `I` ile açılıyor; oyuncunun bunu bilmesi için tek satırlık,
+     sessiz bir ipucu yetiyor. */
+  #p-detay {
+    font-size: 10.5px; letter-spacing: 0.04em; color: #6D777E;
+    margin: -4px 0 9px; white-space: nowrap;
+  }
   #panel dd[data-vurgu="iyi"] { color: #5FB07C; }
   #panel dd[data-vurgu="uyari"] { color: #E8A62C; }
   #panel dd[data-vurgu="kotu"] { color: #E2645A; }
@@ -233,6 +241,21 @@
   }
   #secim[hidden] { display: none; }
   .secim-ic { width: min(1040px, 100%); }
+  /* Dil düğmeleri açılış ekranında duruyor: bütün metinler oyun başlarken bir
+     kez okunuyor, dolayısıyla dili değiştirmenin tek doğru anı burası. */
+  #secim .diller {
+    display: flex; justify-content: center; gap: 6px; margin-bottom: 18px;
+  }
+  #secim button.dil {
+    font: inherit; font-size: 11.5px; letter-spacing: 0.04em; cursor: pointer;
+    background: #171E22; border: 1px solid #2A343A; color: #8E9BA2;
+    border-radius: 3px; padding: 5px 13px;
+  }
+  #secim button.dil:hover { border-color: #3B4750; color: #C7D1D6; }
+  #secim button.dil.secili {
+    background: #E8A62C; border-color: #E8A62C; color: #16191B; font-weight: 600;
+  }
+  #secim button.dil:focus-visible { outline: 2px solid #E8A62C; outline-offset: 2px; }
   #secim header { text-align: center; margin-bottom: 28px; }
   #secim h1 {
     font-family: "Barlow Condensed", system-ui, sans-serif; font-size: 44px;
@@ -308,6 +331,7 @@
     <div id="moment-durum" data-zone="green">GÜVENLİ</div>
 
     <dl id="p-satirlar"></dl>
+    <div id="p-detay"></div>
 
     <div id="p-alt1"></div>
     <div id="p-alt2"></div>

@@ -4,10 +4,32 @@ import { Camera } from './core/camera';
 import { Keyboard } from './input/keyboard';
 import { Mission } from './game/mission';
 import { aracSec } from './ui/secim';
+import { M, baslangicDili, dilSec, gorevAdi, gorevBrifi } from './ui/dil';
+
+/**
+ * Detay modu açık mı?
+ *
+ * Sahadan gelen geri bildirim: *"şu sol bar'ı düzenleyelim, şu an çok detaylı,
+ * oyuncular için fazla olabilir."* Panel sekiz satırdı. Varsayılan artık üç
+ * satır — anlık karar için gereken kadarı; gerisi `I` ile açılıyor. Tercih
+ * `localStorage`'da duruyor, çünkü paneli bir kez açan oyuncu onu her açılışta
+ * yeniden açmak istemiyor.
+ */
+const DETAY_ANAHTARI = 'yv.detay';
+function detayOku(): boolean {
+  try { return localStorage.getItem(DETAY_ANAHTARI) === '1'; } catch { return false; }
+}
+function detayYaz(acik: boolean): void {
+  try { localStorage.setItem(DETAY_ANAHTARI, acik ? '1' : '0'); } catch { /* gizli sekme */ }
+}
 
 async function boot(): Promise<void> {
   const host = document.getElementById('game');
   if (!host) throw new Error('#game bulunamadı');
+
+  // Dil, hiçbir metin okunmadan ÖNCE seçiliyor: araç kartları, HUD etiketleri
+  // ve görev adları hep aynı sözlükten besleniyor.
+  dilSec(baslangicDili());
 
   // --- araç seçimi ---
   // Oyun makineyi seçmekle başlıyor; bundan sonrası hangi makine olduğunu
@@ -23,7 +45,7 @@ async function boot(): Promise<void> {
 
   document.title = `${arac.ad} · Yılmaz Vinç`;
   const ustBaslik = document.querySelector('#ust b');
-  if (ustBaslik) ustBaslik.textContent = arac.ad.toLocaleUpperCase('tr');
+  if (ustBaslik) ustBaslik.textContent = arac.ad.toLocaleUpperCase(M.kod);
   const tuslar = document.getElementById('tuslar');
   if (tuslar) tuslar.innerHTML = arac.tuslar;
 
@@ -44,17 +66,21 @@ async function boot(): Promise<void> {
   const odak = gorunum.baslangicOdak();
   camera.snapTo(odak.x, odak.y);
 
+  let detay = detayOku();
+
   const el = (id: string): HTMLElement | null => document.getElementById(id);
   const hud = {
     gorev: el('gorev'), gorevBrif: el('gorev-brif'), sure: el('sure'), puan: el('puan'),
     baslik: el('p-baslik'), barDolu: el('bar-dolu'),
     yuzde: el('moment-yuzde'), durum: el('moment-durum'),
-    satirlar: el('p-satirlar'), alt1: el('p-alt1'), alt2: el('p-alt2'),
+    satirlar: el('p-satirlar'), detay: el('p-detay'),
+    alt1: el('p-alt1'), alt2: el('p-alt2'),
     hint: el('hint'), uyari: el('uyari'),
     sonuc: el('sonuc'), sonucIc: el('sonuc-ic'), kondu: el('kondu'),
   };
 
   const step = (dt: number): void => {
+    if (keys.consumeDetayToggle()) { detay = !detay; detayYaz(detay); }
     const reset = keys.consumeReset();
     scene.step({
       drive: keys.readDrive(),
@@ -93,16 +119,19 @@ async function boot(): Promise<void> {
     const gorev = mission.task;
     if (hud.gorev) {
       hud.gorev.textContent = gorev
-        ? `${gorev.kod}/${mission.taskCount} · ${gorev.ad} ${gorev.tonnes.toFixed(2)} t`
-        : 'bölüm tamamlandı';
+        ? `${gorev.kod}/${mission.taskCount} · ${gorevAdi(gorev.kod, gorev.ad)}`
+          + ` ${gorev.tonnes.toFixed(2)} t`
+        : M.ust.bolumTamam;
     }
-    if (hud.gorevBrif) hud.gorevBrif.textContent = gorev ? `— ${gorev.brif}` : '';
+    if (hud.gorevBrif) {
+      hud.gorevBrif.textContent = gorev ? `— ${gorevBrifi(gorev.kod, gorev.brif)}` : '';
+    }
     if (hud.sure) {
       const sn = mission.score.sure;
       hud.sure.textContent =
         `${Math.floor(sn / 60)}:${(sn % 60).toFixed(0).padStart(2, '0')}`;
     }
-    if (hud.puan) hud.puan.textContent = `${mission.score.puan} puan`;
+    if (hud.puan) hud.puan.textContent = M.ust.puan(mission.score.puan);
 
     // --- gösterge bloğu ---
     if (hud.baslik) hud.baslik.textContent = g.baslik;
@@ -112,7 +141,7 @@ async function boot(): Promise<void> {
         g.zone === 'red' ? '#E2645A' : g.zone === 'amber' ? '#E8A62C' : '#5FB07C';
     }
     if (hud.yuzde) {
-      hud.yuzde.textContent = g.yuzde === null ? '—' : `%${g.yuzde.toFixed(0)}`;
+      hud.yuzde.textContent = g.yuzde === null ? '—' : M.yuzde(g.yuzde.toFixed(0));
       hud.yuzde.dataset['zone'] = g.zone;
     }
     if (hud.durum) {
@@ -124,13 +153,15 @@ async function boot(): Promise<void> {
 
     // --- etiket–değer satırları ---
     // Satırları makine üretiyor, main.ts sadece basıyor: üçüncü aracı eklemek
-    // buraya hiç dokunmuyor.
+    // buraya hiç dokunmuyor. Detay bayraklı satırlar `I` kapalıyken gizleniyor.
     if (hud.satirlar) {
       hud.satirlar.innerHTML = scene.panelSatirlari()
+        .filter((x) => detay || !x.detay)
         .map((x) => `<dt>${x.etiket}</dt>`
           + `<dd${x.vurgu ? ` data-vurgu="${x.vurgu}"` : ''}>${x.deger}</dd>`)
         .join('');
     }
+    if (hud.detay) hud.detay.textContent = M.panel.detayIpucu(detay);
 
     uyariGoster();
     konduGoster();
@@ -181,23 +212,23 @@ async function boot(): Promise<void> {
       const yakin = t.sapmaCm <= 60;
       const lmiIyi = t.maxLmi <= 90;
       const pz = t.puan;
+      const k = M.kondu;
+      const sure = `${Math.floor(t.sure / 60)}:${(t.sure % 60).toFixed(0).padStart(2, '0')}`;
       hud.kondu.innerHTML = [
-        '<div class="tik">✓ YERİNE KONDU</div>',
-        `<div class="ad">${t.kod} · ${t.ad}</div>`,
-        `<div class="kazanc">+${pz.toplam} puan</div>`,
+        `<div class="tik">${k.tik}</div>`,
+        `<div class="ad">${t.kod} · ${gorevAdi(t.kod, t.ad)}</div>`,
+        `<div class="kazanc">+${pz.toplam} ${k.kazanc}</div>`,
         '<dl>',
-        `<dt>yerleştirme</dt><dd data-iyi="evet">+${pz.temel}</dd>`,
-        `<dt>isabet · ${t.sapmaCm.toFixed(0)} cm sapma</dt>`
+        `<dt>${k.yerlestirme}</dt><dd data-iyi="evet">+${pz.temel}</dd>`,
+        `<dt>${k.isabet(Math.round(t.sapmaCm))}</dt>`
         + `<dd data-iyi="${yakin ? 'evet' : 'hayir'}">+${pz.isabet}</dd>`,
-        `<dt>hız · ${Math.floor(t.sure / 60)}:${(t.sure % 60).toFixed(0).padStart(2, '0')}</dt>`
+        `<dt>${k.hiz(sure)}</dt>`
         + `<dd data-iyi="${pz.hiz > 0 ? 'evet' : 'hayir'}">+${pz.hiz}</dd>`,
-        pz.ceza > 0 ? `<dt>aşırı yük / çarpma</dt><dd data-iyi="hayir">−${pz.ceza}</dd>` : '',
-        `<dt>bu görevde en yüksek moment</dt>`
-        + `<dd data-iyi="${lmiIyi ? 'evet' : 'hayir'}">%${t.maxLmi.toFixed(0)}</dd>`,
+        pz.ceza > 0 ? `<dt>${k.ceza}</dt><dd data-iyi="hayir">−${pz.ceza}</dd>` : '',
+        `<dt>${k.enYuksekMoment}</dt>`
+        + `<dd data-iyi="${lmiIyi ? 'evet' : 'hayir'}">${M.yuzde(t.maxLmi.toFixed(0))}</dd>`,
         '</dl>',
-        `<p class="sonraki">${t.kalan > 0
-          ? `sırada ${t.kalan} görev var · yeni yük malzeme alanında`
-          : 'bölümdeki son yük — toparlayabilirsin'}</p>`,
+        `<p class="sonraki">${k.sonraki(t.kalan)}</p>`,
       ].join('');
       hud.kondu.hidden = false;
     }
@@ -217,24 +248,25 @@ async function boot(): Promise<void> {
     if (sonucYazildi || !hud.sonuc || !hud.sonucIc) return;
     sonucYazildi = true;
     const s = r.score;
+    const n = M.sonuc;
     const ortSapma = s.sapmalar.length
       ? s.sapmalar.reduce((a, b) => a + b, 0) / s.sapmalar.length : 0;
     hud.sonucIc.innerHTML = [
       `<div class="not" data-not="${r.not}">${r.not}</div>`,
-      `<h2>${r.devrildi ? 'ARAÇ DEVRİLDİ' : 'BÖLÜM TAMAMLANDI'}</h2>`,
-      r.usta ? '<p class="rozet">USTA VİNÇÇİ</p>' : '',
-      `<p class="toplam">${s.puan} puan</p>`,
+      `<h2>${r.devrildi ? n.devrildi : n.tamamlandi}</h2>`,
+      r.usta ? `<p class="rozet">${n.usta}</p>` : '',
+      `<p class="toplam">${n.puan(s.puan)}</p>`,
       '<table>',
-      `<tr><td>tamamlanan görev</td><td>${s.sapmalar.length} / ${mission.taskCount}</td></tr>`,
-      `<tr><td>süre</td><td>${Math.floor(s.sure / 60)}:${(s.sure % 60).toFixed(0).padStart(2, '0')}</td></tr>`,
-      `<tr><td>en yüksek kaldırma momenti</td><td>%${s.maxLmi.toFixed(0)}</td></tr>`,
-      `<tr><td>kırmızıda geçen süre</td><td>${s.kirmiziSn.toFixed(1)} sn</td></tr>`,
-      `<tr><td>en geniş salınım</td><td>${s.maxSalinim.toFixed(0)}°</td></tr>`,
-      `<tr><td>çarpma</td><td>${s.carpma}</td></tr>`,
-      `<tr><td>ortalama yerleştirme sapması</td><td>${(ortSapma * 100).toFixed(0)} cm</td></tr>`,
+      `<tr><td>${n.gorev}</td><td>${s.sapmalar.length} / ${mission.taskCount}</td></tr>`,
+      `<tr><td>${n.sure}</td><td>${Math.floor(s.sure / 60)}:${(s.sure % 60).toFixed(0).padStart(2, '0')}</td></tr>`,
+      `<tr><td>${n.maxMoment}</td><td>${M.yuzde(s.maxLmi.toFixed(0))}</td></tr>`,
+      `<tr><td>${n.kirmizi}</td><td>${s.kirmiziSn.toFixed(1)} ${n.saniye}</td></tr>`,
+      `<tr><td>${n.salinim}</td><td>${s.maxSalinim.toFixed(0)}°</td></tr>`,
+      `<tr><td>${n.carpma}</td><td>${s.carpma}</td></tr>`,
+      `<tr><td>${n.sapma}</td><td>${(ortSapma * 100).toFixed(0)} cm</td></tr>`,
       '</table>',
-      `<p class="puan">başarı %${r.puan.toFixed(0)}</p>`,
-      '<p class="note">R ile yeniden başla</p>',
+      `<p class="puan">${n.basari(r.puan.toFixed(0))}</p>`,
+      `<p class="note">${n.yeniden}</p>`,
     ].join('');
     hud.sonuc.hidden = false;
   }
@@ -256,7 +288,7 @@ boot().catch((err: unknown) => {
   const host = document.getElementById('game');
   if (host) {
     host.innerHTML =
-      '<p style="color:#E2645A;font:14px monospace;padding:24px">Başlatılamadı: '
-      + String(err) + '</p>';
+      '<p style="color:#E2645A;font:14px monospace;padding:24px">'
+      + M.hata(String(err)) + '</p>';
   }
 });

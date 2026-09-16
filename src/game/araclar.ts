@@ -4,6 +4,7 @@ import { ForkliftSahnesi } from '../sim/forkliftSahne';
 import {
   SahneGorunumu, VincGorunumu, ForkliftGorunumu,
 } from '../render/gorunum';
+import { M } from '../ui/dil';
 
 /**
  * Oynanabilir araçlar.
@@ -34,21 +35,22 @@ export interface AracTanimi {
   kur?: () => { sahne: OyunSahnesi; gorunum: SahneGorunumu };
 }
 
-export const ARACLAR: readonly AracTanimi[] = [
+/**
+ * Araç listesi bir FONKSİYON, sabit değil: metinler seçilen dile göre
+ * okunuyor ve dil, oyun açılmadan hemen önce seçiliyor. Modül düzeyinde bir
+ * sabit olsaydı sözlük değişmeden önce dondurulurdu.
+ */
+export function araclar(): readonly AracTanimi[] {
+  return [
   {
     id: 'forklift',
-    ad: 'YF-25 Forklift',
-    sinif: '2.5 ton · karşı ağırlıklı · depo',
-    ozet: 'Paletleri kademeli rafın gözlerine koy. Yük alma tuşu yok: '
-      + 'bıçağı paletin cebine sokup kaldırıyorsun, gerisi fizik.',
-    zorluk: 'Sınırı yatay mesafe koyuyor: çatal ne kadar az girerse yük merkezi o kadar uzar.',
+    ad: M.forklift.ad,
+    sinif: M.forklift.sinif,
+    ozet: M.forklift.ozet,
+    zorluk: M.forklift.zorluk,
     seviye: 2,
     simge: forkliftSimgesi(),
-    tuslar: '<b>sürüş</b> <kbd>→</kbd> gaz <kbd>←</kbd> geri <kbd>boşluk</kbd> el freni<br>'
-      + '<b>çatal</b> <kbd>W</kbd><kbd>S</kbd> kaldır/indir '
-      + '<kbd>⇧W</kbd><kbd>⇧S</kbd> direk eğimi<br>'
-      + '<b>yük alma tuşu yok</b> — bıçağı paletin cebine sok ve kaldır'
-      + ' <kbd>R</kbd> sıfırla',
+    tuslar: M.forklift.tuslar,
     hazir: true,
     kur: () => {
       const sahne = new ForkliftSahnesi();
@@ -57,18 +59,13 @@ export const ARACLAR: readonly AracTanimi[] = [
   },
   {
     id: 'vinc',
-    ad: 'YV-25 Teleskopik Vinç',
-    sinif: '25 ton · 30 m bom · sanayi sitesi',
-    ozet: 'Sanayi sitesinin beş katına yük çıkar. Ayakları aç, bomu kur, '
-      + 'salınımı durdur ve terasa bırak.',
-    zorluk: 'Sınırı yarıçap koyuyor: yük uzaklaştıkça kapasite düşer.',
+    ad: M.vinc.ad,
+    sinif: M.vinc.sinif,
+    ozet: M.vinc.ozet,
+    zorluk: M.vinc.zorluk,
     seviye: 3,
     simge: vincSimgesi(),
-    tuslar: '<b>sürüş</b> <kbd>→</kbd> gaz <kbd>←</kbd> geri <kbd>boşluk</kbd> el freni<br>'
-      + '<b>kurulum</b> <kbd>Q</kbd> ayak aç/kapa<br>'
-      + '<b>vinç</b> <kbd>W</kbd><kbd>S</kbd> bom <kbd>⇧W</kbd><kbd>⇧S</kbd> teleskop<br>'
-      + '<kbd>↑</kbd><kbd>↓</kbd> kanca <kbd>boşluk</kbd> bağla/bırak<br>'
-      + '<kbd>K</kbd> halat katı <kbd>R</kbd> sıfırla',
+    tuslar: M.vinc.tuslar,
     hazir: true,
     kur: () => {
       const sahne = new Scene();
@@ -77,21 +74,29 @@ export const ARACLAR: readonly AracTanimi[] = [
   },
   {
     id: 'dirsekli',
-    ad: 'Dirsekli Bom',
-    sinif: '9 tm · kamyon üstü · dar alan',
-    ozet: 'Katlanan bomla binaların üstünden aşıp arkaya uzanan makine. '
-      + 'Dar sokağın makinesi.',
-    zorluk: 'Sınırı iki eklem birden koyuyor — henüz yapım aşamasında.',
+    ad: M.kod === 'tr' ? 'Dirsekli Bom' : 'Knuckle Boom',
+    sinif: M.kod === 'tr' ? '9 tm · kamyon üstü · dar alan'
+      : '9 tm · truck-mounted · tight sites',
+    ozet: M.kod === 'tr'
+      ? 'Katlanan bomla binaların üstünden aşıp arkaya uzanan makine. '
+        + 'Dar sokağın makinesi.'
+      : 'A folding boom that reaches over buildings and behind them. '
+        + 'The machine for a narrow street.',
+    zorluk: M.kod === 'tr'
+      ? 'Sınırı iki eklem birden koyuyor — henüz yapım aşamasında.'
+      : 'Two joints set the limit together — still being built.',
     seviye: 3,
     simge: dirsekliSimgesi(),
     tuslar: '',
     hazir: false,
   },
-];
+  ];
+}
 
 export function aracBul(id: string | null): AracTanimi {
-  const bulunan = ARACLAR.find((a) => a.id === id && a.hazir);
-  const ilk = ARACLAR.find((a) => a.hazir);
+  const liste = araclar();
+  const bulunan = liste.find((a) => a.id === id && a.hazir);
+  const ilk = liste.find((a) => a.hazir);
   if (!bulunan && !ilk) throw new Error('oynanabilir araç yok');
   return bulunan ?? (ilk as AracTanimi);
 }
