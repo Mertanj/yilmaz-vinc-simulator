@@ -3,7 +3,10 @@ import {
   type Body, type World, type DistanceJoint as DJ,
 } from 'planck';
 import type { Snapshotter } from './world';
-import { capacityAt, computeLmi, OutriggerState, type LmiReading } from './loadChart';
+import {
+  capacityAt, computeLmi, halatKapasitesi, KAT_SECENEKLERI, OutriggerState,
+  type KatSayisi, type LmiReading,
+} from './loadChart';
 
 /**
  * YV-25'in vinç düzeneği.
@@ -104,7 +107,24 @@ export const CRANE = {
    */
   winchLimitFadeM: 1.6,
 
+  /**
+   * Kanca bloğunun ağırlığı, kat sayısına göre (ton).
+   *
+   * Çok katlı blokta daha fazla makara var, blok ağırlaşıyor — ve bu ağırlık
+   * doğrudan yükten düşülüyor. Liebherr'de 1 kattan 12 kata blok 140 kg'dan
+   * 760 kg'a çıkıyor; aynı eğrinin küçük vinç ölçeği.
+   */
+  hookTonnesByKat: { 1: 0.22, 2: 0.45, 4: 0.78 } as Record<number, number>,
   hookTonnes: 0.45,
+  /**
+   * Halatı yeniden geçirme (re-reeving) süresi, kat başına saniye.
+   *
+   * Sahada iki kişiyle 30–90 dakika sürüyor; oyuna o ölçekte alınamaz ama
+   * BEDAVA da olmamalı — yoksa oyuncu her yükte en yüksek kata geçer ve karar
+   * diye bir şey kalmaz. Değiştirmek kancayı yere indirmeyi ve beklemeyi
+   * gerektiriyor; bedeli süre puanından çıkıyor.
+   */
+  reevingSecPerKat: 7.0,
   /** Kanca boğazının blok merkezine göre düşey ofseti (m) — görselle aynı. */
   hookThroatM: 0.46,
   /**
@@ -117,8 +137,16 @@ export const CRANE = {
    * vinççilikte yasak durumdur. 2.0 hem gerçek hem de o rijit kipi kapatıyor.
    */
   minRopeM: 2.0,
+  /** Kat değiştirmek için kanca bu yüksekliğin altında olmalı (m). */
+  reevingMaxHookY: 2.6,
   /** LMI okumasının zaman sabiti (s). Gerçek yük hücreleri de filtrelidir. */
   lmiFilterSec: 0.2,
+  /**
+   * İki-blok bölgesi: kanca bom kafasına bu kadar yaklaşınca kilit devreye
+   * girer. Gerçek vinçte bunu, halatı çevreleyen ağırlıklı bir halka ve ona
+   * bağlı limit anahtarı yapar; tetikleme mesafesi 30–46 cm.
+   */
+  ikiBlokPayiM: 0.55,
   maxRopeM: 26,
 
   /**
@@ -248,6 +276,11 @@ export class Crane {
 
   private ropeLength = 3.0;
   private stowed = true;
+  /** Halat kat sayısı. 2 kat varsayılan — çoğu iş onunla dönüyor. */
+  private kat: KatSayisi = 2;
+  /** Yeniden geçirme sürerken kalan saniye; 0 ise vinç çalışır. */
+  private reevingKalan = 0;
+  private reevingHedef: KatSayisi = 2;
   private winchRate = 0;
   /** Rampalanmış aktüatör hızları — komut basamak, hidrolik değil. */
   private luffRate = 0;
@@ -338,6 +371,20 @@ export class Crane {
 
   /** Her fizik adımında, world.step()'ten ÖNCE. */
   update(input: CraneInput, dt: number, lmi: LmiReading): void {
+    // Halat yeniden geçiriliyorsa vinç hiç çalışmıyor — sapancı bomun altında.
+    if (this.reevingKalan > 0) {
+      this.reevingKalan -= dt;
+      if (this.reevingKalan <= 0) {
+        this.reevingKalan = 0;
+        this.kat = this.reevingHedef;
+        this.hook.setMassData({
+          mass: (CRANE.hookTonnesByKat[this.kat] ?? CRANE.hookTonnes) * 1000,
+          center: { x: 0, y: 0 }, I: 90,
+        });
+      }
+      this.winchRate = 0; this.luffRate = 0; this.teleRate = 0;
+      return;
+    }
     if (this.stowed) {
       // Halatı toparla, kancayı bom ucuna yasla.
       this.winchRate = 0;
@@ -368,28 +415,55 @@ export class Crane {
       (CRANE.maxAngleDeg * Math.PI) / 180,
     );
 
-    const teleHedef = teleCmd * CRANE.telescopeSpeedMps * scale;
+    // **İki-blok koruması.** Kanca bom kafasına dayanmışken halatı daha da
+    // kısaltan üç hareket kilitlenir: vinç yukarı ve teleskop açma (aşağıdaki
+    // halat modeli yüzünden teleskop da halat yer).
+    const ikiBlok = this.ropeLength <= CRANE.minRopeM + CRANE.ikiBlokPayiM;
+    const teleIzin = ikiBlok ? Math.min(0, teleCmd) : teleCmd;
+    const winchIzin = ikiBlok ? Math.min(0, input.winch) : input.winch;
+    this.ikiBlokta = ikiBlok;
+    if (teleIzin !== teleCmd || winchIzin !== input.winch) this.kilitliDenendi = true;
+
+    const teleHedef = teleIzin * CRANE.telescopeSpeedMps * scale;
     const teleMax = (CRANE.telescopeSpeedMps / CRANE.boomRampSec) * dt;
     this.teleRate += clamp(teleHedef - this.teleRate, -teleMax, teleMax);
+    const oncekiUzama = this.extension;
     this.extension = clamp(
       this.extension + this.teleRate * dt, 0, CRANE.maxExtensionM,
     );
 
+    // **Halat bom boyunu takip eder.**
+    //
+    // Toplam halat sabit: tambur→kafa yolu + kafa→kanca. Bom uzayınca birinci
+    // parça uzuyor, dolayısıyla İKİNCİSİ kısalıyor — yani teleskobu açmak
+    // kancayı kafaya doğru çeker. Gerçek operatör bu yüzden teleskobu açarken
+    // aynı anda vinci salar; modellemezsek teleskop bedava bir hamle olur ve
+    // iki-blok diye bir tehlike hiç oluşmaz.
+    this.ropeLength = clamp(
+      this.ropeLength - (this.extension - oncekiUzama),
+      CRANE.minRopeM, CRANE.maxRopeM,
+    );
+
     // Vinç hızı rampalı: komut basamak, hidrolik değil. Rampasız her basış
     // rijit halata bir darbe bindiriyor ve bomu aşağı çekiyordu.
-    const target = -input.winch * CRANE.winchSpeedMps * scale;
-    const maxDelta = (CRANE.winchSpeedMps / CRANE.winchRampSec) * dt;
+    // **Kanca hızı kat sayısına bölünür.** Dört kat dört kat yavaş: kapasitenin
+    // bedeli bu ve oyundaki asıl takas da bu.
+    const katHiz = CRANE.winchSpeedMps / this.kat;
+    const target = -winchIzin * katHiz * scale;
+    const maxDelta = (katHiz / CRANE.winchRampSec) * dt;
     this.winchRate += clamp(target - this.winchRate, -maxDelta, maxDelta);
 
-    if (Math.abs(this.winchRate) > 1e-4) {
+    if (true) {
       // Strok sonuna yaklaşırken yavaşla — sert duruş kancayı bom ucuna çarpıyor.
       const headroom = this.winchRate < 0
         ? this.ropeLength - CRANE.minRopeM
         : CRANE.maxRopeM - this.ropeLength;
       const fade = clamp(headroom / CRANE.winchLimitFadeM, 0, 1);
-      this.ropeLength = clamp(
-        this.ropeLength + this.winchRate * fade * dt, CRANE.minRopeM, CRANE.maxRopeM,
-      );
+      if (Math.abs(this.winchRate) > 1e-4) {
+        this.ropeLength = clamp(
+          this.ropeLength + this.winchRate * fade * dt, CRANE.minRopeM, CRANE.maxRopeM,
+        );
+      }
       this.cable.setLength(this.ropeLength);
     }
   }
@@ -614,7 +688,7 @@ export class Crane {
     // dikenleri kesiyor.
     const k = Math.min(1, dt / CRANE.lmiFilterSec);
     this.lmiTonnes += (ham - this.lmiTonnes) * k;
-    this.lmi = computeLmi(this.radiusM, this.lmiTonnes, 0, outriggers);
+    this.lmi = computeLmi(this.radiusM, this.lmiTonnes, 0, outriggers, this.kat);
   }
 
   private lmiTonnes = 0;
@@ -630,8 +704,36 @@ export class Crane {
     return null;
   }
 
-  /** Bu adımda oyuncu yük momenti yüzünden kilitli bir kola bastı mı? */
+  /** Bu adımda oyuncu kilitli bir kola bastı mı? (yük momenti ya da iki-blok) */
   kilitliDenendi = false;
+  /** Kanca bom kafasına dayandı mı — iki-blok bölgesinde miyiz? */
+  ikiBlokta = false;
+
+  get katSayisi(): KatSayisi { return this.kat; }
+  /** K'ya basınca geçilecek kat — panelde göstermek için. */
+  get sonrakiKat(): KatSayisi {
+    const i = KAT_SECENEKLERI.indexOf(this.kat);
+    return KAT_SECENEKLERI[(i + 1) % KAT_SECENEKLERI.length] ?? 2;
+  }
+  get reevingSuresi(): number { return this.reevingKalan; }
+  get halatKapasiteTon(): number { return halatKapasitesi(this.kat); }
+
+  /**
+   * Kat sayısını değiştirmeye başlar. Kanca boş ve yere yakın olmalı —
+   * sapancı halatı ancak kanca elinin altındayken yeniden geçirebilir.
+   */
+  katDegistir(): { ok: boolean; neden: string } {
+    if (this.reevingKalan > 0) return { ok: false, neden: 'zaten değiştiriliyor' };
+    if (this.attached) return { ok: false, neden: 'önce yükü bırak' };
+    if (this.hook.getPosition().y > CRANE.reevingMaxHookY) {
+      return { ok: false, neden: 'kancayı yere indir' };
+    }
+    const i = KAT_SECENEKLERI.indexOf(this.kat);
+    const sonraki = KAT_SECENEKLERI[(i + 1) % KAT_SECENEKLERI.length] ?? 2;
+    this.reevingHedef = sonraki;
+    this.reevingKalan = CRANE.reevingSecPerKat * Math.abs(sonraki - this.kat);
+    return { ok: true, neden: '' };
+  }
 
   /** Son örneklenen LMI. Hem HUD hem aktüatör kısıtları bunu okur. */
   lmi: LmiReading = computeLmi(0, 0, 0, OutriggerState.Full);

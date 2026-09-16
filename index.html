@@ -41,7 +41,7 @@
   */
   #panel {
     position: fixed; left: 16px; top: 64px; z-index: 10; pointer-events: none;
-    width: 244px; max-width: calc(100vw - 32px);
+    width: 268px; max-width: calc(100vw - 32px);
     padding: 14px 16px 12px; border-radius: 4px;
     background: rgba(14, 20, 23, 0.86); border: 1px solid #253038;
     font-family: "IBM Plex Mono", ui-monospace, monospace; color: #C7D1D6;
@@ -74,14 +74,24 @@
   #moment-yuzde[data-zone="red"],   #moment-durum[data-zone="red"]   { color: #E2645A; }
 
   #panel dl {
-    display: grid; grid-template-columns: 1fr auto; gap: 4px 10px;
-    margin: 0 0 10px; font-size: 12px; border-top: 1px solid #1D262B; padding-top: 9px;
+    display: grid; grid-template-columns: auto 1fr; gap: 4px 10px;
+    margin: 0 0 8px; font-size: 12px; border-top: 1px solid #1D262B; padding-top: 9px;
   }
+  #panel dt { white-space: nowrap; }
+  #panel dd { white-space: nowrap; }
   #panel dt { color: #8E9BA2; margin: 0; }
   #panel dd { margin: 0; text-align: right; font-weight: 600; color: #E4E9EB; }
   #p-ayak[data-state="full"] { color: #5FB07C; }
   #p-ayak[data-state="half"] { color: #E8A62C; }
-  #p-egim[data-warn="yes"] { color: #E2645A; }
+  #p-egim[data-warn="yes"], #p-halat[data-warn="yes"] { color: #E2645A; }
+  /* Sınırı hangi şeyin koyduğu ve halat katı, listenin altında kendi
+     satırlarında — grid hücresine sığdırmaya çalışmak etiketleri sarıyordu. */
+  #p-sinir-et, #p-kat {
+    font-size: 11px; line-height: 1.5; color: #8E9BA2; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  #p-sinir-et[data-baglayan="halat"] { color: #E8A62C; }
+  #p-kat { margin-bottom: 8px; color: #C7D1D6; }
 
   #hint {
     font-size: 11.5px; line-height: 1.45; color: #8E9BA2;
@@ -225,14 +235,18 @@
     <div id="moment-durum" data-zone="green">GÜVENLİ</div>
 
     <dl>
-      <dt>kancadaki ağırlık</dt><dd id="p-yuk">0.00 t</dd>
-      <dt>bu mesafede sınır</dt><dd id="p-sinir">0.00 t</dd>
-      <dt>çalışma yarıçapı</dt><dd id="p-yaricap">0.0 m</dd>
+      <dt>kancada</dt><dd id="p-yuk">0.00 t</dd>
+      <dt>sınır</dt><dd id="p-sinir">0.00 t</dd>
+      <dt>yarıçap</dt><dd id="p-yaricap">0.0 m</dd>
       <dt>bom</dt><dd id="p-bom">9.5 m · 11°</dd>
+      <dt>halat</dt><dd id="p-halat" data-warn="no">3.0 m</dd>
       <dt>ayaklar</dt><dd id="p-ayak" data-state="stowed">TOPLU</dd>
-      <dt>araç eğimi</dt><dd id="p-egim" data-warn="no">+0.0°</dd>
+      <dt>eğim</dt><dd id="p-egim" data-warn="no">+0.0°</dd>
       <dt>hız</dt><dd id="p-hiz">0 km/sa</dd>
     </dl>
+
+    <div id="p-sinir-et">sınırı yük tablosu koyuyor</div>
+    <div id="p-kat">2 kat · 3.9 t · K ile değiştir</div>
 
     <div id="hint" data-mode="drive">çalışma alanına yanaş, sonra Q ile ayakları aç</div>
   </div>
@@ -243,7 +257,8 @@
     <b>sürüş</b> <kbd>→</kbd> gaz <kbd>←</kbd> geri <kbd>boşluk</kbd> el freni<br>
     <b>kurulum</b> <kbd>Q</kbd> ayak aç/kapa<br>
     <b>vinç</b> <kbd>W</kbd><kbd>S</kbd> bom <kbd>⇧W</kbd><kbd>⇧S</kbd> teleskop<br>
-    <kbd>↑</kbd><kbd>↓</kbd> kanca <kbd>boşluk</kbd> bağla/bırak <kbd>R</kbd> sıfırla
+    <kbd>↑</kbd><kbd>↓</kbd> kanca <kbd>boşluk</kbd> bağla/bırak<br>
+    <kbd>K</kbd> halat katı <kbd>R</kbd> sıfırla
   </div>
 
   <div id="kondu" hidden></div>

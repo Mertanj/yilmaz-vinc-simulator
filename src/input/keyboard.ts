@@ -27,6 +27,8 @@ export class Keyboard {
   outriggerToggled = false;
   /** Boşluğa basıldığı karede bir kez true olur. */
   hookToggled = false;
+  /** K'ya basıldığı karede bir kez true olur — halat kat sayısı. */
+  katToggled = false;
 
   constructor(target: EventTarget = window) {
     target.addEventListener('keydown', (e) => {
@@ -36,6 +38,7 @@ export class Keyboard {
       if (ev.code === 'KeyR') this.resetRequested = true;
       if (ev.code === 'KeyQ') this.outriggerToggled = true;
       if (ev.code === 'Space') this.hookToggled = true;
+      if (ev.code === 'KeyK') this.katToggled = true;
       // Boşluk ve ok tuşları sayfayı kaydırmasın.
       if (ev.code === 'Space' || ev.code.startsWith('Arrow')) ev.preventDefault();
     });
@@ -85,6 +88,12 @@ export class Keyboard {
   consumeOutriggerToggle(): boolean {
     const r = this.outriggerToggled;
     this.outriggerToggled = false;
+    return r;
+  }
+
+  consumeKatToggle(): boolean {
+    const r = this.katToggled;
+    this.katToggled = false;
     return r;
   }
 }

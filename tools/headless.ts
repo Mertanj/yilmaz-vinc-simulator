@@ -132,8 +132,11 @@ function main(): void {
   // 1) Takoza dayanana kadar sür, sonra ayakları aç.
   r.run(20, (rig) => ({ drive: { throttle: rig.scene.truck.speedKmh < 26 ? 1 : 0, handbrake: false } }));
   r.run(3, () => ({ drive: { throttle: 0, handbrake: true } }));
+  // Ayaklar artık KADEMELİ: Q bir kademe ilerletiyor, tam açık için iki basış.
+  r.tap('toggleOutriggers', 3);
   r.tap('toggleOutriggers', 6);
   say(`PARK+AYAK  ayak %${(r.scene.outriggers.fraction * 100).toFixed(0)}`
+    + ` (${r.scene.outriggers.state})`
     + `  egim ${r.scene.tiltDeg.toFixed(2)}°`);
 
   // --- çalışma zarfı: park edilen yerden neye ulaşılıyor? ---
@@ -191,17 +194,65 @@ function main(): void {
     // kısıt 11 metre ihlal ediliyor ama kanca korkuluğu aşamıyor — fizik
     // doğru, hamle yanlış. Operatör de yükü bıraktıktan sonra bomu dikleştirip
     // binanın üstünden döner.
-    const temizY = FACTORY.floorHeight * FACTORY.floors + 4.0;
+    /**
+     * Verilen x'te binanın yüksekliği. Kademeler iç içe: f. kademe
+     * `left + setback*f` ten sağa doğru uzanıyor ve tepesi `floorHeight*(f+1)`.
+     */
+    const binaYuksekligi = (x: number): number => {
+      let h = 0;
+      for (let f = 0; f < FACTORY.floors; f++) {
+        if (x >= FACTORY.left + FACTORY.setback * f) h = FACTORY.floorHeight * (f + 1);
+      }
+      return h;
+    };
+    // Kancanın aşması gereken kot: bulunduğu yerdeki bina + korkuluk + pay.
+    // Kademeler sola doğru alçaldığı için malzeme alanına dönerken en yüksek
+    // engel kancanın ŞU ANKİ x'i oluyor.
+    const engelY = binaYuksekligi(r.scene.crane.hook.getPosition().x)
+      + FACTORY.parapetHeight + 1.2;
+    const temizY = engelY + 3.0;
+    // **Bom hareket ederken halatı koru.** Teleskop açmak halat yiyor (gerçek
+    // vinçte de öyle), o yüzden vinci boşta bırakmak iki-bloğa dayandırıyor.
+    const halatKoru = (rig: Rig, hedefHalat: number): number =>
+      Math.max(-1, Math.min(1, (rig.scene.crane.ropeM - hedefHalat) / 1.0));
+    // **Dönüş boyunca halat KISA kalır.** 5 metreye salmak kancayı bom ucunun
+    // 5 metre altına indiriyor ve o kot tam da 1. kat korkuluğunun (4.7 m)
+    // hizası — kanca korkuluğa tünüyor, sonra 18 metre halat salınsa bile
+    // kıpırdamıyordu. 3 metre ile kanca ucun hemen altında ve her şeyin
+    // üstünde kalıyor.
+    const DONUS_HALATI = 3.0;
+    // Bu hamle SADECE kanca teraslar arasındayken gerekli — takılacağı bir şey
+    // varsa. Ölçüt bom ucunun x'i DEĞİL: yol konumundaki bom zaten cephe
+    // hizasında bitiyor ve koşul boş yere sağlanıyordu; ilk görevde bom
+    // 11°'den 66°'ye çıkıp geri inince sarkaç 40 dereceye savruluyordu.
+    // Kanca zaten engelin üstündeyse tırmanmaya gerek yok. Sabit "çatıyı aş"
+    // kuralı 22 metreye çıkıp geri iniyordu ve o sweep sarkacı 40 dereceye
+    // savuruyordu — üstelik aşılacak engel 3.8 metredeydi.
+    if (r.scene.crane.hook.getPosition().y < engelY) {
     r.runUntil(60,
       (rig) => rig.scene.crane.tipWorld.y > temizY - 0.6
         && Math.abs(rig.scene.crane.tipWorld.x - loadX) < 1.5,
-      (rig) => ({ crane: { ...rig.boomToDamped(loadX, temizY), winch: 0 } }));
+      (rig) => ({ crane: {
+        ...rig.boomToDamped(loadX, temizY), winch: halatKoru(rig, DONUS_HALATI),
+      } }));
     iz('bom-yukseldi');
+    }
     r.runUntil(60,
       (rig) => Math.abs(rig.scene.crane.tipWorld.x - loadX) < 0.12
         && rig.scene.crane.tipWorld.y < almaUcY() + 1.0,
-      (rig) => ({ crane: { ...rig.boomToDamped(loadX, almaUcY()), winch: 0 } }));
+      (rig) => ({ crane: {
+        ...rig.boomToDamped(loadX, almaUcY()), winch: halatKoru(rig, DONUS_HALATI),
+      } }));
     iz('bom-dondu');
+    // **İndirmeden önce kancanın ucun altına gelmesini bekle.**
+    //
+    // Bom dönerken kanca geride kalıyor; hemen halat salınca kanca binanın
+    // üstündeyken iniyor ve terasa oturuyordu (ölçümde 18 metre halat salındı,
+    // kanca 90 santim indi — çünkü 1. kat terasındaydı).
+    r.runUntil(30,
+      (rig) => Math.abs(rig.scene.crane.hook.getPosition().x - rig.scene.crane.tipWorld.x) < 0.4,
+      (rig) => ({ crane: { luff: 0, telescope: 0, winch: halatKoru(rig, DONUS_HALATI) } }));
+    iz('kanca-oturdu');
     r.run(26, (rig) => ({ crane: {
       ...rig.boomToDamped(loadX, almaUcY()),
       winch: toward(rig.scene.crane.hook.getPosition().y, asili, 0.05),

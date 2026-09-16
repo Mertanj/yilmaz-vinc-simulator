@@ -53,6 +53,54 @@ export function capacityAt(radiusM: number, outriggers = OutriggerState.Full): n
   return 0;
 }
 
+/**
+ * Halat kat sayısı (parts of line / kat / fall).
+ *
+ * Kanca bloğunu taşıyan halat parçası sayısı. Dört şey birden değişiyor:
+ *   kapasite = N × tek kat çekme × verim(N)   — verim N büyüdükçe DÜŞER
+ *   kanca hızı = halat hızı ÷ N
+ *   kullanılabilir kanca yolu = halat boyu ÷ N
+ *   kanca bloğu ağırlaşır ve bu ağırlık yükten düşülür
+ *
+ * Maeda MC285C-3'ün kataloğu bunu birebir yazıyor: 4 kat 2.820 kg, 2 kat
+ * 1.410 kg, tek kat 710 kg. Tam olarak 1:2:4.
+ *
+ * **Vinçte iki bağımsız sınır var ve küçüğü geçerli:** yük tablosu (devrilme
+ * ve bom mukavemeti) ile halatın kendisi. Kısa yarıçapta halat bağlar, uzun
+ * yarıçapta tablo bağlar. Gerçek LMI de bu ikisinin min()'ini alır.
+ */
+export const KAT_SECENEKLERI = [1, 2, 4] as const;
+export type KatSayisi = (typeof KAT_SECENEKLERI)[number];
+
+/**
+ * Tek kat halat çekme kuvveti (ton).
+ *
+ * **Oyun dengesi için seçildi, ölçüldü.** 3.5 t (National NBT30H'ın gerçek
+ * değeri) denendi ve mekaniği öldürdü: bölümdeki en ağır yük 3.1 t olduğu için
+ * tek kat her göreve yetiyordu ve tek kat hem daha hızlı hem bloğu daha hafif —
+ * yani seçim diye bir şey kalmıyordu, oyuncu her zaman tek kat kullanırdı.
+ *
+ * 2.0 t ile yükler sınırın iki yanına düşüyor: ağır üç görev (2.3 / 3.1 / 2.2 t)
+ * iki kat ZORUNLU, hafif iki görev (1.5 / 1.05 t) tek katla yapılabiliyor ve
+ * kanca iki kat hızlanıyor. Karşılığında halatı yeniden geçirmek süre yiyor.
+ * Karar gerçek ve sonucu yakın — iyi bir mekaniğin istediği tam da bu.
+ *
+ * Sahada bu makine sınıfı için 2 ton düşük değil: aile vincinde (HIDROKON
+ * HK 90) standart ırgatın tek kat çekmesi 1.937 ton.
+ */
+export const TEK_KAT_TON = 2.0;
+
+/**
+ * N kat halatın taşıyabileceği yük (ton).
+ *
+ * Verim makara sürtünmesiyle düşüyor, o yüzden kapasite tam olarak N katı
+ * değil. Liebherr'in kendi tablosunda kat başına pay 6.30'dan 5.67 tona
+ * geriliyor (−%10, 1'den 12 kata) — buradaki 0.985^(N−1) o eğriye oturuyor.
+ */
+export function halatKapasitesi(kat: KatSayisi): number {
+  return TEK_KAT_TON * kat * Math.pow(0.985, kat - 1);
+}
+
 export enum LmiZone {
   Green = 'green',
   Amber = 'amber',
@@ -63,7 +111,14 @@ export interface LmiReading {
   /** Kapasitenin yüzdesi. 100'ün üstü aşırı yük. */
   percent: number;
   zone: LmiZone;
+  /** Geçerli sınır: tablo ile halat kapasitesinin küçüğü. */
   capacityTonnes: number;
+  /** Yük tablosundan gelen sınır (devrilme / bom mukavemeti). */
+  chartTonnes: number;
+  /** Halattan gelen sınır (kat sayısı × tek kat çekme). */
+  ropeTonnes: number;
+  /** Hangisi bağlıyor — panelde bunu söylemek gerekiyor. */
+  limitedBy: 'tablo' | 'halat';
   loadTonnes: number;
   radiusM: number;
   /** Aktüatörlere uygulanacak hız çarpanı — sarıda yavaşlar. */
@@ -84,9 +139,13 @@ export function computeLmi(
   loadTonnes: number,
   hookTonnes: number,
   outriggers = OutriggerState.Full,
+  kat: KatSayisi = 2,
 ): LmiReading {
   const total = loadTonnes + hookTonnes;
-  const capacity = capacityAt(radiusM, outriggers);
+  const chart = capacityAt(radiusM, outriggers);
+  const rope = halatKapasitesi(kat);
+  // İki bağımsız sınır, küçüğü geçerli.
+  const capacity = Math.min(chart, rope);
   const percent = capacity <= 0 ? Infinity : (total / capacity) * 100;
 
   let zone: LmiZone;
@@ -106,6 +165,9 @@ export function computeLmi(
     percent,
     zone,
     capacityTonnes: capacity,
+    chartTonnes: chart,
+    ropeTonnes: rope,
+    limitedBy: rope < chart ? 'halat' : 'tablo',
     loadTonnes: total,
     radiusM,
     speedScale,

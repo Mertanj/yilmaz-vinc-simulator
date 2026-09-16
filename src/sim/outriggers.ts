@@ -76,6 +76,20 @@ export const OUTRIGGER = {
    */
   targetMountHeight: 1.50,
   /**
+   * Kademeli açılma: TOPLU → YARI → TAM.
+   *
+   * Gerçek vinçte kademe **yanal açıklık** demek (ayaklar yarıya kadar dışarı);
+   * yandan bakan bir oyunda o hareket görünmüyor. Bizdeki karşılığı bağlantı
+   * yükseklik hedefi: yarıda pabuçlar yere basıyor ve yükün bir kısmını alıyor
+   * ama lastikler hâlâ yerde, yani araç krikoya tam oturmamış oluyor. Yük
+   * tablosu bunu zaten 0.6 çarpanıyla cezalandırıyordu — şimdi oyuncu o
+   * cezayı kendi seçimiyle alıyor.
+   *
+   * Oyun tarafı: kurulumu aceleye getirmek kapasiteyi %40 düşürüyor. Karar
+   * oyuncunun ve bedeli ölçülebilir.
+   */
+  stageHeights: [0, 1.28, 1.50],
+  /**
    * Komutun anlık stroktan ne kadar önde olabileceği (m).
    *
    * Mafsalın kopmasının sebebi komutun 1.3 metre ileride olmasıydı. Önce
@@ -129,7 +143,6 @@ interface Leg {
 export class Outriggers {
   private readonly legs: Leg[] = [];
   /** Oyuncunun komutu: açık mı kapalı mı. */
-  private wantDeployed = false;
 
   constructor(world: World, private readonly chassis: Body, snaps: Snapshotter) {
     for (const m of OUTRIGGER.mounts) {
@@ -170,8 +183,13 @@ export class Outriggers {
     }
   }
 
-  toggle(): void { this.wantDeployed = !this.wantDeployed; }
-  get deployedCommand(): boolean { return this.wantDeployed; }
+  /** 0 toplu · 1 yarı açık · 2 tam açık. */
+  private stage = 0;
+
+  /** Q her basışta bir kademe ilerletir, sonra başa döner. */
+  toggle(): void { this.stage = (this.stage + 1) % OUTRIGGER.stageHeights.length; }
+  get stageIndex(): number { return this.stage; }
+  get deployedCommand(): boolean { return this.stage > 0; }
 
   /**
    * Her fizik adımında, world.step()'ten önce.
@@ -182,10 +200,11 @@ export class Outriggers {
    * araç kalıcı olarak yatık kalıyordu.
    */
   update(): void {
-    if (!this.wantDeployed) {
+    if (this.stage === 0) {
       for (const leg of this.legs) leg.joint.setMotorSpeed(-OUTRIGGER.extendSpeed);
       return;
     }
+    const hedefY = OUTRIGGER.stageHeights[this.stage] ?? OUTRIGGER.targetMountHeight;
 
     for (const leg of this.legs) {
       const mount = this.chassis.getWorldPoint(leg.mountLocal);
@@ -198,7 +217,7 @@ export class Outriggers {
 
       // Hedef: bağlantıyı istenen yüksekliğe getirecek strok. Komut stroktan
       // en fazla maxCommandLead kadar önde olabilir.
-      const heightError = OUTRIGGER.targetMountHeight - mount.y;
+      const heightError = hedefY - mount.y;
       const lead = clamp(
         heightError / down, -OUTRIGGER.maxCommandLead, OUTRIGGER.maxCommandLead,
       );
@@ -247,7 +266,7 @@ export class Outriggers {
   get feet(): Body[] { return this.legs.map((l) => l.foot); }
 
   reset(chassis: Body): void {
-    this.wantDeployed = false;
+    this.stage = 0;
     for (const leg of this.legs) {
       const anchor = chassis.getWorldPoint(leg.mountLocal);
       leg.foot.setTransform({ x: anchor.x, y: anchor.y }, 0);

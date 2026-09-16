@@ -76,7 +76,9 @@ async function boot(): Promise<void> {
     gorev: el('gorev'), gorevBrif: el('gorev-brif'), sure: el('sure'), puan: el('puan'),
     barDolu: el('bar-dolu'), yuzde: el('moment-yuzde'), durum: el('moment-durum'),
     pYuk: el('p-yuk'), pSinir: el('p-sinir'), pYaricap: el('p-yaricap'),
-    pBom: el('p-bom'), pAyak: el('p-ayak'), pEgim: el('p-egim'), pHiz: el('p-hiz'),
+    pBom: el('p-bom'), pHalat: el('p-halat'), pAyak: el('p-ayak'),
+    pKat: el('p-kat'), pSinirEt: el('p-sinir-et'),
+    pEgim: el('p-egim'), pHiz: el('p-hiz'),
     hint: el('hint'), uyari: el('uyari'),
     sonuc: el('sonuc'), sonucIc: el('sonuc-ic'), kondu: el('kondu'),
   };
@@ -88,6 +90,7 @@ async function boot(): Promise<void> {
       crane: keys.readCrane(),
       toggleOutriggers: keys.consumeOutriggerToggle(),
       toggleHook: keys.consumeHookToggle(),
+      toggleKat: keys.consumeKatToggle(),
       reset,
     }, dt);
     if (reset) {
@@ -209,7 +212,26 @@ async function boot(): Promise<void> {
     if (hud.pSinir) {
       hud.pSinir.textContent = tabloDisi ? 'tablo dışı' : `${r.capacityTonnes.toFixed(2)} t`;
     }
+    // Sınırı hangi şey koyuyor? Kısa yarıçapta halat, uzun yarıçapta tablo.
+    // İkisini ayırmadan oyuncu "neden kaldıramıyorum" sorusunu çözemiyor.
+    if (hud.pSinirEt) {
+      hud.pSinirEt.textContent = r.limitedBy === 'halat'
+        ? `sınırı HALAT koyuyor (tablo ${r.chartTonnes.toFixed(1)} t)`
+        : `sınırı TABLO koyuyor (halat ${r.ropeTonnes.toFixed(1)} t)`;
+      hud.pSinirEt.dataset['baglayan'] = r.limitedBy;
+    }
+    if (hud.pKat) {
+      const kalan = crane.reevingSuresi;
+      hud.pKat.textContent = kalan > 0
+        ? `halat geçiriliyor… ${kalan.toFixed(0)} sn`
+        : `${crane.katSayisi} kat · ${crane.halatKapasiteTon.toFixed(1)} t`
+          + ` · K → ${crane.sonrakiKat} kat`;
+    }
     if (hud.pYaricap) hud.pYaricap.textContent = `${crane.radiusM.toFixed(1)} m`;
+    if (hud.pHalat) {
+      hud.pHalat.textContent = `${crane.ropeM.toFixed(1)} m`;
+      hud.pHalat.dataset['warn'] = crane.ikiBlokta ? 'yes' : 'no';
+    }
     if (hud.pBom) {
       hud.pBom.textContent = `${crane.lengthM.toFixed(1)} m · ${crane.angleDeg.toFixed(0)}°`;
     }
@@ -268,9 +290,31 @@ async function boot(): Promise<void> {
     const u = hud.uyari;
     if (!u) return;
     const r = crane.lmi;
-    if (!craneMode || r.zone === 'green') { u.hidden = true; return; }
+    const ikiBlokUyari = crane.ikiBlokta && (crane.kilitliDenendi || crane.hasLoad);
+    if (!craneMode || (r.zone === 'green' && !ikiBlokUyari)) { u.hidden = true; return; }
 
     const kilitli = crane.kilitliDenendi;
+
+    // İki-blok, yük momentinden ÖNCE gelir: kanca kafaya dayanmışsa mesele
+    // ağırlık değil, halatın bitmiş olması.
+    //
+    // Ama SADECE oyuncuyu fiilen engellediğinde uyarıyoruz. Kurulumda kanca
+    // zaten yol konumunda kafaya toplu duruyor; orada kırmızı bir şerit
+    // açmak alarmı daha ilk saniyede değersizleştiriyordu. Panelde halat
+    // satırı yine kırmızı — durum her zaman görünür, kesinti sadece gerektiğinde.
+    if (crane.ikiBlokta && (kilitli || crane.hasLoad)) {
+      u.dataset['zone'] = 'red';
+      u.classList.toggle('carpiyor', kilitli);
+      u.innerHTML = [
+        '<div class="bas">⚠ İKİ-BLOK — KANCA BOM KAFASINA DAYANDI</div>',
+        '<p>Halat bitti. Vinci yukarı almak ve teleskobu açmak <b>KİLİTLİ</b>;'
+        + ' ikisi de halatı daha da kısaltır ve kancayı kafaya çarpar.</p>',
+        '<p class="cozum">↓ ile halatı sal. Teleskobu açarken vinci de salman'
+        + ' gerekir — bom uzadıkça halat kısalır.</p>',
+      ].join('');
+      u.hidden = false;
+      return;
+    }
     if (tabloDisi) {
       // Yük tablosunun sonunu geçtik. Burada mesele yükün ağırlığı değil,
       // mesafenin kendisi: boş kanca bile bu yarıçapta kaldırılamaz.

@@ -43,6 +43,8 @@ export interface SceneInput {
   toggleOutriggers: boolean;
   /** Bu karede kancayı bağla/bırak. */
   toggleHook: boolean;
+  /** Bu karede halat kat sayısını değiştir. */
+  toggleKat: boolean;
   /** Bu karede her şeyi başa al. */
   reset: boolean;
 }
@@ -52,6 +54,7 @@ export const IDLE: SceneInput = {
   crane: NEUTRAL,
   toggleOutriggers: false,
   toggleHook: false,
+  toggleKat: false,
   reset: false,
 };
 
@@ -142,6 +145,9 @@ export class Scene {
     return this.outriggers.fraction > 0.15;
   }
 
+  /** Son kat değiştirme denemesinin sonucu — HUD gerekçeyi gösteriyor. */
+  sonKatCevabi: { ok: boolean; neden: string } = { ok: true, neden: '' };
+
   /** Şasi eğimi, derece. Ekranda gördüğümüz işaretle aynı. */
   get tiltDeg(): number {
     return (-this.truck.chassis.getAngle() * 180) / Math.PI;
@@ -157,6 +163,7 @@ export class Scene {
     const craneMode = this.craneMode;
     this.crane.setStowed(!craneMode);
     if (input.toggleHook && craneMode) this.crane.requestToggleAttach();
+    if (input.toggleKat && craneMode) this.sonKatCevabi = this.crane.katDegistir();
 
     this.snaps.capture();
 
