@@ -39,15 +39,16 @@ export const ARACLAR: readonly AracTanimi[] = [
     id: 'forklift',
     ad: 'YF-25 Forklift',
     sinif: '2.5 ton · karşı ağırlıklı · depo',
-    ozet: 'Paletleri raflara koy. Sürüşü kolay, ama yük merkezi uzadıkça '
-      + 'kapasite hızla erir ve arka teker havalanır.',
-    zorluk: 'Sınırı yatay mesafe koyuyor: geniş palet = uzak yük merkezi.',
-    seviye: 1,
+    ozet: 'Paletleri kademeli rafın gözlerine koy. Yük alma tuşu yok: '
+      + 'bıçağı paletin cebine sokup kaldırıyorsun, gerisi fizik.',
+    zorluk: 'Sınırı yatay mesafe koyuyor: çatal ne kadar az girerse yük merkezi o kadar uzar.',
+    seviye: 2,
     simge: forkliftSimgesi(),
     tuslar: '<b>sürüş</b> <kbd>→</kbd> gaz <kbd>←</kbd> geri <kbd>boşluk</kbd> el freni<br>'
       + '<b>çatal</b> <kbd>W</kbd><kbd>S</kbd> kaldır/indir '
       + '<kbd>⇧W</kbd><kbd>⇧S</kbd> direk eğimi<br>'
-      + '<kbd>boşluk</kbd> yükü al/bırak <kbd>R</kbd> sıfırla',
+      + '<b>yük alma tuşu yok</b> — bıçağı paletin cebine sok ve kaldır'
+      + ' <kbd>R</kbd> sıfırla',
     hazir: true,
     kur: () => {
       const sahne = new ForkliftSahnesi();

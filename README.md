@@ -33,12 +33,16 @@ gerek yok — linki aç ve başla.
 | Sürüş | `boşluk` | El freni |
 | Çatal | `W` / `S` | Kaldır / indir |
 | Çatal | `Shift+W` / `Shift+S` | Direği geriye / öne yatır |
-| Çatal | `boşluk` | Yükü al / bırak |
+| — | — | **Yük alma tuşu yok** |
 | Genel | `R` | Bölümü baştan başlat |
 
-**Yük merkezi uzadıkça kapasite erir** — geniş bir paleti 4.60 metreye çıkarmak,
-ondan ağır ama dar bir paleti aynı rafa koymaktan zordur. Aşırı yükte makine
-burnunu çatalına dayıyor ve ön tekerler yönlendirmeyi bırakıyor.
+Forkliftte yükü **tuşla almıyorsun**: bıçağı paletin cebine sokup kaldırıyorsun,
+palet çatalın üstünde yükseliyor. Bu yüzden yük merkezi ölçülen bir şey — çatal
+ne kadar az girdiyse kapasite o kadar düşük okur.
+
+**Yük merkezi uzadıkça kapasite erir** — geniş bir paleti 4.75 metreye çıkarmak,
+ondan ağır ama dar bir paleti aynı rafa koymaktan zordur. Direk yukarıdayken
+makine adım hızında gider: taşımak için çatalı indirmen gerekiyor.
 
 **Bomu kaldırmak yarıçapı KISALTIR** — gerçek vinçte de öyle. Uzağa ulaşmak
 için bomu indirip teleskobu açmak gerekiyor, ve tam o anda ibre tırmanıyor.

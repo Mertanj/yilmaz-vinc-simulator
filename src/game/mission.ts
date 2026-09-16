@@ -206,8 +206,9 @@ export class Mission {
     if (this.scene.hasLoad) return false;
     const p = this.scene.load.getPosition();
     const v = this.scene.load.getLinearVelocity();
-    return Math.abs(p.x - hedef.x) <= 2.0
-      && Math.abs(p.y - (hedef.y + t.halfHeight)) <= 0.4
+    const tol = this.scene.yerlestirmeToleransi(t);
+    return Math.abs(p.x - hedef.x) <= tol.x
+      && Math.abs(p.y - (hedef.y + t.halfHeight)) <= tol.y
       && Math.hypot(v.x, v.y) < 0.25;
   }
 

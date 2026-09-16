@@ -1,8 +1,9 @@
 import {
-  Box, Circle, WheelJoint, Vec2,
+  Box, Circle, WheelJoint, PrismaticJoint, RevoluteJoint, Vec2,
   type Body, type World, type WheelJoint as WhJ,
+  type PrismaticJoint as PJ, type RevoluteJoint as RJ,
 } from 'planck';
-import { TRUCK_GROUP, type Snapshotter } from './world';
+import { KATEGORI, MASKE, TRUCK_GROUP, type Snapshotter } from './world';
 import type { DriveInput } from '../input/keyboard';
 import type { Grabbable } from './crane';
 
@@ -59,7 +60,13 @@ export const FORKLIFT = {
    */
   mastX: 1.45,
   /** Çatal bıçağının boyu (m). Yük bunun üstüne oturuyor. */
-  forkLengthM: 1.15,
+  /**
+   * Çatal bıçağının boyu (m). 1.15 iken en geniş palet (2.2 m derin) bıçağın
+   * ucundan taşıyordu ve ölçülen yük merkezi 1.10 yerine 1.41 okuyordu —
+   * yani makine kendi kendine kapasitesini aşıyordu. Gerçek forklift bıçağı
+   * da 1.2–1.5 metre arasındadır.
+   */
+  forkLengthM: 1.35,
   /**
    * Direk tabanının şasi merkezine göre y'si.
    *
@@ -68,21 +75,50 @@ export const FORKLIFT = {
    * çatal en alttayken bile 1.04 metrede kalıyor, paletin cebine hiç girmiyor
    * ve yük alınamıyordu.
    */
-  mastBaseY: -(0.52 + 0.32 + 0.12),
+  /**
+   * Direk pimi, şasi merkezine göre. Düz duran boş makinede zeminden 10 cm
+   * yukarıda: çatalın ve direğin yere değmemesi için gereken pay. Pim tam
+   * zemin hizasındayken süspansiyon her çöküşünde bıçak yere dayanıyor, ön
+   * teker boşalıyor ve tahrik patinaj yapıyordu.
+   *
+   * **`minLiftM` ile tutarlı olmak zorunda**: pim zeminden ne kadar
+   * yukarıdaysa `minLiftM` de o. Bir ara pim 0.22'ye çıkmıştı ama minLiftM
+   * 0.10 kalmıştı; panel "çatal kotu 0.12 m" yazarken bıçak gerçekte
+   * 0.22'deydi ve palete cebinden değil ön yüzünden vuruyordu.
+   */
+  mastBaseY: -(0.52 + 0.32 + 0.02),
   /** Çatalın yerden en düşük ve en yüksek kotu (m). */
-  minLiftM: 0.08,
-  maxLiftM: 4.9,
+  /**
+   * Çatalın en düşük kotu (m) — direk pimine göre.
+   *
+   * 0.04'teyken bıçak zemine değiyordu: pim zemin hizasında, süspansiyon da
+   * yük altında 2-3 santim çöküyor. Sonuç ölçümde nettir — bıçak yere
+   * dayanınca ÖN TEKER boşalıyor ve tahrik tekeri patinaj yapıyor, makine
+   * tam gazda hiç hareket etmiyordu. Gerçek forklift de çatalını yerden
+   * birkaç santim yukarıda taşır.
+   */
+  minLiftM: 0.10,
+  maxLiftM: 5.6,
   liftSpeedMps: 0.75,
   /** Direk eğimi: geri (+) ve ileri (−), derece. */
   maxTiltBackDeg: 10,
   maxTiltFwdDeg: 5,
   tiltSpeedDegPerSec: 6,
 
-  /** Yük almak için çatal kotu, yükün tabanına bu kadar yakın olmalı (m). */
-  forkPocketToleranceM: 0.16,
-  /** Çatal yüzü yükün içine bu kadar girmiş olmalı (m). */
-  forkInsertM: 0.35,
-  attachMaxSpeedMps: 1.0,
+  /** Çatal bıçağının kalınlığı (m) — palet cebine girecek kadar ince. */
+  bicakKalinligiM: 0.06,
+  /** Palet cebinin yüksekliği (m) — bıçak buraya giriyor. */
+  paletCebiM: 0.38,
+  /** Yük sırtlığının yüksekliği (m): yük geriye yaslanıyor. */
+  sirtlikM: 0.5,
+  /** Direk kanalının boyu (m) ve kütlesi (kg). */
+  direkBoyM: 2.45,
+  direkKg: 320,
+  /** Taşıyıcı + çatal kütlesi (kg). En ağır yükle oran 8.4:1 — sınırın altında. */
+  tasiyiciKg: 220,
+  /** Kaldırma silindirinin kuvveti (N) ve eğim silindirinin torku (N·m). */
+  kaldirmaKuvvetiN: 150_000,
+  egimTorkuNm: 400_000,
 
   /**
    * Tahrik tekerden geçiyor, gövdeye uygulanan kuvvetten değil.
@@ -95,30 +131,40 @@ export const FORKLIFT = {
    * tek mafsalda. Üstelik çekiş artık lastik sürtünmesiyle sınırlı — burnu
    * yere değen makine gerçekten patinaj yapıyor.
    */
-  maxMotorTorque: 4_200,
-  maxWheelSpeed: 16,
-  handbrakeTorque: 9_000,
-  maxSpeedKmh: 18,
-
   /**
-   * Çatalın ZEMİN TEMASI — devrilmeyi durduran şey.
-   *
-   * Direk ve çatal birer gövde değil, sadece sayı; dolayısıyla makine öne
-   * yatarken solverın gördüğü hiçbir şey onu tutmuyordu ve forklift 180°
-   * takla atıp sırtüstü kalıyordu. Oysa gerçekte devrilen bir forklift
-   * ÇATALININ ÜSTÜNE oturur: burun birkaç derece iner, bıçaklar yere değer,
-   * iş orada biter. Bomun "yatakta dururken ağırlık şasiden geçer" kuralının
-   * aynısı — kinematik parçanın tepki kuvvetini elle uyguluyoruz.
-   *
-   * Yay katsayısı, 5 cm batmada makine + yükü (yaklaşık 7 ton) taşıyacak
-   * kadar sert; sönüm kritik sönümün altında, çünkü zıplamasını değil
-   * oturmasını istiyoruz.
+   * Tahrik torku (N·m). 4200 iken teker temasında 13 kN çıkıyordu; direk
+   * yukarıdayken ağırlık merkezi yükseldiği için makine geri giderken
+   * şahlanıyordu. 2600 N·m, 8 kN ve 1.4 m/s² veriyor — gerçek bir
+   * forkliftin ivmesi de bu civarda, ve manevra hassaslaşıyor.
    */
-  /** Temasın izin verdiği batma payı (m) ve düzeltme oranı. */
-  zeminPayiM: 0.01,
-  zeminDuzeltme: 0.25,
-  zeminMaxDuzeltmeMps: 1.2,
-  zeminSurtunme: 0.9,
+  maxMotorTorque: 2_600,
+  maxWheelSpeed: 13,
+  /**
+   * Direk yukarıdayken sürüş kısıtlanıyor — gerçek makinelerdeki
+   * "travel speed limiting" sistemi.
+   *
+   * Sadece gerçekçi değil, gerekli: taşıyıcı 5 metreye çıkınca ağırlık
+   * merkezi yükseliyor ve makine geri giderken şahlanıp takla atıyordu
+   * (ölçüldü: -138°). Gerçek forklift de yükü kaldırılmışken ancak adım
+   * hızında gider. Oyun tarafında da doğru şeyi öğretiyor: taşımak için
+   * çatalı indir.
+   */
+  yuksekKotM: 1.2,
+  yuksekKotHizCarpani: 0.34,
+  yuksekKotTorkCarpani: 0.5,
+  /**
+   * El freni torku (N·m), teker başına.
+   *
+   * 9000 iken iki tekerden 56 kN geliyordu, yani 10.6 m/s² yavaşlama — çatal
+   * sürtünmesinin tutabileceğinin üstünde. Ölçümde yük sekiz metrelik
+   * taşımada bıçağın ucuna doğru 83 santim kayıyor, ölçülen yük merkezi
+   * 0.68'den 1.51'e çıkıyor ve makine kendi kendini aşırı yüke sokuyordu.
+   * 3200 N·m, 3.8 m/s² veriyor: gerçek bir forkliftin freni de bu civarda ve
+   * yük artık yerinde duruyor.
+   */
+  handbrakeTorque: 3_200,
+  maxSpeedKmh: 15,
+
 } as const;
 
 /**
@@ -178,24 +224,25 @@ export const FORKLIFT_NEUTRAL: ForkliftInput = { lift: 0, tilt: 0 };
 export class Forklift {
   readonly chassis: Body;
   readonly wheels: Body[] = [];
+  /** Direk — şasiye mafsalla bağlı, eğimi o mafsalın motoru yapıyor. */
+  readonly mast: Body;
+  /** Taşıyıcı ve çatal — direğin içinde kayan gövde. */
+  readonly carriage: Body;
   private readonly joints: WhJ[] = [];
+  private readonly kaldirma: PJ;
+  private readonly egim: RJ;
 
-  /** Çatalın yerden kotu (m) — kendi durumumuz, kinematik. */
-  private lift: number = FORKLIFT.minLiftM;
-  /** Direk eğimi (derece). Pozitif = geriye yatık. */
-  private tilt = 0;
-
-  private attached: Body | null = null;
-  private attachedSpec: Grabbable | null = null;
-  private pendingAttach = false;
-  private pendingDetach = false;
+  /** Bu adımda çatalın üstünde duran yük (geometriyle bulunuyor). */
+  private yuk: Grabbable | null = null;
+  /** Silindirlerin KOMUT değerleri: hidrolik konum tutar, hız değil. */
+  private liftKomut: number = FORKLIFT.minLiftM;
+  private tiltKomut = 0;
   /** Bu adımda oyuncu kilitli bir kola bastı mı? */
   kilitliDenendi = false;
-
   /** Arka tekerin bu adımdaki zemin impulsu (N·s) ve süzülmüş hâli (N). */
   private arkaHam = 0;
   private arkaSuzulmus = 0;
-  /** Çatal/yük zemine değiyor mu? Devrilmenin durduğu yer burası. */
+  /** Çatal ya da direk zemine değiyor mu? Devrilmenin durduğu yer burası. */
   burunYerde = false;
 
   constructor(world: World, snaps: Snapshotter, spawnX = FORKLIFT.spawnX) {
@@ -203,7 +250,19 @@ export class Forklift {
     this.chassis = world.createDynamicBody({ x: spawnX, y: restY });
     this.chassis.createFixture(
       new Box(FORKLIFT.chassisHalfLength, FORKLIFT.chassisHalfHeight),
-      { density: 1, friction: 0.6, filterGroupIndex: TRUCK_GROUP },
+      { density: 1, friction: 0.6, filterGroupIndex: TRUCK_GROUP,
+        filterCategoryBits: KATEGORI.makine, filterMaskBits: 0xFFFF },
+    );
+    // **Karşı ağırlığın eteği.** Gerçek forkliftte karşı ağırlık aracın
+    // arkasında ve alçaktadır; yerden açıklığı 10-15 santimdir. Bizim şasi
+    // kutusunun altı 44 santimdeydi, yani makine arkaya doğru istediği kadar
+    // şahlanabiliyordu — ölçümde direk yukarıdayken geri giderken 141 dereceye
+    // kadar döndü, yani takla attı. Oysa karşı ağırlıklı bir forklift takla
+    // atamaz: kuyruğu yere oturur ve iş orada biter. Etek tam olarak o.
+    this.chassis.createFixture(
+      new Box(0.35, 0.14, new Vec2(-1.0, -FORKLIFT.chassisHalfHeight - 0.14), 0),
+      { density: 1, friction: 0.7, filterGroupIndex: TRUCK_GROUP,
+        filterCategoryBits: KATEGORI.makine, filterMaskBits: 0xFFFF },
     );
     this.chassis.setMassData({
       mass: FORKLIFT.tonnes * 1000,
@@ -217,6 +276,7 @@ export class Forklift {
       const w = world.createDynamicBody({ x: spawnX + dx, y: FORKLIFT.wheelRadius });
       w.createFixture(new Circle(FORKLIFT.wheelRadius), {
         density: 1, friction: 1.4, filterGroupIndex: TRUCK_GROUP,
+        filterCategoryBits: KATEGORI.makine, filterMaskBits: 0xFFFF,
       });
       w.setMassData({ mass: 180, center: { x: 0, y: 0 }, I: 9 });
       // Forklift süspansiyonu neredeyse yok: sert lastik üstünde çalışır.
@@ -225,11 +285,88 @@ export class Forklift {
       // arka aks direksiyon. Yük ön aksa bindiği için çekiş de orada olmalı.
       this.joints.push(world.createJoint(new WheelJoint({
         enableMotor: dx > 0, maxMotorTorque: FORKLIFT.maxMotorTorque, motorSpeed: 0,
-        frequencyHz: 9.0, dampingRatio: 0.9,
+        frequencyHz: 12.0, dampingRatio: 0.95,
       }, this.chassis, w, w.getPosition(), new Vec2(0, 1))) as WhJ);
       this.wheels.push(w);
       snaps.track(w);
     }
+
+    // --- DİREK ve TAŞIYICI: gerçek gövdeler, gerçek mafsallar ---
+    //
+    // Önce kinematik denendi (bomdaki desen) ve üç ayrı biçimde kırıldı:
+    // sırtlık şasinin içine girip makineyi el freni basılıyken 27 metre
+    // sürükledi; her adım setTransform yükü bıçağın üstünde 8 metrede 69 cm
+    // ileri kaydırdı; hızı düzeltince de yük bıçaktan kayıp düştü. Sebep
+    // hep aynı: kinematik gövde solverın çözdüğü şeyin dışında kalıyor, biz
+    // de tepkileri elle taklit etmeye çalışıyoruz.
+    //
+    // Burada buna gerek yok. Bomdan farklı olarak direk KISA ve kuvvetler
+    // ölçülü: en ağır yükte 27 kN. Dolayısıyla direk şasiye bir menteşeyle,
+    // taşıyıcı direğe bir kızakla bağlanabiliyor ve ikisi de motorlu. Yükün
+    // ağırlığı mafsallardan şasiye kendiliğinden geçiyor — devrilme artık
+    // elle uygulanan bir kuvvetten değil, gerçekten yükün kendisinden
+    // çıkıyor. Kütle oranları sınırın altında: yük/taşıyıcı 5.4, direk/şasi
+    // 7.1.
+    const pivot = this.chassis.getWorldPoint(
+      new Vec2(FORKLIFT.mastX, FORKLIFT.mastBaseY),
+    );
+    const catalFiltre = {
+      filterGroupIndex: TRUCK_GROUP,
+      filterCategoryBits: KATEGORI.catal,
+      filterMaskBits: MASKE.catal,
+    };
+
+    this.mast = world.createDynamicBody({ x: pivot.x, y: pivot.y });
+    // Direğin ALT UCU zeminden 18 cm yukarıda başlıyor. Pimden başlatınca
+    // direk sürekli yere dayanıyor, ön teker boşalıyor ve tahrik tekeri
+    // patinaj yapıyordu: makine tam gazda hiç hareket etmedi.
+    const direkAlt = 0.18;
+    const direkYuk = FORKLIFT.direkBoyM - direkAlt;
+    // Direk, sırtlığın ARKASINDA duruyor (x < 0). Aynı düzlemdeyken palet
+    // sırtlığa yaslandığı anda direğe de değiyor ve makine paleti önüne
+    // katıp 1.7 metre itiyordu. Gerçekte de direk taşıyıcının arkasındadır.
+    this.mast.createFixture(
+      new Box(0.09, direkYuk / 2, new Vec2(-0.16, direkAlt + direkYuk / 2), 0),
+      { density: 1, friction: 0.5, filterGroupIndex: TRUCK_GROUP,
+        filterCategoryBits: KATEGORI.direk, filterMaskBits: MASKE.direk },
+    );
+    this.mast.setMassData({
+      mass: FORKLIFT.direkKg,
+      center: { x: 0, y: FORKLIFT.direkBoyM / 2 },
+      I: (FORKLIFT.direkKg * FORKLIFT.direkBoyM ** 2) / 3,
+    });
+    snaps.track(this.mast);
+
+    this.carriage = world.createDynamicBody({ x: pivot.x, y: pivot.y });
+    const k = FORKLIFT.bicakKalinligiM;
+    this.carriage.createFixture(
+      new Box(FORKLIFT.forkLengthM / 2, k / 2, new Vec2(FORKLIFT.forkLengthM / 2, k / 2), 0),
+      { density: 1, friction: 1.1, ...catalFiltre },
+    );
+    // Sırtlık: yük geriye kaçmasın, direk geri yatınca ona yaslansın.
+    this.carriage.createFixture(
+      new Box(0.05, FORKLIFT.sirtlikM / 2, new Vec2(-0.02, FORKLIFT.sirtlikM / 2), 0),
+      { density: 1, friction: 0.8, ...catalFiltre },
+    );
+    this.carriage.setMassData({
+      mass: FORKLIFT.tasiyiciKg,
+      center: { x: 0.25, y: 0.2 },
+      I: (FORKLIFT.tasiyiciKg * (FORKLIFT.forkLengthM ** 2 + FORKLIFT.sirtlikM ** 2)) / 12,
+    });
+    snaps.track(this.carriage);
+
+    this.egim = world.createJoint(new RevoluteJoint({
+      enableMotor: true, motorSpeed: 0, maxMotorTorque: FORKLIFT.egimTorkuNm,
+      enableLimit: true,
+      lowerAngle: (-FORKLIFT.maxTiltFwdDeg * Math.PI) / 180,
+      upperAngle: (FORKLIFT.maxTiltBackDeg * Math.PI) / 180,
+    }, this.chassis, this.mast, pivot)) as RJ;
+
+    this.kaldirma = world.createJoint(new PrismaticJoint({
+      enableMotor: true, motorSpeed: 0, maxMotorForce: FORKLIFT.kaldirmaKuvvetiN,
+      enableLimit: true,
+      lowerTranslation: 0, upperTranslation: FORKLIFT.maxLiftM - FORKLIFT.minLiftM,
+    }, this.mast, this.carriage, pivot, new Vec2(0, 1))) as PJ;
 
     const arka = this.wheels[1];
     world.on('post-solve', (contact, impulse: { normalImpulses: number[] }) => {
@@ -262,24 +399,25 @@ export class Forklift {
     const l = FORKLIFT.frontAxleX - FORKLIFT.rearAxleX;
     return (toplam * (FORKLIFT.frontAxleX - FORKLIFT.comX)) / l;
   }
-  get liftM(): number { return this.lift; }
-  get tiltDeg(): number { return this.tilt; }
-  get hasLoad(): boolean { return this.attached !== null; }
 
-  /** Çatalın TOPUĞU — direğin dibi, yükün dayandığı yüz. */
+  /** Çatalın yerden kotu (m) — kızak mafsalından OKUNUYOR, tutulmuyor. */
+  get liftM(): number {
+    return FORKLIFT.minLiftM + this.kaldirma.getJointTranslation();
+  }
+  /** Direk eğimi (derece). Pozitif = geriye yatık. */
+  get tiltDeg(): number { return (this.egim.getJointAngle() * 180) / Math.PI; }
+  get hasLoad(): boolean { return this.yuk !== null; }
+
+  /** Çatalın TOPUĞU — taşıyıcının kendi başlangıç noktası. */
   get forkWorld(): { x: number; y: number } {
-    const p = this.chassis.getWorldPoint({ x: FORKLIFT.mastX, y: FORKLIFT.mastBaseY });
-    const a = this.chassis.getAngle() + (this.tilt * Math.PI) / 180;
-    // Direk eğimi çatalı geri/ileri alıyor.
-    return { x: p.x - Math.sin(a) * this.lift, y: p.y + Math.cos(a) * this.lift };
+    const p = this.carriage.getWorldPoint(new Vec2(0, 0));
+    return { x: p.x, y: p.y };
   }
 
   /** Çatalın UCU — topuktan ileriye doğru bıçak boyu kadar. */
   get forkTip(): { x: number; y: number } {
-    const h = this.forkWorld;
-    const a = this.chassis.getAngle() + (this.tilt * Math.PI) / 180;
-    return { x: h.x + Math.cos(a) * FORKLIFT.forkLengthM,
-             y: h.y + Math.sin(a) * FORKLIFT.forkLengthM };
+    const p = this.carriage.getWorldPoint(new Vec2(FORKLIFT.forkLengthM, 0));
+    return { x: p.x, y: p.y };
   }
 
   /**
@@ -287,19 +425,28 @@ export class Forklift {
    *
    * **ÇATAL YÜZÜNDEN** ölçülür, ön akstan değil. Gerçek forklift etiketi de
    * "2500 kg @ 500 mm yük merkezi" derken bunu kasteder ve aks mesafesini
-   * zaten kendi içinde hesaba katmıştır. İkisini toplamak tabloyu bir kez daha
-   * cezalandırıyordu: standart palet 1.02 m yük merkezi gösteriyor, oysa
-   * gerçeği 0.60.
+   * zaten kendi içinde hesaba katmıştır.
+   *
+   * Ve artık gerçekten ÖLÇÜLÜYOR: yarı yamalak sokulmuş bir palet daha uzun
+   * bir yük merkezi okuyor ve kapasiteyi gerçekten düşürüyor. Sabit bir
+   * `halfWidth` bunu hiç göstermiyordu.
    */
   get loadCentreM(): number {
-    return this.attachedSpec?.halfWidth ?? 0.5;
+    if (!this.yuk) return 0.5;
+    const yerel = this.carriage.getLocalPoint(this.yuk.body.getWorldCenter());
+    return Math.max(0.2, yerel.x);
   }
+
+  /** Çataldaki yükün ağırlığı (ton) — panel ve LMI bunu kullanıyor. */
+  get yukTonu(): number { return this.yuk ? this.yuk.body.getMass() / 1000 : 0; }
 
   drive(input: DriveInput, dt: number): void {
     void dt;
     const on = this.joints[0];
     const arka = this.joints[1];
-    const hizli = this.speedKmh >= FORKLIFT.maxSpeedKmh;
+    const sinirKmh = this.liftM > FORKLIFT.yuksekKotM
+      ? FORKLIFT.maxSpeedKmh * FORKLIFT.yuksekKotHizCarpani : FORKLIFT.maxSpeedKmh;
+    const hizli = this.speedKmh >= sinirKmh;
 
     if (input.handbrake) {
       // El freni iki tekeri de kilitliyor — forklift zaten kısa ve ağır.
@@ -314,9 +461,15 @@ export class Forklift {
     if (arka) arka.enableMotor(false);
     if (!on) return;
     on.enableMotor(true);
+    const yuksek = this.liftM > FORKLIFT.yuksekKotM;
     if (input.throttle !== 0 && !hizli) {
-      on.setMaxMotorTorque(FORKLIFT.maxMotorTorque);
-      on.setMotorSpeed(-input.throttle * FORKLIFT.maxWheelSpeed);
+      on.setMaxMotorTorque(
+        FORKLIFT.maxMotorTorque * (yuksek ? FORKLIFT.yuksekKotTorkCarpani : 1),
+      );
+      on.setMotorSpeed(
+        -input.throttle * FORKLIFT.maxWheelSpeed
+        * (yuksek ? FORKLIFT.yuksekKotHizCarpani : 1),
+      );
     } else {
       // Gaz bırakıldığında motor freni: hidrostatik şanzımanlı forklift
       // gerçekten de gaz bırakınca kendi kendine durur.
@@ -326,7 +479,7 @@ export class Forklift {
   }
 
   /** world.step()'ten ÖNCE. */
-  update(input: ForkliftInput, dt: number, asiriYuk: boolean): void {
+  update(input: ForkliftInput, dt: number, asiriYuk: boolean, adaylar: Grabbable[]): void {
     // Geçen adımın teması ölçüldü; süz ve sıfırla. Ham değer adım adım
     // zıplıyor, gösterge okunaksız olurdu.
     const ham = this.arkaHam / dt;
@@ -340,173 +493,104 @@ export class Forklift {
     const tiltCmd = asiriYuk ? Math.max(0, input.tilt) : input.tilt;
     this.kilitliDenendi = liftCmd !== input.lift || tiltCmd !== input.tilt;
 
-    this.lift = clamp(
-      this.lift + liftCmd * FORKLIFT.liftSpeedMps * dt,
+    // **Silindirler KONUM tutuyor, hız değil.**
+    //
+    // Önce motor hızıyla sürüldü ve direk kendi kendine 4 dereceye kadar
+    // kaydı: motor hız kısıtıdır, konum hatasını geri almaz. Hidrolik silindir
+    // ise konum tutar — valf kapalıyken piston nerede kaldıysa orada durur.
+    // Mafsal limitini komut değerine kilitlemek tam olarak bunu veriyor ve
+    // rijit: yük altında çökmüyor, sürerken kaymıyor.
+    this.liftKomut = clamp(
+      this.liftKomut + liftCmd * FORKLIFT.liftSpeedMps * dt,
       FORKLIFT.minLiftM, FORKLIFT.maxLiftM,
     );
-    this.tilt = clamp(
-      this.tilt + tiltCmd * FORKLIFT.tiltSpeedDegPerSec * dt,
+    this.tiltKomut = clamp(
+      this.tiltKomut + tiltCmd * FORKLIFT.tiltSpeedDegPerSec * dt,
       -FORKLIFT.maxTiltFwdDeg, FORKLIFT.maxTiltBackDeg,
     );
+    // Silindir, komut konumunu kovalayan bir servo. Mafsal limitini komuta
+    // kilitlemek denendi ve planck'te taşıyıcıyı hiç hareket ettirmedi;
+    // motor hızıyla sürmek ise konum hatasını geri almadığı için direği
+    // kendi kendine 4 dereceye kaydırdı. Hız komutunu HATAYLA orantılı
+    // vermek ikisini birden çözüyor: hareket ederken hız sınırlı, dururken
+    // her sapma anında geri alınıyor — hidrolik valfin yaptığı da bu.
+    const liftHata = this.liftKomut - this.liftM;
+    this.kaldirma.setMotorSpeed(
+      clamp(liftHata * 9, -FORKLIFT.liftSpeedMps * 1.4, FORKLIFT.liftSpeedMps * 1.4),
+    );
+    const tiltHata = ((this.tiltKomut * Math.PI) / 180) - this.egim.getJointAngle();
+    const tiltHiz = (FORKLIFT.tiltSpeedDegPerSec * Math.PI) / 180;
+    this.egim.setMotorSpeed(clamp(tiltHata * 9, -tiltHiz * 1.6, tiltHiz * 1.6));
+    this.mast.setAwake(true);
+    this.carriage.setAwake(true);
 
-    // Yükün ağırlığı şasiye, çatalın bulunduğu noktadan. Devrilme momenti
-    // buradan çıkıyor — kinematik taşıyıcı bunu kendiliğinden yapmaz.
-    if (this.attached) {
-      const w = this.attached.getMass() * 9.81;
-      const f = this.forkWorld;
-      const kol = this.attachedSpec?.halfWidth ?? 0.5;
-      // Ağırlık çatalın üstünde, topuktan yük merkezi kadar ileride — devrilme
-      // momentinin kolu tam olarak bu.
-      this.chassis.applyForce({ x: 0, y: -w }, { x: f.x + kol, y: f.y }, true);
-      // Yükü çatala kilitli tut: taşıyıcı kinematik, yük onunla gider.
-      const a = this.chassis.getAngle() + (this.tilt * Math.PI) / 180;
-      const hw = this.attachedSpec?.halfWidth ?? 0.5;
-      const hh = this.attachedSpec?.halfHeight ?? 0.4;
-      this.attached.setTransform(
-        { x: f.x + Math.cos(a) * hw - Math.sin(a) * hh,
-          y: f.y + Math.sin(a) * hw + Math.cos(a) * hh },
-        a,
-      );
-      this.attached.setLinearVelocity(this.chassis.getLinearVelocity());
-      this.attached.setAngularVelocity(0);
-      this.attached.setAwake(true);
-    }
-
-    this.yereBas(dt);
+    this.yuk = this.catalinUstundeki(adaylar);
+    this.burunYerde = this.zeminTemasi();
   }
 
   /**
-   * Çatal (ve üstündeki yük) zemine değdiyse şasiyi oradan destekle.
+   * Çatal zemine dayandı mı? Devrilme orada duruyor.
    *
-   * Devrilmenin sonu burası. Üç nokta bakılıyor: çatalın topuğu, ucu ve
-   * yüklüyken yükün ön-alt köşesi — hangisi önce yere iner, makineyi o tutar.
-   * Yükü yüksekteyken devrilen forklift gerçekten de önce yükünün köşesine,
-   * sonra çatalına oturur; alçakta taşıyan forklift ise birkaç derece eğilip
-   * bıçaklarının üstünde kalır. İkisi de aynı denklemden çıkıyor.
+   * Temas listesine bakmak yetmiyordu: raf kirişi de statik ve çatal rafa
+   * girince ona da değiyor. Geometri hem kesin hem ucuz — bıçağın iki ucundan
+   * alçak olanı zemin hizasının altındaysa makine burnunun üstünde demektir.
    */
-  private yereBas(dt: number): void {
-    const noktalar: Array<{ x: number; y: number }> = [this.forkWorld, this.forkTip];
-    if (this.attached && this.attachedSpec) {
-      // Yük çatalın ucundan taşabilir; taşan ön-alt köşe daha alçaktır.
-      const h = this.forkWorld;
-      const a = this.chassis.getAngle() + (this.tilt * Math.PI) / 180;
-      const boy = this.attachedSpec.halfWidth * 2;
-      noktalar.push({ x: h.x + Math.cos(a) * boy, y: h.y + Math.sin(a) * boy });
-    }
-
-    this.burunYerde = false;
-    const c = this.chassis;
-    const m = c.getMass();
-    const I = c.getInertia();
-    // İki tur: noktalar birbirini etkiliyor, tek tur çözümü sallantılı bırakıyor.
-    for (let tur = 0; tur < 2; tur++) {
-      for (const p of noktalar) {
-        const batma = -p.y;
-        if (batma <= 0) continue;
-        const merkez = c.getWorldCenter();
-        const rx = p.x - merkez.x;
-        const ry = p.y - merkez.y;
-        const w = c.getAngularVelocity();
-        const v = c.getLinearVelocity();
-        // Temas noktasının hızı: v + ω × r
-        const vy = v.y + w * rx;
-        const vx = v.x - w * ry;
-        // Batmayı yavaşça geri itme hızı (Baumgarte) — sertlik değil, düzeltme.
-        const bias = Math.min(
-          FORKLIFT.zeminMaxDuzeltmeMps,
-          (Math.max(0, batma - FORKLIFT.zeminPayiM) * FORKLIFT.zeminDuzeltme) / dt,
-        );
-        const kn = 1 / m + (rx * rx) / I;
-        const jn = -(vy - bias) / kn;
-        if (jn <= 0) continue;
-        this.burunYerde = true;
-        c.applyLinearImpulse({ x: 0, y: jn }, { x: p.x, y: p.y }, true);
-        // Sürtünme: burun yere değdikten sonra makine gaza rağmen sürünmesin.
-        const kt = 1 / m + (ry * ry) / I;
-        const jtHam = -vx / kt;
-        const sinir = FORKLIFT.zeminSurtunme * jn;
-        const jt = Math.max(-sinir, Math.min(sinir, jtHam));
-        c.applyLinearImpulse({ x: jt, y: 0 }, { x: p.x, y: p.y }, true);
-      }
-    }
-  }
-
-  /** world.step()'ten SONRA. Joint yaratma/yok etme burada güvenli. */
-  flushJointQueue(candidates: Grabbable[]): void {
-    if (this.pendingDetach && this.attached) {
-      // Bırakırken yükü tekrar serbest bırak: artık kendi fiziğiyle oturacak.
-      for (let f = this.attached.getFixtureList(); f; f = f.getNext()) {
-        f.setFilterData({ groupIndex: 0, categoryBits: 1, maskBits: 0xFFFF });
-      }
-      this.attached.setSleepingAllowed(true);
-      this.attached.setLinearVelocity(this.chassis.getLinearVelocity());
-      this.attached = null;
-      this.attachedSpec = null;
-    }
-    this.pendingDetach = false;
-
-    if (this.pendingAttach && !this.attached) {
-      const item = this.alinabilir(candidates);
-      if (item) {
-        // **Çataldaki yük hiçbir şeye çarpmıyor.**
-        // Taşınan yük kinematik: her adım setTransform ile çatala konuyor.
-        // Böyle bir gövdenin temas impulsu anlamsız — ne yükü durdurabiliyor
-        // (bir sonraki adımda yeri zaten eziliyor) ne de makineye doğru bir
-        // kuvvet veriyor; sadece gürültü ve sahte "çarpma" sayısı üretiyordu.
-        // Bırakınca filtre geri açılıyor ve yük yine rafa oturuyor.
-        for (let f = item.body.getFixtureList(); f; f = f.getNext()) {
-          f.setFilterData({ groupIndex: TRUCK_GROUP, categoryBits: 1, maskBits: 0xFFFF });
-        }
-        const f = this.forkWorld;
-        item.body.setTransform(
-          { x: f.x + item.halfWidth, y: f.y + item.halfHeight }, 0,
-        );
-        item.body.setLinearVelocity({ x: 0, y: 0 });
-        item.body.setAngularVelocity(0);
-        item.body.setAwake(true);
-        item.body.setSleepingAllowed(false);
-        this.attached = item.body;
-        this.attachedSpec = item;
-      }
-    }
-    this.pendingAttach = false;
+  private zeminTemasi(): boolean {
+    return Math.min(this.forkWorld.y, this.forkTip.y) < 0.025;
   }
 
   /**
-   * Çatal yüke girmiş mi?
+   * Çatalın üstünde duran yük — geometriyle bulunuyor, tutma diye bir şey yok.
    *
-   * İki koşul: çatal kotu yükün TABANINA yakın olmalı (palet cebi orada) ve
-   * çatal yüzü yükün içine girmiş olmalı. Vinçteki "üstüne indir" kuralının
-   * forklift karşılığı — ve sahada da sapancı değil, sürücü hizalıyor.
+   * Sadece "değiyor mu" yetmez: makine paletin ön yüzüne çarpınca da temas
+   * var. Yükün çatalın ÜSTÜNDE olması ve yerden KESİLMİŞ olması gerekiyor —
+   * sırtlıkla yerde itilen palet de temas veriyor ve ölçümde ibreyi %129'a
+   * çıkarıyordu, oysa çatalda bir şey yok.
    */
-  alinabilirSebep(candidates: Grabbable[]): { item: Grabbable | null; reason: ForkReason } {
-    const v = this.chassis.getLinearVelocity();
-    if (Math.abs(v.x) > FORKLIFT.attachMaxSpeedMps) return { item: null, reason: 'hizli' };
+  private catalinUstundeki(adaylar: Grabbable[]): Grabbable | null {
+    for (const item of adaylar) {
+      const yerel = this.carriage.getLocalPoint(item.body.getWorldCenter());
+      // Bant dar tutuluyor: taşınan yükün tabanı bıçağın üstünde, yani
+      // aradaki mesafe bıçak kalınlığı kadar. Bant genişken rafa konmuş yük
+      // de "çatalda" sayılıyordu (bıçak kirişin 6 cm üstünde, yük 18 cm
+      // yukarıda) ve görev tamamlanmış sayılmıyordu.
+      const bicaginUstunde = yerel.y - item.halfHeight >= -0.03
+        && yerel.y - item.halfHeight <= FORKLIFT.bicakKalinligiM + 0.05;
+      const bicaginUzerinde = yerel.x > -0.15
+        && yerel.x < FORKLIFT.forkLengthM + 1.4;
+      const ayak = item.ayakM ?? 0;
+      const yerdenKesik = item.body.getWorldCenter().y - item.halfHeight - ayak > 0.035;
+      if (bicaginUstunde && bicaginUzerinde && yerdenKesik) return item;
+    }
+    return null;
+  }
+
+  /**
+   * Oyuncuya "şu an ne eksik" demek için geometrik durum.
+   *
+   * Bu bir KİLİT DEĞİL — hiçbir şeyi engellemiyor, sadece anlatıyor. Yük alma
+   * tamamen fiziksel: bıçak cebe girer, kaldırırsın, palet gelir.
+   */
+  durum(adaylar: Grabbable[]): ForkReason {
+    if (this.hasLoad) return 'yuklu';
     const h = this.forkWorld;
     const t = this.forkTip;
-    let yakin: ForkReason = 'uzak';
-    for (const item of candidates) {
+    let enIyi: ForkReason = 'uzak';
+    for (const item of adaylar) {
       const p = item.body.getWorldCenter();
       const taban = p.y - item.halfHeight;
       const yakinYuz = p.x - item.halfWidth;
-      const kotOk = Math.abs(h.y - taban) <= FORKLIFT.forkPocketToleranceM;
-      // Bıçak yükün altına girmiş olmalı: uç yeterince içeride, topuk ise
-      // yükün ön yüzünü geçmemiş. İkisi birden gerçek bir "çatal altta" hali.
-      const girdi = t.x >= yakinYuz + FORKLIFT.forkInsertM && h.x <= yakinYuz + 0.18;
-      if (kotOk && girdi) return { item, reason: 'hazir' };
-      if (girdi) yakin = 'kot';
-      else if (kotOk && Math.abs(h.x - yakinYuz) < 2.2) yakin = 'yanas';
+      const uzakYuz = p.x + item.halfWidth;
+      if (t.x < yakinYuz - 2.5 || h.x > uzakYuz) continue;
+      const altinda = h.y < taban - 0.01 && h.y > taban - FORKLIFT.paletCebiM;
+      const girdi = t.x >= yakinYuz + 0.25;
+      if (altinda && girdi) return 'hazir';
+      if (girdi && h.y >= taban - 0.01) enIyi = 'yuksek';
+      else if (girdi) enIyi = 'alcak';
+      else if (altinda) enIyi = 'yanas';
+      else enIyi = enIyi === 'uzak' ? 'kot' : enIyi;
     }
-    return { item: null, reason: yakin };
-  }
-
-  alinabilir(candidates: Grabbable[]): Grabbable | null {
-    return this.alinabilirSebep(candidates).item;
-  }
-
-  requestToggleAttach(): void {
-    if (this.attached) this.pendingDetach = true;
-    else this.pendingAttach = true;
+    return enIyi;
   }
 
   reset(spawnX = FORKLIFT.spawnX): void {
@@ -520,15 +604,25 @@ export class Forklift {
       w.setLinearVelocity({ x: 0, y: 0 });
       w.setAngularVelocity(0);
     });
-    this.lift = FORKLIFT.minLiftM;
-    this.tilt = 0;
+    const pivotY = restY + FORKLIFT.mastBaseY;
+    for (const [b, y] of [[this.mast, pivotY], [this.carriage, pivotY]] as const) {
+      b.setTransform({ x: spawnX + FORKLIFT.mastX, y }, 0);
+      b.setLinearVelocity({ x: 0, y: 0 });
+      b.setAngularVelocity(0);
+    }
+    this.liftKomut = FORKLIFT.minLiftM;
+    this.tiltKomut = 0;
+    this.kaldirma.setMotorSpeed(0);
+    this.egim.setMotorSpeed(0);
+    this.yuk = null;
     this.arkaHam = 0;
     this.arkaSuzulmus = 0;
     this.burunYerde = false;
   }
 }
 
-export type ForkReason = 'hazir' | 'hizli' | 'kot' | 'yanas' | 'uzak';
+export type ForkReason = 'yuklu' | 'hazir' | 'yuksek' | 'alcak' | 'yanas' | 'kot' | 'uzak';
+
 
 function clamp(v: number, lo: number, hi: number): number {
   return v < lo ? lo : v > hi ? hi : v;

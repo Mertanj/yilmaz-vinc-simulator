@@ -1,7 +1,7 @@
 import { Container, Graphics } from 'pixi.js';
 import { C } from './palette';
 import { worldText } from './text';
-import { RAF_KATLARI, RAF_X, RAF_YARI, FORKLIFT_MALZEME_X } from '../game/forkliftTasks';
+import { RAF_GOZLERI, RAF_YARI, GIRIS_X, PALET_AYAK } from '../game/forkliftTasks';
 
 /**
  * Depo dekoru.
@@ -12,40 +12,40 @@ import { RAF_KATLARI, RAF_X, RAF_YARI, FORKLIFT_MALZEME_X } from '../game/forkli
  * gerekiyor. Raf katlarının kotu fizikten okunuyor, tekrar yazılmıyor.
  */
 
-/** Rafın çizimi — fizikteki döşemelerle aynı kotlarda. */
+/** Rafın çizimi — fizikteki kirişlerle aynı gözlerde ve aynı kotlarda. */
 export function drawRaf(): Container {
   const c = new Container();
   const g = new Graphics();
-  const half = RAF_YARI;
-  const ust = (RAF_KATLARI[RAF_KATLARI.length - 1] ?? 4.35) + 0.9;
 
-  // Dikmeler: önde ve arkada, delikli çelik profil
-  for (const x of [RAF_X - half, RAF_X + half]) {
-    g.rect(x - 0.09, 0, 0.18, ust).fill(C.rack);
-    g.rect(x - 0.09, 0, 0.06, ust).fill({ color: C.rackLight, alpha: 0.8 });
-    for (let y = 0.25; y < ust; y += 0.28) {
-      g.rect(x - 0.03, y, 0.06, 0.09).fill({ color: C.rackDark, alpha: 0.9 });
+  for (const goz of RAF_GOZLERI) {
+    const ust = goz.kot + 0.9;
+    // Gözün iki yanındaki dikmeler — delikli çelik profil
+    for (const x of [goz.x - RAF_YARI - 0.09, goz.x + RAF_YARI + 0.09]) {
+      g.rect(x - 0.09, 0, 0.18, ust).fill(C.rack);
+      g.rect(x - 0.09, 0, 0.06, ust).fill({ color: C.rackLight, alpha: 0.8 });
+      for (let y = 0.25; y < ust; y += 0.3) {
+        g.rect(x - 0.03, y, 0.06, 0.1).fill({ color: C.rackDark, alpha: 0.85 });
+      }
+      g.rect(x - 0.17, 0, 0.34, 0.08).fill(C.rackDark);
     }
-    // Taban plakası
-    g.rect(x - 0.17, 0, 0.34, 0.08).fill(C.rackDark);
-  }
-  // Çapraz bağlantılar — arkadaki dikmeyle, derinlik hissi
-  for (let y = 0.4; y < ust - 0.4; y += 0.9) {
-    g.moveTo(RAF_X - half + 0.09, y).lineTo(RAF_X + half - 0.09, y + 0.55)
-      .stroke({ width: 0.05, color: C.rackDark, alpha: 0.45 });
-  }
+    // Gözün arkasındaki çaprazlar — derinlik hissi
+    for (let y = 0.4; y < ust - 0.7; y += 1.0) {
+      g.moveTo(goz.x - RAF_YARI, y).lineTo(goz.x + RAF_YARI, y + 0.6)
+        .stroke({ width: 0.05, color: C.rackDark, alpha: 0.4 });
+    }
+    // Kat kirişi
+    g.rect(goz.x - RAF_YARI, goz.kot - 0.16, RAF_YARI * 2, 0.16).fill(C.rack);
+    g.rect(goz.x - RAF_YARI, goz.kot - 0.16, RAF_YARI * 2, 0.05)
+      .fill({ color: C.rackLight, alpha: 0.9 });
+    g.rect(goz.x - RAF_YARI, goz.kot - 0.04, RAF_YARI * 2, 0.04).fill(C.rackDark);
+    // Arka dayanak
+    g.rect(goz.x + RAF_YARI - 0.07, goz.kot, 0.14, 0.52).fill(C.rackDark);
 
-  // Kat kirişleri — fizikteki döşeme kutularıyla aynı yerde
-  RAF_KATLARI.forEach((y, i) => {
-    g.rect(RAF_X - half, y - 0.18, half * 2, 0.18).fill(C.rack);
-    g.rect(RAF_X - half, y - 0.18, half * 2, 0.06).fill({ color: C.rackLight, alpha: 0.9 });
-    g.rect(RAF_X - half, y - 0.04, half * 2, 0.04).fill(C.rackDark);
-    // Kat etiketi kirişin ALTINDA: üstünde yükün oturacağı yer var, oraya
-    // yazı koyunca palet etiketin üstüne biniyordu.
-    const et = worldText(`R${i + 1} · ${y.toFixed(2)} m`, 0.22, { fill: 0xD6E2EA });
-    et.position.set(RAF_X - half + 0.16, y - 0.52);
+    // Göz adresi ve kotu: depo raflarında gerçekten yazar
+    const et = worldText(`${goz.ad} · ${goz.kot.toFixed(2)} m`, 0.26, { fill: 0xD6E2EA });
+    et.position.set(goz.x - RAF_YARI + 0.12, goz.kot - 0.58);
     c.addChild(et);
-  });
+  }
 
   c.addChildAt(g, 0);
   return c;
@@ -64,10 +64,10 @@ export function drawDepoZemin(left: number, right: number): Graphics {
   for (let x = left + 1; x < right; x += 0.9) {
     g.rect(x, 0.01, 0.5, 0.06).fill({ color: C.hazardY, alpha: 0.55 });
   }
-  // Malzeme alanı kutusu: yükler buraya geliyor
-  g.rect(FORKLIFT_MALZEME_X - 2.2, 0.01, 4.4, 0.07).fill({ color: C.hazardY, alpha: 0.9 });
-  g.rect(FORKLIFT_MALZEME_X - 2.2, 0.01, 0.07, 1.1).fill({ color: C.hazardY, alpha: 0.9 });
-  g.rect(FORKLIFT_MALZEME_X + 2.13, 0.01, 0.07, 1.1).fill({ color: C.hazardY, alpha: 0.9 });
+  // Giriş (mal kabul) kutusu: paletler buraya geliyor
+  g.rect(GIRIS_X - 2.2, 0.01, 4.4, 0.07).fill({ color: C.hazardY, alpha: 0.9 });
+  g.rect(GIRIS_X - 2.2, 0.01, 0.07, 1.1).fill({ color: C.hazardY, alpha: 0.9 });
+  g.rect(GIRIS_X + 2.13, 0.01, 0.07, 1.1).fill({ color: C.hazardY, alpha: 0.9 });
   return g;
 }
 
@@ -137,13 +137,16 @@ export function drawDepoIci(left: number, right: number): Container {
 /** Yükün altındaki palet — çatalın nereye gireceğini gösteriyor. */
 export function drawPalet(hw: number): Graphics {
   const g = new Graphics();
-  const h = 0.13;
+  const h = PALET_AYAK;
   g.rect(-hw, -h, hw * 2, h).fill(C.pallet);
   g.rect(-hw, -h, hw * 2, 0.04).fill({ color: 0xC9A470, alpha: 0.8 });
-  // Cepler: çatalın gireceği iki boşluk
-  for (const x of [-hw * 0.55, hw * 0.15]) {
-    g.rect(x, -h + 0.035, hw * 0.4, h - 0.07).fill(C.palletDark);
+  // Takozlar: çatal bunların ARASINDAN giriyor. Yandan bakınca bıçak
+  // takozun içinden geçiyormuş gibi görünür; fizikte de ayaklar çatalla
+  // çarpışmıyor, çünkü gerçekte farklı derinlikteler.
+  for (const x of [-hw + 0.02, -0.16, hw - 0.34]) {
+    g.rect(x, -h + 0.05, 0.32, h - 0.09).fill(C.palletDark);
   }
+  g.rect(-hw, -h, hw * 2, 0.05).fill(C.palletDark);
   return g;
 }
 

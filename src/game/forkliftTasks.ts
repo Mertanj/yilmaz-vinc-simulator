@@ -1,71 +1,101 @@
 import type { Task } from './tasks';
 
 /**
- * Forklift bölümü — "Depo, sevkiyat rampası".
+ * Forklift bölümü — "Depo, sevkiyat koridoru".
  *
- * Yükler raflara gidiyor. Zorluk vinçtekinin AYNISI değil, çünkü forkliftte
- * sınırı koyan iki şey var ve ikisi de yatay: yük merkezi mesafesi (yük ne
- * kadar geniş) ve kaldırma yüksekliği (3.3 m üstünde kapasite eriyor). Geniş
- * bir yükü yukarı çıkarmak, dar bir yükü aynı rafa koymaktan çok daha zor.
+ * Zorluk vinçtekinin aynısı değil. Vinçte sınırı YARIÇAP koyuyor; burada iki
+ * şey birden: yük merkezi mesafesi (paletin ne kadar derin olduğu ve çatalın
+ * ne kadar içeri girdiği) ve kaldırma yüksekliği (3.3 m üstünde kapasite
+ * eriyor). Geniş bir paleti üst rafa koymak, ondan ağır ama dar bir paleti
+ * aynı rafa koymaktan zordur.
  *
- * Devrilme burada GERÇEKTEN olabilir: makine lastik üstünde, devrilme ekseni
- * ön aks ve ayak yok. Vinçte erişilemeyen tehlike forkliftte oyunun merkezinde.
+ * **Yük merkezi artık ÖLÇÜLÜYOR.** Çatal paletin cebine ne kadar girdiyse
+ * mesafe o; yarı yamalak sokulmuş palet gerçekten daha yüksek okuyor. Bu
+ * yüzden zorluk sadece hangi paleti seçtiğinde değil, onu nasıl aldığında.
  */
-export const RAF_X = 26.0;
+
 /**
- * Rafın yarı derinliği (m) — yani ÖN YÜZÜ `RAF_X - RAF_YARI` noktasında.
+ * Raf gözleri — her gözün TEK katı var ve katlar kademeli yükseliyor.
  *
- * Bu sayı keyfi değil, makinenin ölçüsünden çıkıyor: forklift rafın önünde
- * durur, yükü çatalıyla içeri uzatır. Çatal topuğu şasi merkezinden
- * `mastX` (1.45 m) ileride, dolayısıyla makine ön yüzü rafın ön yüzünden
- * 10 cm geride kalıyor. Raf daha derin olsaydı yükü ortasına koymak için
- * makineyi rafın içine sürmek gerekirdi — gerçekte de olmayan bir şey.
+ * Çok katlı raf denendi ve 2B'de kendi kuyruğunu yakaladı: yükü bir gözün alt
+ * katına koymak için paleti iki kirişin arasından geçirmek gerekiyor, makine
+ * ise yük altında öne yatıyor. Ölçümde palet her seferinde üstteki kirişin
+ * kenarına takıldı ve makine tam gazda ilerleyemedi (temas 21.29 , 1.85).
+ * Yandan bakan bir oyunda bu, oyuncunun göremediği bir hassasiyet.
+ *
+ * Kademeli raf aynı beceriyi daha okunur biçimde istiyor: hedefin üstü açık,
+ * zorluk YÜKSEKLİKTE ve MESAFEDE. Girişe en yakın göz en alçak; en uzak göz
+ * en yüksek, yani kapasitenin en çok eridiği yer.
  */
-export const RAF_YARI = 1.15;
+export interface RafGozu { x: number; kot: number; ad: string; }
+
+export const RAF_GOZLERI: readonly RafGozu[] = [
+  { x: 11.5, kot: 4.75, ad: 'A' },
+  { x: 17.0, kot: 3.30, ad: 'B' },
+  { x: 22.5, kot: 1.85, ad: 'C' },
+];
+
+/** Bir gözün yarı derinliği (m). Yük buraya sığmak zorunda. */
+export const RAF_YARI = 1.2;
+
 /**
- * Raf katlarının kotu (m) — çatal buraya çıkacak.
+ * Paletlerin geldiği yer — koridorun DOĞU ucu.
  *
- * **En alt kat şasinin ÜSTÜNDE.** Sebebi oynanışın kendisi: forklift yan
- * görünümde dönemiyor, dolayısıyla paleti almak için hep onun BATISINDA
- * olmalı. Paletler rafın doğusunda bekliyorsa makine her turda rafın önünden
- * geçmek zorunda — geçemezse ikinci paleti hiç alamıyor (ölçüldü: bölüm
- * D2'de kilitlendi). Kiriş altı 1.62 m, şasi tavanı 1.48 m: 14 cm boşlukla
- * geçiyor. Kafes ve direk çarpışmıyor, çünkü yan görünümde raf dikmeleri
- * koridorun ARKASINDA — çizim de onları aktörlerin arkasına koyuyor.
+ * Konum keyfi değil, makinenin kısıtından çıkıyor: forklift yan görünümde
+ * dönemiyor, çatalı hep doğuya bakıyor, dolayısıyla paleti alabilmek için hep
+ * onun batısında olmalı. Paletler rafların batısında olsaydı makine her turda
+ * yeni paletin içinden geçmek zorunda kalırdı ve bölüm ikinci görevde
+ * kilitlenirdi (ölçüldü). Paletler doğuda, hedefler batıda: makine yüklü
+ * batıya gidiyor, boş doğuya dönüyor, hiçbir turda önünü kesen şey olmuyor.
  */
-export const RAF_KATLARI = [1.80, 3.20, 4.60] as const;
-/** Rafın ön yüzü: yük buraya dayanacak. */
-export const RAF_ON = RAF_X - RAF_YARI;
-/** Malzeme alanı: paletler rafın DOĞUSUNDA bekliyor. */
-export const FORKLIFT_MALZEME_X = 31.0;
+export const GIRIS_X = 29.0;
 /** Depo duvarları — koridorun iki ucu. */
 export const DEPO_BATI = -12;
 export const DEPO_DOGU = 44;
 
+/**
+ * Paletin ayak yüksekliği (m): çatalın gireceği cep.
+ *
+ * Palet rafa AYAKLARIYLA oturuyor, tabanıyla değil — bırakma kotu bu yüzden
+ * kiriş kotunun `PALET_AYAK - bıçak` kadar üstünde.
+ *
+ * 0.22 iken cep bıçağa 16 cm pay bırakıyordu ve bu yetmedi: makine yük
+ * altında 1.4° öne yatıyor, bu da çatal ucunda 6 santim düşüş demek.
+ * Bıçak çekilirken kirişin kenarına takılıyor, makinenin burnunu kaldırıyor
+ * ve araç 39 derece şahlanıyordu. 0.30 cep, iki yana da 12 santim pay
+ * bırakıyor.
+ */
+export const PALET_AYAK = 0.36;
+
+/** Görevin gideceği göz. */
+export function rafGozu(index: number): RafGozu | undefined {
+  return RAF_GOZLERI[index];
+}
+
 export const FORKLIFT_TASKS: readonly Task[] = [
   {
-    kod: 'D1', ad: 'Çimento paleti', tonnes: 1.35,
-    halfWidth: 0.6, halfHeight: 0.55, kind: 'tezgah', hedef: 0,
-    brif: '48 torba çimento — alt rafa, dar palet',
+    kod: 'D1', ad: 'Çimento paleti', tonnes: 1.30,
+    halfWidth: 0.58, halfHeight: 0.45, kind: 'tezgah', hedef: 2,
+    brif: 'C gözü, 1.85 m — ısınma turu: çatalı cebe düzgün sok',
   },
   {
-    kod: 'D2', ad: 'Fayans paleti', tonnes: 1.55,
-    halfWidth: 0.62, halfHeight: 0.42, kind: 'bobin', hedef: 1,
-    brif: 'Seramik karo — orta rafa',
+    kod: 'D2', ad: 'Fayans paleti', tonnes: 1.47,
+    halfWidth: 0.60, halfHeight: 0.40, kind: 'bobin', hedef: 1,
+    brif: 'B gözü, 3.30 m — kapasite burada erimeye başlıyor',
   },
   {
-    kod: 'D3', ad: 'Boya varilleri', tonnes: 1.32,
-    halfWidth: 0.85, halfHeight: 0.5, kind: 'jenerator', hedef: 1,
-    brif: 'Dört varil — geniş palet, yük merkezi uzuyor',
+    kod: 'D3', ad: 'Boya varilleri', tonnes: 1.20,
+    halfWidth: 0.88, halfHeight: 0.48, kind: 'jenerator', hedef: 1,
+    brif: 'Geniş palet — çatalı dibine kadar sok, yoksa yük merkezi uzar',
   },
   {
-    kod: 'D4', ad: 'Yalıtım balyası', tonnes: 0.90,
-    halfWidth: 1.05, halfHeight: 0.62, kind: 'klima', hedef: 2,
-    brif: 'Hafif ama çok geniş — üst rafa, ibre yine de tırmanır',
+    kod: 'D4', ad: 'Yalıtım balyası', tonnes: 1.00,
+    halfWidth: 0.95, halfHeight: 0.55, kind: 'klima', hedef: 0,
+    brif: 'Bölümün en hafifi ama en genişi — A gözü, 4.75 m',
   },
   {
-    kod: 'D5', ad: 'Çelik profil', tonnes: 1.72,
-    halfWidth: 0.55, halfHeight: 0.35, kind: 'kompresor', hedef: 2,
-    brif: 'Bölümün en ağırı — dar palet, ama en üst rafta ibre sınıra dayanır',
+    kod: 'D5', ad: 'Çelik profil', tonnes: 1.74,
+    halfWidth: 0.52, halfHeight: 0.32, kind: 'kompresor', hedef: 0,
+    brif: 'Bölümün en ağırı, en uzak ve en yüksek göz — ibre sınıra dayanır',
   },
 ];

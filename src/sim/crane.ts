@@ -251,6 +251,14 @@ export interface Grabbable {
   body: Body;
   halfWidth: number;
   halfHeight: number;
+  /**
+   * Paletin ayak yüksekliği (m) — gövdenin alt yüzü ile zemin arasındaki cep.
+   *
+   * Forklift bunu iki yerde kullanıyor: çatal buraya giriyor, ve yükün
+   * gerçekten KALDIRILDIĞINI anlamanın ölçüsü ayakların yerden kesilmesi.
+   * Vinç yükleri paletsiz, dolayısıyla 0.
+   */
+  ayakM?: number;
 }
 
 export class Crane {

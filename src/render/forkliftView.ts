@@ -20,13 +20,26 @@ import { FORKLIFT } from '../sim/forklift';
 const F = FORKLIFT;
 /** Direğin şasi üstündeki dönme pimi — eğim buradan. */
 const DIREK_PIM = { x: F.mastX, y: F.mastBaseY };
-/** Direğin toplam boyu: çatal en üste çıktığında da içinde kalmalı. */
-const DIREK_BOY = F.maxLiftM * 0.62 + 0.9;
+/**
+ * Direk İKİ KADEMELİ ve gerçekten uzuyor.
+ *
+ * İlk sürümde direk sabit boydaydı ve taşıyıcı 4.9 metreye çıkınca direğin
+ * bir metre üstünde havada kalıyordu — sahadan gelen "forklift en üste
+ * çıkınca animasyon bozuluyor, çatal kayboluyor" bunun ta kendisi. Gerçek
+ * makinede dış kanal sabittir, iç kanal serbest kalkıştan sonra yükselir ve
+ * taşıyıcı hep onun içinde kalır.
+ */
+const DIS_KANAL = FORKLIFT.direkBoyM;
+const IC_KANAL = FORKLIFT.direkBoyM + 0.3;
+/** Serbest kalkış: taşıyıcı bu kota kadar iç kanalı hareket ettirmeden çıkar. */
+const SERBEST_KALKIS = 1.4;
 
 export class ForkliftView extends Container {
   /** Direk — kendi eğimiyle dönüyor. */
   readonly direk = new Container();
-  /** Taşıyıcı ve çatal — direğin içinde yükseliyor. */
+  /** İç kanal — serbest kalkıştan sonra yükselen kısım. */
+  readonly icKanal = new Container();
+  /** Taşıyıcı ve çatal — iç kanalın içinde yükseliyor. */
   readonly tasiyici = new Container();
 
   constructor() {
@@ -34,7 +47,10 @@ export class ForkliftView extends Container {
     this.addChild(drawGovde(), drawKafes());
 
     this.direk.position.set(DIREK_PIM.x, DIREK_PIM.y);
-    this.direk.addChild(drawDirek());
+    this.direk.addChild(drawDisKanal());
+
+    this.icKanal.addChild(drawIcKanal());
+    this.direk.addChild(this.icKanal);
 
     this.tasiyici.addChild(drawCatal());
     this.direk.addChild(this.tasiyici);
@@ -43,10 +59,17 @@ export class ForkliftView extends Container {
     this.setPose(F.minLiftM, 0);
   }
 
-  /** `liftM` çatalın YERDEN kotu, `tiltDeg` direğin eğimi (+ geriye). */
+  /**
+   * `liftM` çatalın YERDEN kotu, `tiltDeg` direğin eğimi (+ geriye).
+   *
+   * Taşıyıcının direk içindeki yeri, pimin zeminden yüksekliği çıkarılarak
+   * bulunuyor: `lift` yerden ölçülüyor, çizim ise pimden.
+   */
   setPose(liftM: number, tiltDeg: number): void {
+    const pimden = liftM - FORKLIFT.minLiftM;
     this.direk.rotation = (tiltDeg * Math.PI) / 180;
-    this.tasiyici.position.set(0, liftM);
+    this.tasiyici.position.set(0, pimden);
+    this.icKanal.position.set(0, Math.max(0, pimden - SERBEST_KALKIS));
   }
 }
 
@@ -86,6 +109,9 @@ function drawGovde(): Graphics {
   // Ön aks gövdesi — tekerleğin oturduğu yer görünsün
   g.rect(F.frontAxleX - 0.3, -H - 0.1, 0.6, 0.18).fill(C.mast);
   g.rect(F.rearAxleX - 0.26, -H - 0.08, 0.52, 0.16).fill(C.mast);
+  // Karşı ağırlığın eteği — fizikte de var, makinenin arkaya devrilmesini
+  // durduran şey. Yerden açıklığı bilerek az.
+  g.roundRect(-1.35, -H - 0.28, 0.7, 0.28, 0.06).fill(C.forkDark);
 
   // Giydirme: kamyonda ne varsa burada da. Aynı firma, başka makine.
   const logo = worldText('YILMAZ', 0.2, { fill: 0x2A1608, letterSpacing: 1 });
@@ -119,41 +145,51 @@ function drawKafes(): Graphics {
   return g;
 }
 
-function drawDirek(): Graphics {
+function drawDisKanal(): Graphics {
   const g = new Graphics();
-  // İki kanal: dış (sabit) ve iç (uzayan). Yan görünümde üst üsteler, o yüzden
-  // iç kanal biraz daha açık renkle ayrılıyor.
-  g.rect(-0.1, 0, 0.2, DIREK_BOY).fill(C.mast);
-  g.rect(-0.1, 0, 0.07, DIREK_BOY).fill({ color: C.mastLight, alpha: 0.85 });
-  g.rect(-0.05, 0.1, 0.1, DIREK_BOY - 0.2).fill({ color: C.mastLight, alpha: 0.5 });
-  // Kaldırma silindiri
-  g.rect(0.11, 0.05, 0.09, DIREK_BOY * 0.8).fill(C.hydraulic);
-  g.rect(0.13, 0.05, 0.04, DIREK_BOY * 0.8).fill({ color: C.chrome, alpha: 0.35 });
+  g.rect(-0.11, 0, 0.22, DIS_KANAL).fill(C.mast);
+  g.rect(-0.11, 0, 0.07, DIS_KANAL).fill({ color: C.mastLight, alpha: 0.85 });
+  g.rect(0.07, 0, 0.04, DIS_KANAL).fill({ color: 0x14171C, alpha: 0.9 });
   // Eğim silindiri — direği şasiye bağlayan, eğimi yapan parça
-  g.moveTo(-0.08, 0.55).lineTo(-0.62, 0.2).stroke({ width: 0.1, color: C.hydraulic });
-  g.circle(-0.08, 0.55, 0.06).fill(C.mastLight);
+  g.moveTo(-0.09, 0.55).lineTo(-0.62, 0.2).stroke({ width: 0.1, color: C.hydraulic });
+  g.circle(-0.09, 0.55, 0.06).fill(C.mastLight);
+  // Taban pimi
+  g.circle(0, 0.08, 0.07).fill(C.mastLight);
+  return g;
+}
+
+function drawIcKanal(): Graphics {
+  const g = new Graphics();
+  g.rect(-0.07, 0, 0.14, IC_KANAL).fill(C.mastLight);
+  g.rect(-0.07, 0, 0.05, IC_KANAL).fill({ color: 0x5A616C, alpha: 0.9 });
+  // Kaldırma silindiri ve zinciri
+  g.rect(0.08, 0, 0.07, IC_KANAL * 0.92).fill(C.hydraulic);
+  g.rect(0.095, 0, 0.03, IC_KANAL * 0.92).fill({ color: C.chrome, alpha: 0.4 });
+  // Tepedeki zincir makarası
+  g.circle(0.115, IC_KANAL * 0.92, 0.09).fill(C.mast);
+  g.circle(0.115, IC_KANAL * 0.92, 0.04).fill(C.mastLight);
   return g;
 }
 
 function drawCatal(): Graphics {
   const g = new Graphics();
+  const sirt = F.sirtlikM;
   // Taşıyıcı plakası
-  g.rect(-0.12, 0, 0.24, 0.92).fill(C.mastLight);
+  g.rect(-0.12, 0, 0.24, sirt + 0.08).fill(C.mastLight);
   g.rect(-0.12, 0, 0.24, 0.1).fill(C.mast);
-  g.rect(-0.12, 0.82, 0.24, 0.1).fill(C.mast);
+  g.rect(-0.12, sirt - 0.02, 0.24, 0.1).fill(C.mast);
   // Yük sırtlığı — yükün geriye devrilmesini engelleyen ızgara
-  g.rect(0.1, 0.08, 0.06, 0.86).fill(C.blade);
-  for (let i = 0; i < 3; i++) {
-    g.rect(0.1, 0.16 + i * 0.3, 0.42, 0.05).fill({ color: C.bladeDark, alpha: 0.8 });
+  g.rect(0.02, 0.06, 0.06, sirt).fill(C.blade);
+  for (let i = 0; i * 0.18 + 0.12 < sirt; i++) {
+    g.rect(0.02, 0.12 + i * 0.18, 0.4, 0.045).fill({ color: C.bladeDark, alpha: 0.8 });
   }
-  // Çatal bıçağı: dikey topuk + yatay bıçak, ucu inceliyor
-  g.moveTo(0.04, 0.9)
-    .lineTo(0.16, 0.9).lineTo(0.16, 0.09)
-    .lineTo(F.forkLengthM, 0.03).lineTo(F.forkLengthM, -0.005)
-    .lineTo(0.04, -0.005)
-    .fill(C.blade);
-  g.moveTo(0.04, -0.005).lineTo(F.forkLengthM, -0.005).lineTo(F.forkLengthM, 0.03)
-    .lineTo(0.04, 0.045).fill({ color: C.bladeDark, alpha: 0.8 });
+  // Çatal bıçağı: fizikteki kutuyla aynı kalınlıkta, ucu inceliyor
+  const k = F.bicakKalinligiM;
+  g.moveTo(0.0, 0).lineTo(F.forkLengthM - 0.12, 0)
+    .lineTo(F.forkLengthM, k * 0.45).lineTo(F.forkLengthM, k)
+    .lineTo(0.0, k).fill(C.blade);
+  g.moveTo(0.0, 0).lineTo(F.forkLengthM - 0.12, 0).lineTo(F.forkLengthM, k * 0.45)
+    .lineTo(0.0, k * 0.4).fill({ color: C.bladeDark, alpha: 0.75 });
   return g;
 }
 

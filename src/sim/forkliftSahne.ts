@@ -1,27 +1,36 @@
-import { Box, type Body, type Contact, type World } from 'planck';
-import { createWorld, createGround, Snapshotter, SIM } from './world';
+import { Box, Vec2, type Body, type Contact, type World } from 'planck';
+import { createWorld, createGround, KATEGORI, MASKE, Snapshotter, SIM } from './world';
 import { Forklift, forkliftKapasitesi, FORKLIFT_NEUTRAL } from './forklift';
 import type { Grabbable } from './crane';
 import { LmiZone, type LmiReading } from './loadChart';
 import {
-  FORKLIFT_TASKS, FORKLIFT_MALZEME_X, RAF_KATLARI, RAF_ON, RAF_X, RAF_YARI,
+  FORKLIFT_TASKS, GIRIS_X, PALET_AYAK, RAF_GOZLERI, RAF_YARI, rafGozu,
 } from '../game/forkliftTasks';
 import type { Task } from '../game/tasks';
 import type { SceneInput } from './scene';
 import type { Gosterge, OyunSahnesi, PanelSatiri, Uyari } from './sahne';
 
-/** Rafın çarpışma gövdesi: her kat bir döşeme, arkada bir dikme. */
+/**
+ * Rafın çarpışma gövdesi.
+ *
+ * **Kirişler makineyle ÇARPIŞMIYOR.** Yan görünümde raf derinlik yönünde
+ * durur; forklift onun önündeki koridorda ilerler. İlk sürümde bu modellenmiş
+ * değildi ve en alt kat şasinin üstüne çıkarılmak zorunda kalmıştı — yani
+ * level, eksik bir filtreyi telafi etmek için yalan söylüyordu. Şimdi kirişler
+ * yükle ve çatalla çarpışıyor, gövdeyle değil; raf da olması gereken yerde.
+ */
 export function createRaf(world: World): Body {
   const body = world.createBody();
-  const half = RAF_YARI;
-  for (const y of RAF_KATLARI) {
-    body.createFixture(new Box(half, 0.09, { x: RAF_X, y: y - 0.09 }, 0), { friction: 0.85 });
-    // Arka dayanak: yükün rafı geçip arkaya düşmesini engelliyor. **Tam boy
-    // dikme DEĞİL** — dikme koridoru kapatıyor ve makine rafın doğusundaki
-    // malzeme alanına hiç geçemiyordu. Gerçek rafta da dikmeler derinlik
-    // yönünde, koridorda değil.
-    body.createFixture(new Box(0.08, 0.3, { x: RAF_X + half, y: y + 0.3 }, 0),
-      { friction: 0.6 });
+  const filtre = { filterCategoryBits: KATEGORI.raf, filterMaskBits: MASKE.raf };
+  for (const goz of RAF_GOZLERI) {
+    // Kat kirişi
+    body.createFixture(new Box(RAF_YARI, 0.08, new Vec2(goz.x, goz.kot - 0.08), 0),
+      { friction: 0.9, ...filtre });
+    // Arka dayanak: yük gözü geçip arkaya düşmesin. **Tam boy dikme DEĞİL** —
+    // dikme koridoru kapatıyor ve makine rafın doğusundaki giriş alanına hiç
+    // geçemiyordu. Gerçek rafta da dikmeler derinlik yönünde durur.
+    body.createFixture(new Box(0.07, 0.26, new Vec2(goz.x + RAF_YARI, goz.kot + 0.26), 0),
+      { friction: 0.6, ...filtre });
   }
   return body;
 }
@@ -68,11 +77,26 @@ export class ForkliftSahnesi implements OyunSahnesi {
     this.loadSpec = spec;
     if (!spec) { this.grabbables = []; return; }
     const body = this.world.createDynamicBody({
-      x: FORKLIFT_MALZEME_X, y: spec.halfHeight + 0.04,
+      x: GIRIS_X, y: spec.halfHeight + PALET_AYAK,
     });
+    // Yükün kendisi: her şeye değiyor.
     body.createFixture(new Box(spec.halfWidth, spec.halfHeight), {
       density: 1, friction: 0.9, restitution: 0.01,
+      filterCategoryBits: KATEGORI.yuk, filterMaskBits: MASKE.yuk,
     });
+    // **Paletin ayakları.** Cebi açan şey bunlar: yük zeminden 15 cm yukarıda
+    // duruyor ve çatal altına giriyor. Ayaklar çatalla ÇARPIŞMIYOR, çünkü
+    // gerçekte çatal takozların arasından geçer — yandan bakınca içinden
+    // geçiyormuş gibi görünür, 2B'de bunu ancak filtreyle anlatabiliyoruz.
+    for (const sx of [-1, 1]) {
+      body.createFixture(
+        new Box(0.16, PALET_AYAK / 2,
+          new Vec2(sx * (spec.halfWidth - 0.18), -spec.halfHeight - PALET_AYAK / 2), 0),
+        { density: 0.2, friction: 0.9,
+          filterCategoryBits: KATEGORI.paletAyagi,
+          filterMaskBits: MASKE.paletAyagi & MASKE.yuk },
+      );
+    }
     body.setMassData({
       mass: spec.tonnes * 1000, center: { x: 0, y: 0 },
       I: (spec.tonnes * 1000 * (spec.halfWidth ** 2 + spec.halfHeight ** 2)) / 3,
@@ -80,7 +104,9 @@ export class ForkliftSahnesi implements OyunSahnesi {
     body.setAngularDamping(0.6);
     this.snaps.track(body);
     this.load = body;
-    this.grabbables = [{ body, halfWidth: spec.halfWidth, halfHeight: spec.halfHeight }];
+    this.grabbables = [{
+      body, halfWidth: spec.halfWidth, halfHeight: spec.halfHeight, ayakM: PALET_AYAK,
+    }];
   }
 
   /** Forklift bölümü — depo. Hedefler raf katları. */
@@ -88,10 +114,22 @@ export class ForkliftSahnesi implements OyunSahnesi {
   /** Ölçülen tur: görev başına 26–35 s. Forklift bölümü kısa, eşik de öyle. */
   readonly hizEsikleri = { tam: 22, sifir: 70 };
   hedefNoktasi(t: Task): { x: number; y: number } | null {
-    const y = RAF_KATLARI[t.hedef];
-    // Hedef rafın ORTASI değil, ÖN YÜZÜNE dayalı konum: makine dışarıda
-    // durup yükü içeri uzatıyor, dolayısıyla yükün doğru yeri burası.
-    return y === undefined ? null : { x: RAF_ON + t.halfWidth, y };
+    const g = rafGozu(t.hedef);
+    if (!g) return null;
+    // **Gözün ORTASI değil, ÖN KENARI.** Paleti gözün dibine kadar sokmak
+    // çatalı bir buçuk metre rafın içine sokmak demek; geri çekilirken bıçak
+    // kirişe takılıyor ve makine şahlanıyordu. Sahada da palet gözün ön
+    // kenarına konur — çatal ancak paletin boyu kadar içeri girer.
+    // Palet rafa AYAKLARIYLA oturuyor: tabanı kirişin `PALET_AYAK` üstünde.
+    return { x: g.x - RAF_YARI + t.halfWidth + 0.06, y: g.kot + PALET_AYAK };
+  }
+  /**
+   * Gözün içine oturmalı: raf yarı derinliği 1.2 m, yani geniş bir palet için
+   * hata payı 10 cm'ye kadar iniyor. Vinçteki 2 metrelik pencere burada
+   * anlamsız olurdu — teras geniş, raf gözü değil.
+   */
+  yerlestirmeToleransi(t: Task): { x: number; y: number } {
+    return { x: Math.max(0.18, RAF_YARI - t.halfWidth), y: 0.32 };
   }
   get sasiHizi(): number { return this.forklift.chassis.getLinearVelocity().x; }
   /** Küçük makine, dar koridor: vinçten belirgin biçimde daha yakın. */
@@ -148,25 +186,22 @@ export class ForkliftSahnesi implements OyunSahnesi {
 
   step(input: SceneInput, dt: number): void {
     if (input.reset) this.forklift.reset();
-    if (input.toggleHook) this.forklift.requestToggleAttach();
 
     this.snaps.capture();
     this.forklift.drive(input.drive, dt);
     // Vinç kolları forkliftte kaldırma ve eğim oluyor: W/S çatal, ⇧W/⇧S direk.
+    // **Yük alma tuşu yok** — çatal paleti fiziken kaldırıyor.
     this.forklift.update(
       { lift: input.crane.luff, tilt: input.crane.telescope },
-      dt, this.olcum.blockRadiusIncrease,
+      dt, this.olcum.blockRadiusIncrease, this.grabbables,
     );
 
     this.world.step(dt, SIM.velocityIterations, SIM.positionIterations);
     this.world.clearForces();
 
-    // Ölçüm: çatalda ne varsa onun ağırlığı. Vinçteki halat kuvvetinin
-    // karşılığı — ama burada yük rijit bağlı, dolayısıyla doğrudan kütle.
-    const ham = this.forklift.hasLoad ? (this.loadSpec?.tonnes ?? 0) : 0;
+    // Ölçüm: çatalda ne varsa onun ağırlığı.
+    const ham = this.forklift.yukTonu;
     this.olcumTon += (ham - this.olcumTon) * Math.min(1, dt / 0.2);
-
-    this.forklift.flushJointQueue(this.grabbables);
   }
 
   gosterge(): Gosterge {
@@ -261,21 +296,23 @@ export class ForkliftSahnesi implements OyunSahnesi {
   }
 
   ipucu(): { metin: string; mod: 'drive' | 'crane' | 'ready' } {
-    if (this.forklift.hasLoad) {
-      return { metin: 'yük çatalda · rafa hizala, boşluk ile bırak', mod: 'crane' };
-    }
-    const { reason } = this.forklift.alinabilirSebep(this.grabbables);
-    const say: Record<typeof reason, string> = {
-      hazir: 'ÇATAL YÜKÜN ALTINDA · boşluk ile al',
-      hizli: 'çok hızlısın · yavaşla, sonra al',
-      kot: 'çatal kotu tutmuyor · W/S ile palet tabanına getir',
-      yanas: 'çatalı yükün içine sür',
-      uzak: 'paletin yanına git, çatalı tabanına indir',
+    const durum = this.forklift.durum(this.grabbables);
+    const say: Record<typeof durum, string> = {
+      yuklu: 'yük çatalda · gözün önüne gel, kaldır, içeri sür, indir',
+      hazir: 'ÇATAL CEPTE · W ile kaldır, palet gelecek',
+      yuksek: 'çatal çok yüksek · S ile indir, cebin altına gir',
+      alcak: 'çatal çok alçak · W ile paletin cebine getir',
+      yanas: 'kot doğru · ileri sür, bıçağı cebe sok',
+      kot: 'çatalı paletin cebi hizasına getir (W/S)',
+      uzak: 'paletler koridorun doğu ucunda · sağa sür',
     };
-    return { metin: say[reason], mod: reason === 'hazir' ? 'ready' : 'drive' };
+    return {
+      metin: say[durum],
+      mod: durum === 'hazir' ? 'ready' : durum === 'yuklu' ? 'crane' : 'drive',
+    };
   }
 
   reset(): void { this.forklift.reset(); }
 }
 
-export { FORKLIFT_NEUTRAL, FORKLIFT_TASKS, RAF_KATLARI, RAF_ON, RAF_X, RAF_YARI };
+export { FORKLIFT_NEUTRAL, FORKLIFT_TASKS, RAF_GOZLERI, RAF_YARI };

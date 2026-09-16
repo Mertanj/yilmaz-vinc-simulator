@@ -15,6 +15,66 @@ import { World, Edge, Box, Vec2, type Body } from 'planck';
  */
 export const TRUCK_GROUP = -1;
 
+/**
+ * Çarpışma kategorileri — forkliftin iki yalanını kurmak için.
+ *
+ * Yan görünüm 2B, oysa anlattığımız şey 3B. İki yerde bu fark önemli:
+ *
+ * 1. **Palet cepleri.** Gerçek palette çatal, takozların ARASINDAN girer;
+ *    yandan bakınca çatal takozun içinden geçiyormuş gibi görünür. Paletin
+ *    ayakları bu yüzden çatalla çarpışmıyor, zemin ve rafla çarpışıyor.
+ * 2. **Raf koridorda değil.** Forklift rafın ÖNÜNDE, koridorda ilerler; raf
+ *    derinlik yönünde durur. Dolayısıyla raf kirişleri yükle ve çatalla
+ *    çarpışıyor ama makinenin gövdesiyle çarpışmıyor.
+ *
+ * Bu iki filtre olmadan level kuruluyor ama yalan söylemek zorunda kalıyor:
+ * ilk sürümde en alt raf kirişi şasinin üstüne çıkarılmıştı, çünkü makine
+ * başka türlü koridorda ilerleyemiyordu.
+ */
+export const KATEGORI = {
+  /** Varsayılan: yük, zemin, dekor. */
+  normal: 0x0001,
+  /** Çatal ve taşıyıcı. */
+  catal: 0x0002,
+  /** Makine gövdesi ve tekerler. */
+  makine: 0x0004,
+  /** Paletin ayakları — çatal bunların arasından geçiyor. */
+  paletAyagi: 0x0008,
+  /** Raf kirişleri. */
+  raf: 0x0010,
+  /** Palet üstündeki yük gövdesi. */
+  yuk: 0x0020,
+  /** Direk kanalı — çataldan ayrı, çünkü rafa girmeyen tek makine parçası o. */
+  direk: 0x0040,
+} as const;
+
+export const MASKE = {
+  /** Çatal her şeye değiyor, paletin ayakları hariç. */
+  catal: 0xFFFF & ~KATEGORI.paletAyagi,
+  /** Raf yükle ve çatalla çarpışıyor, makineyle değil. */
+  raf: 0xFFFF & ~KATEGORI.makine,
+  /** Palet ayağı çatala takılmıyor. */
+  paletAyagi: 0xFFFF & ~KATEGORI.catal,
+  /**
+   * Yük makinenin GÖVDESİNE değmiyor — sadece çatalına.
+   *
+   * Gerçek forkliftte palete dokunan tek şey çataldır; şasi paletin 10 cm
+   * gerisinde kalır. Bu filtre olmadan, çatal palete yanlış kotta girdiğinde
+   * oluşan içiçe geçmeyi solver şasi üzerinden çözmeye çalışıyor ve makineyi
+   * fırlatıyordu (ölçüldü: makine 2.8 metre havaya çıktı). Şimdi en kötü
+   * durumda palet itiliyor — sahada da olan bu.
+   */
+  yuk: 0xFFFF & ~KATEGORI.makine,
+  /**
+   * Direk rafa değmiyor — çünkü koridorda ilerleyen şey o.
+   *
+   * Rafa uzanan tek parça ÇATAL; direk hep koridorda kalır. Bu filtre olmadan
+   * 2.45 metrelik direk en alt kirişe çarpıyor ve makine hiçbir gözün önünden
+   * geçemiyordu (ölçüm: makine ilk gözde durdu, paletin 19 metre gerisinde).
+   */
+  direk: 0xFFFF & ~KATEGORI.raf & ~KATEGORI.paletAyagi,
+} as const;
+
 export const SIM = {
   gravity: -9.81,
   /** Sabit fizik adımı. Döngü de, başsız test de bunu kullanır. */

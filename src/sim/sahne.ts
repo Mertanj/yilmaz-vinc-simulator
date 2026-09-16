@@ -54,8 +54,15 @@ export interface OyunSahnesi {
    * anlatmıyordu (başsız tur: 5/5, not A (99)).
    */
   readonly hizEsikleri: { tam: number; sifir: number };
-  /** Görevin bırakma noktası — vinçte teras, forkliftte raf katı. */
+  /** Görevin bırakma noktası — vinçte teras, forkliftte raf gözü. */
   hedefNoktasi(t: Task): { x: number; y: number } | null;
+  /**
+   * Yükün "kondu" sayılması için hedefe ne kadar yakın olması gerektiği (m).
+   *
+   * Makineye ait, çünkü hedefler aynı şey değil: teras geniş bir düzlem,
+   * raf gözü ise paletten birkaç on santim büyük bir kutu.
+   */
+  yerlestirmeToleransi(t: Task): { x: number; y: number };
   /**
    * Makine kurtarılamayacak şekilde devrildi mi?
    *

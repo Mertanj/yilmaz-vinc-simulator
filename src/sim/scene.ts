@@ -148,6 +148,8 @@ export class Scene implements OyunSahnesi {
   hedefNoktasi(t: Task): { x: number; y: number } | null {
     return this.teraslar[t.hedef] ?? null;
   }
+  /** Teras geniş: kör kaldırmada iki metrelik pencere adil. */
+  yerlestirmeToleransi(): { x: number; y: number } { return { x: 2.0, y: 0.4 }; }
   get sasiHizi(): number { return this.truck.chassis.getLinearVelocity().x; }
   readonly kameraOlcegi = { yakin: 30, uzak: 15 };
   /** Vinçte 8° zaten kaza: ayaklar açıkken şasi hiç eğilmemeli. */

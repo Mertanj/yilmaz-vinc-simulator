@@ -309,87 +309,129 @@ devrilmeyi tasarımdaki yerine — emergent bir sonuç olarak — geri getiriyor
 
 ---
 
-# Bölüm 2 — Depo, sevkiyat rampası (YF-25 Forklift)
+# Bölüm 2 — Depo, sevkiyat koridoru (YF-25 Forklift)
 
-İkinci araç forklift. Seçilme sebebi yeni bir fizik motoru gerektirmemesi:
-yük tablosu mantığı vinçle birebir aynı (moment / izin verilen moment), ama
-devrilme ekseni ÖN AKS ve araç lastik üstünde duruyor — yani vinçte ayaklar
-yüzünden erişilemeyen devrilme burada gerçekten oluyor.
+İkinci araç forklift. Seçilme sebebi yeni bir fizik motoru gerektirmemesi: yük
+tablosu mantığı vinçle birebir aynı (moment / izin verilen moment), ama devrilme
+ekseni ÖN AKS ve araç lastik üstünde duruyor — yani vinçte ayaklar yüzünden
+erişilemeyen devrilme burada gerçekten oluyor.
 
-Sınırı koyan iki şey var ve ikisi de vinçtekinden farklı:
-
-| | Yük | Ton | Yük merkezi | Raf | LMI |
+| | Yük | Ton | Yük merkezi | Göz | LMI (ölçülen zirve) |
 |---|---|---|---|---|---|
-| D1 | Çimento paleti | 1.35 | 0.60 m | R1 (1.80 m) | %63 |
-| D2 | Fayans paleti | 1.55 | 0.62 m | R2 (3.20 m) | %77 |
-| D3 | Boya varilleri | 1.32 | 0.85 m | R2 (3.20 m) | %85 |
-| D4 | Yalıtım balyası | 0.90 | 1.05 m | R3 (4.60 m) | %91 |
-| D5 | Çelik profil | 1.72 | 0.55 m | R3 (4.60 m) | %99 |
+| D1 | Çimento paleti | 1.30 | 0.58 m | C · 1.85 m | %64 |
+| D2 | Fayans paleti | 1.47 | 0.60 m | B · 3.30 m | %78 |
+| D3 | Boya varilleri | 1.20 | 0.88 m | B · 3.30 m | %87 |
+| D4 | Yalıtım balyası | 1.00 | 0.95 m | A · 4.75 m | %94 |
+| D5 | Çelik profil | 1.74 | 0.52 m | A · 4.75 m | %103 |
 
-D4 tasarımın özeti: bölümün **en hafif** yükü, ama en yüksek ibreyi okuyan
-ikinci yük. Sebebi geniş palet (yük merkezi 1.05 m) ve 3.3 metrenin üstünde
-eriyen kapasite. Oyuncunun "ağır = zor" sezgisini kıran yer burası.
+Başsız tur: 5/5, 264 saniye, not A (86), çarpma 0, devrilme yok.
 
-## Devrilme artık ölçülebilir bir şey
+## Yük alma tuşu YOK — çatal paleti fiziken kaldırıyor
 
-Vinçte devrilme erişilemiyordu; forkliftte erişiliyor ve göstergesi de var.
-Panelde **arka aks** satırı, arka tekerin zemine bastığı kuvvetin boş makinedeki
-payını gösteriyor — solverın o temasa verdiği normal impulstan okunuyor, yani
-uydurma değil ölçüm. Başsız turda en düşük değer %13; yani bölüm devrilmenin
-kıyısından geçiyor ama devrilmiyor.
+Sahadan gelen itiraz haklıydı: *"yük almak için boşluğa basmamalıyım, çatallar
+onu fiziken sezip kaldırmalı."* Önceki sürümde yük boşluk tuşuyla kancaya
+"yapıştırılıyor", sonra her adım `setTransform` ile çatala konuyordu.
 
-`WheelJoint.getReactionForce` önce denendi ve hep 0 döndü: yayın taşıdığı kuvvet
-mafsalın kendi impulsunda görünmüyor. Temasın kendisini ölçmek hem doğru hem de
-oyuncuya anlatması kolay.
+Artık direk ve taşıyıcı GERÇEK GÖVDE:
 
-## Takla atan forklift — ve onu durduran şey
+    şasi --RevoluteJoint(motor)--> direk --PrismaticJoint(motor)--> taşıyıcı
 
-İlk sürümde aşırı yükte makine 180° takla atıp sırtüstü kalıyordu. Ölçüm
-patlamayı değil, **hiç durmayan bir devrilmeyi** gösterdi: 1.4 saniyede
-0° → 180°, arada yükün ve şasinin zemine 9 kN·s'lik vuruşları.
+Bıçak paletin cebine giriyor, kaldırınca paleti İTEREK yukarı çıkarıyor,
+indirince palet kirişe oturuyor ve bıçak cepten çıkıyor. Tutma diye bir olay
+yok; yük sadece çatalın üstünde duruyor ve sürtünmeyle kalıyor. Yükün ağırlığı
+mafsallardan şasiye kendiliğinden geçtiği için devrilme de artık elle uygulanan
+bir kuvvetten değil, yükün kendisinden çıkıyor.
 
-Sebep basitti: direk ve çatal birer gövde değil, sadece sayı. Dolayısıyla makine
-öne yatarken solverın göreceği hiçbir şey yoktu. Oysa gerçekte devrilen bir
-forklift **çatalının üstüne oturur**.
+Bunun bedeli, `loadCentreM` artık ÖLÇÜLEN bir şey: çatal cebe ne kadar girdiyse
+yük merkezi o. Yarı yamalak alınmış palet gerçekten daha yüksek okuyor ve
+kapasiteyi gerçekten düşürüyor.
 
-Çözüm, bomun "yatakta dururken ağırlık şasiden geçer" kuralının aynısı: çatalın
-topuğu, ucu ve yüklüyken yükün ön-alt köşesi zemine değdiğinde şasiye elle temas
-impulsu uygulanıyor. Penaltı yayı önce denendi ve makineyi trambolin gibi
-zıplattı (±300°/s); Box2D'nin kendi yaptığı gibi hız düzeltmesi + küçük Baumgarte
-itmesi kullanınca sonuç kararlı: aşırı yükte makine **2.09° öne yatıp çatalının
-üstünde duruyor**, oradan geri gidip kurtulabiliyor.
+**Önce kinematik denendi ve üç ayrı biçimde kırıldı.** Hepsi ölçümle yakalandı:
 
-Bu yüzden forkliftin devrilme eşiği 22°, vinçin 8°: burnunu çatalına dayamak
-kaza değil, kurtarılabilir bir hata.
+1. Sırtlık, direk geriye yatarken şasinin içine giriyordu; kinematik gövde
+   sonsuz kütle olduğu için makineyi el freni basılıyken 1.3 saniyede 27 metre
+   geri sürdü.
+2. Her adım `setTransform` yapmak yükü bıçağın üstünde ileri kaydırdı: sekiz
+   metrelik taşımada 69 cm, ölçülen yük merkezi 0.70'ten 1.39'a.
+3. Hızı analitik yazınca kayma durdu ama bu sefer yük bıçaktan tamamen düştü.
+
+Sebep hep aynıydı: kinematik gövde solverın çözdüğü şeyin dışında kalıyor, biz
+de tepkilerini elle taklit etmeye çalışıyorduk. Bomdan farklı olarak direk KISA
+ve kuvvetler ölçülü (en ağır yükte 27 kN), dolayısıyla burada mafsal zinciri
+doğru cevap. Kütle oranları sınırın altında: yük/taşıyıcı 8.4, direk/şasi 7.1.
+
+Hidrolik silindirler KONUM tutuyor, hız değil. Motor hızıyla sürünce direk kendi
+kendine 4 dereceye kadar kaydı (motor hız kısıtıdır, konum hatasını geri almaz);
+mafsal limitini komuta kilitlemek ise planck'te taşıyıcıyı hiç hareket
+ettirmedi. Hız komutunu konum hatasıyla orantılı vermek ikisini birden çözüyor
+— hidrolik valfin yaptığı da bu.
+
+## 2B'nin iki yalanı, iki filtreyle kuruldu
+
+Yan görünüm 2B, oysa anlattığımız şey 3B. İki yerde bu fark oynanışı belirliyor:
+
+- **Palet cepleri.** Gerçek palette çatal takozların ARASINDAN girer; yandan
+  bakınca içinden geçiyormuş gibi görünür. Paletin ayakları bu yüzden çatalla
+  çarpışmıyor, zemin ve rafla çarpışıyor.
+- **Raf koridorda değil.** Forklift rafın ÖNÜNDE ilerler; raf derinlik yönünde
+  durur. Kirişler yükle ve çatalla çarpışıyor, makinenin gövdesiyle değil; direk
+  de rafa hiç değmiyor, çünkü rafa uzanan tek parça çatal.
+
+Bu filtreler olmadan level yalan söylemek zorunda kalıyordu: bir sürümde en alt
+raf kirişi şasinin üstüne çıkarılmıştı, çünkü makine başka türlü koridorda
+ilerleyemiyordu.
+
+Üçüncü filtre daha var: **yük makinenin gövdesine değmiyor, sadece çatalına.**
+Gerçek forkliftte palete dokunan tek şey çataldır. Bu olmadan, çatal palete
+yanlış kotta girdiğinde oluşan iç içe geçmeyi solver şasi üzerinden çözmeye
+çalışıyor ve makineyi 2.8 metre havaya fırlatıyordu.
+
+## Kademeli raf — çok katlı raf 2B'de çalışmıyor
+
+Önce üç gözlü, üç katlı klasik raf yapıldı. Yükü bir gözün ALT katına koymak
+paleti iki kirişin arasından geçirmek demek; makine ise yük altında 1.4° öne
+yatıyor ve bu çatal ucunda 6 santim düşüş yapıyor. Ölçümde palet her seferinde
+üstteki kirişin kenarına takıldı ve makine tam gazda ilerleyemedi. Yandan bakan
+bir oyunda bu, oyuncunun göremeyeceği bir hassasiyet.
+
+Şimdi her gözün TEK katı var ve katlar kademeli yükseliyor: girişe en yakın göz
+en alçak (C, 1.85 m), en uzak göz en yüksek (A, 4.75 m). Hedefin üstü açık,
+zorluk YÜKSEKLİKTE ve MESAFEDE. Palet gözün ön kenarına konuyor — sahada da
+öyle, çatal ancak paletin boyu kadar içeri girer.
 
 ## Koridor — 2B'de dönemeyen makinenin level tasarımı
 
 Forklift yan görünümde dönemiyor, çatalı hep doğuya bakıyor. Dolayısıyla paleti
-alabilmek için **hep onun batısında** olmalı. İlk yerleşimde paletler rafın
+alabilmek için hep onun batısında olmalı. İlk yerleşimde paletler rafların
 batısında bekliyordu ve bölüm D2'de kilitlendi: makine rafa yükü bırakıp geri
 dönerken paletin doğusunda kalıyor, batısına geçmek için paletin içinden geçmesi
 gerekiyordu.
 
-Yerleşim buna göre yeniden kuruldu: **paletler rafın DOĞUSUNDA**, en alt raf
-kirişi şasinin üstünde (kiriş altı 1.62 m, şasi tavanı 1.48 m). Makine her turda
-rafın önünden geçip paleti alıyor, yüklü olarak geri geçip rafın batısında
-duruyor ve yükü içeri uzatıyor. Tur kapanıyor, hiçbir hile gerekmiyor.
+Paletler artık koridorun DOĞU ucunda, hedefler batıda: makine yüklü batıya
+gidiyor, boş doğuya dönüyor, hiçbir turda önünü kesen şey olmuyor.
 
-Yan görünümde raf dikmeleri koridorun ARKASINDA kalır; çizim de onları
-aktörlerin arkasına koyuyor, fizikte ise koridorda dikme yok — sadece kirişler
-ve her katın arkasında kısa bir dayanak.
+## Devrilme ölçülebilir, ve takla atmak imkânsız
 
-## Tekerlerin motoru makineyi frenliyordu
+Panelde **arka aks** satırı, arka tekerin zemine bastığı kuvvetin boş makinedeki
+payını gösteriyor — solverın o temasa verdiği normal impulstan okunuyor, yani
+uydurma değil ölçüm. `WheelJoint.getReactionForce` önce denendi ve hep 0 döndü.
 
-Forklift ilk sürümde `applyForceToCenter` ile sürülüyor, tekerlerin motoru ise
-`motorSpeed: 0` ile AÇIK duruyordu. Ölçüm: yarım gazda 18 saniyede 0.5 metre.
-2600 N·m fren torku 0.32 m yarıçapta 16 kN'a karşılık geliyor, gazın verdiği
-13 kN'dan fazla — makine kendi kendini frenliyordu.
+Makinenin arkaya takla atması da artık mümkün değil, üstelik bir hileyle değil
+GEOMETRİYLE: karşı ağırlığın eteği eklendi. Gerçek forkliftte karşı ağırlık
+arkada ve alçaktadır, yerden açıklığı 10-15 santimdir; bizim şasi kutusunun altı
+44 santimdeydi ve makine istediği kadar şahlanabiliyordu (ölçümde direk
+yukarıdayken 141 derece döndü). Kuyruk artık yere oturuyor.
 
-Kamyonda doğru olan desen burada da doğru: süspansiyon, tahrik ve fren tek
-mafsalda. Tahrik ön tekerde (karşı ağırlıklı forklift önden çekişli). Yan
-kazanç: çekiş artık lastik sürtünmesiyle sınırlı, yani burnu yere değen makine
-gerçekten patinaj yapıyor.
+Aynı gerekçeyle **direk yukarıdayken sürüş kısıtlanıyor** — gerçek makinelerdeki
+travel speed limiting. Hem doğru şeyi öğretiyor (taşımak için çatalı indir) hem
+de yüksek ağırlık merkeziyle sürmeyi imkânsız kılıyor.
+
+## El freni de ölçümle ayarlandı
+
+9000 N·m iken iki tekerden 56 kN geliyordu, yani 10.6 m/s² yavaşlama — çatal
+sürtünmesinin tutabileceğinin üstünde. Yük sekiz metrelik taşımada bıçağın ucuna
+doğru 83 santim kayıyor ve makine kendi kendini aşırı yüke sokuyordu. 3200 N·m
+3.8 m/s² veriyor: gerçek bir forkliftin freni de bu civarda.
 
 ## Araç seçimi
 
