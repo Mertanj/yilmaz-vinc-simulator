@@ -98,7 +98,12 @@ export const FORKLIFT = {
    * birkaç santim yukarıda taşır.
    */
   minLiftM: 0.10,
-  maxLiftM: 5.6,
+  /**
+   * En yüksek çatal kotu (m). 5.6 iken en üst rafa (5.10) yaklaşırken çatal
+   * tavana dayanıyordu: bırakma kotu 5.40, yaklaşma 5.52 — sadece 8 santim
+   * pay. 5.9'luk üç kademeli direk 2.5 tonluk bir makinede olağan.
+   */
+  maxLiftM: 5.9,
   liftSpeedMps: 0.75,
   /** Direk eğimi: geri (+) ve ileri (−), derece. */
   maxTiltBackDeg: 10,
@@ -112,7 +117,7 @@ export const FORKLIFT = {
   /** Yük sırtlığının yüksekliği (m): yük geriye yaslanıyor. */
   sirtlikM: 0.5,
   /** Direk kanalının boyu (m) ve kütlesi (kg). */
-  direkBoyM: 2.45,
+  direkBoyM: 3.2,
   direkKg: 320,
   /** Taşıyıcı + çatal kütlesi (kg). En ağır yükle oran 8.4:1 — sınırın altında. */
   tasiyiciKg: 220,
@@ -489,8 +494,13 @@ export class Forklift {
     // Aşırı yükte kaldırma kilitli — gerçek makinede de yükseltmek devrilmeyi
     // yaklaştırır. İndirmek her zaman serbest, çünkü çıkış yolu o.
     const liftCmd = asiriYuk ? Math.min(0, input.lift) : input.lift;
-    // Öne yatırmak yük merkezini uzatır, o da kilitli.
-    const tiltCmd = asiriYuk ? Math.max(0, input.tilt) : input.tilt;
+    // Öne yatırmak yük merkezini uzatır, o da kilitli — **ama sadece düşeyin
+    // ötesi.** Geriye yatık direği düzleştirmek bir KURTARMA hareketi; onu da
+    // kilitlemek oyuncuyu kapana kıstırıyordu: aşırı yükte direk 10 derecede
+    // takılı kalıyor, çatalın ucu yukarıda duruyor ve geri çekilirken raf
+    // kirişine takılıyordu (ölçümde makine 22 derece şahlandı).
+    const tiltCmd = asiriYuk && !(input.tilt < 0 && this.tiltKomut > 0)
+      ? Math.max(0, input.tilt) : input.tilt;
     this.kilitliDenendi = liftCmd !== input.lift || tiltCmd !== input.tilt;
 
     // **Silindirler KONUM tutuyor, hız değil.**
@@ -506,7 +516,7 @@ export class Forklift {
     );
     this.tiltKomut = clamp(
       this.tiltKomut + tiltCmd * FORKLIFT.tiltSpeedDegPerSec * dt,
-      -FORKLIFT.maxTiltFwdDeg, FORKLIFT.maxTiltBackDeg,
+      asiriYuk ? 0 : -FORKLIFT.maxTiltFwdDeg, FORKLIFT.maxTiltBackDeg,
     );
     // Silindir, komut konumunu kovalayan bir servo. Mafsal limitini komuta
     // kilitlemek denendi ve planck'te taşıyıcıyı hiç hareket ettirmedi;

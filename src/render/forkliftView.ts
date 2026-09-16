@@ -30,9 +30,21 @@ const DIREK_PIM = { x: F.mastX, y: F.mastBaseY };
  * taşıyıcı hep onun içinde kalır.
  */
 const DIS_KANAL = FORKLIFT.direkBoyM;
-const IC_KANAL = FORKLIFT.direkBoyM + 0.3;
+const IC_KANAL = FORKLIFT.direkBoyM;
 /** Serbest kalkış: taşıyıcı bu kota kadar iç kanalı hareket ettirmeden çıkar. */
-const SERBEST_KALKIS = 1.4;
+const SERBEST_KALKIS = 1.2;
+/**
+ * İç kanalın en çok yükseldiği miktar (m).
+ *
+ * İki kısıtı birden karşılamak zorunda ve ilk sürümde ikisini de karşılamıyordu:
+ * taşıyıcı hep iç kanalın İÇİNDE kalmalı (`kalkis + IC_KANAL >= en yüksek kot`)
+ * ve iç kanal dış kanalla HEP ÖRTÜŞMELİ (`kalkis <= DIS_KANAL - payda`). Eski
+ * hâlde iç kanal taşıyıcıyla birebir yükseliyordu: 5.6 metrede dış kanal
+ * 2.45'te bitiyor, iç kanal 4.1'den başlıyordu — arada bir buçuk metre boşluk,
+ * yani direk ikiye ayrılmış görünüyordu. Gerçek teleskopik direkte zincir
+ * taşıyıcıyı iç kanalın İKİ KATI hızla kaldırır; oran tam olarak bu.
+ */
+const IC_MAX_KALKIS = 2.4;
 
 export class ForkliftView extends Container {
   /** Direk — kendi eğimiyle dönüyor. */
@@ -67,9 +79,13 @@ export class ForkliftView extends Container {
    */
   setPose(liftM: number, tiltDeg: number): void {
     const pimden = liftM - FORKLIFT.minLiftM;
+    const menzil = FORKLIFT.maxLiftM - FORKLIFT.minLiftM - SERBEST_KALKIS;
+    const kalkis = Math.max(0, Math.min(
+      IC_MAX_KALKIS, ((pimden - SERBEST_KALKIS) / menzil) * IC_MAX_KALKIS,
+    ));
     this.direk.rotation = (tiltDeg * Math.PI) / 180;
     this.tasiyici.position.set(0, pimden);
-    this.icKanal.position.set(0, Math.max(0, pimden - SERBEST_KALKIS));
+    this.icKanal.position.set(0, kalkis);
   }
 }
 

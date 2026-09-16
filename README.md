@@ -40,7 +40,7 @@ Forkliftte yükü **tuşla almıyorsun**: bıçağı paletin cebine sokup kaldı
 palet çatalın üstünde yükseliyor. Bu yüzden yük merkezi ölçülen bir şey — çatal
 ne kadar az girdiyse kapasite o kadar düşük okur.
 
-**Yük merkezi uzadıkça kapasite erir** — geniş bir paleti 4.75 metreye çıkarmak,
+**Yük merkezi uzadıkça kapasite erir** — geniş bir paleti 5.10 metreye çıkarmak,
 ondan ağır ama dar bir paleti aynı rafa koymaktan zordur. Direk yukarıdayken
 makine adım hızında gider: taşımak için çatalı indirmen gerekiyor.
 

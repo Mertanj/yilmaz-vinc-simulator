@@ -1,7 +1,9 @@
 import { Container, Graphics } from 'pixi.js';
 import { C } from './palette';
 import { worldText } from './text';
-import { RAF_GOZLERI, RAF_YARI, GIRIS_X, PALET_AYAK } from '../game/forkliftTasks';
+import {
+  RAF_KATLARI, RAF_X, RAF_DERINLIK, GIRIS_X, PALET_AYAK, katAdi,
+} from '../game/forkliftTasks';
 
 /**
  * Depo dekoru.
@@ -12,40 +14,42 @@ import { RAF_GOZLERI, RAF_YARI, GIRIS_X, PALET_AYAK } from '../game/forkliftTask
  * gerekiyor. Raf katlarının kotu fizikten okunuyor, tekrar yazılmıyor.
  */
 
-/** Rafın çizimi — fizikteki kirişlerle aynı gözlerde ve aynı kotlarda. */
+/** Rafın çizimi — tek yapı, fizikteki kirişlerle aynı kotlarda. */
 export function drawRaf(): Container {
   const c = new Container();
   const g = new Graphics();
+  const ust = (RAF_KATLARI[RAF_KATLARI.length - 1] ?? 4.8) + 1.1;
+  const on = RAF_X;
+  const arka = RAF_X + RAF_DERINLIK;
 
-  for (const goz of RAF_GOZLERI) {
-    const ust = goz.kot + 0.9;
-    // Gözün iki yanındaki dikmeler — delikli çelik profil
-    for (const x of [goz.x - RAF_YARI - 0.09, goz.x + RAF_YARI + 0.09]) {
-      g.rect(x - 0.09, 0, 0.18, ust).fill(C.rack);
-      g.rect(x - 0.09, 0, 0.06, ust).fill({ color: C.rackLight, alpha: 0.8 });
-      for (let y = 0.25; y < ust; y += 0.3) {
-        g.rect(x - 0.03, y, 0.06, 0.1).fill({ color: C.rackDark, alpha: 0.85 });
-      }
-      g.rect(x - 0.17, 0, 0.34, 0.08).fill(C.rackDark);
+  // Dikmeler — delikli çelik profil, önde ve arkada
+  for (const x of [on - 0.1, arka + 0.1]) {
+    g.rect(x - 0.1, 0, 0.2, ust).fill(C.rack);
+    g.rect(x - 0.1, 0, 0.07, ust).fill({ color: C.rackLight, alpha: 0.85 });
+    for (let y = 0.3; y < ust; y += 0.32) {
+      g.rect(x - 0.035, y, 0.07, 0.11).fill({ color: C.rackDark, alpha: 0.85 });
     }
-    // Gözün arkasındaki çaprazlar — derinlik hissi
-    for (let y = 0.4; y < ust - 0.7; y += 1.0) {
-      g.moveTo(goz.x - RAF_YARI, y).lineTo(goz.x + RAF_YARI, y + 0.6)
-        .stroke({ width: 0.05, color: C.rackDark, alpha: 0.4 });
-    }
-    // Kat kirişi
-    g.rect(goz.x - RAF_YARI, goz.kot - 0.16, RAF_YARI * 2, 0.16).fill(C.rack);
-    g.rect(goz.x - RAF_YARI, goz.kot - 0.16, RAF_YARI * 2, 0.05)
-      .fill({ color: C.rackLight, alpha: 0.9 });
-    g.rect(goz.x - RAF_YARI, goz.kot - 0.04, RAF_YARI * 2, 0.04).fill(C.rackDark);
-    // Arka dayanak
-    g.rect(goz.x + RAF_YARI - 0.07, goz.kot, 0.14, 0.52).fill(C.rackDark);
-
-    // Göz adresi ve kotu: depo raflarında gerçekten yazar
-    const et = worldText(`${goz.ad} · ${goz.kot.toFixed(2)} m`, 0.26, { fill: 0xD6E2EA });
-    et.position.set(goz.x - RAF_YARI + 0.12, goz.kot - 0.58);
-    c.addChild(et);
+    g.rect(x - 0.19, 0, 0.38, 0.09).fill(C.rackDark);
   }
+  // Çaprazlar — iki dikme arasında, derinlik hissi
+  for (let y = 0.3; y < ust - 0.8; y += 1.05) {
+    g.moveTo(on, y).lineTo(arka, y + 0.62)
+      .stroke({ width: 0.055, color: C.rackDark, alpha: 0.42 });
+    g.moveTo(arka, y).lineTo(on, y + 0.62)
+      .stroke({ width: 0.055, color: C.rackDark, alpha: 0.28 });
+  }
+
+  RAF_KATLARI.forEach((kot, i) => {
+    g.rect(on, kot - 0.16, RAF_DERINLIK, 0.16).fill(C.rack);
+    g.rect(on, kot - 0.16, RAF_DERINLIK, 0.05).fill({ color: C.rackLight, alpha: 0.9 });
+    g.rect(on, kot - 0.04, RAF_DERINLIK, 0.04).fill(C.rackDark);
+    // Arka dayanak
+    g.rect(arka - 0.07, kot, 0.14, 0.52).fill(C.rackDark);
+    // Kat adresi ve kotu: depo raflarında gerçekten yazar
+    const et = worldText(`${katAdi(i)} · ${kot.toFixed(2)} m`, 0.26, { fill: 0xD6E2EA });
+    et.position.set(on + 0.14, kot - 0.62);
+    c.addChild(et);
+  });
 
   c.addChildAt(g, 0);
   return c;

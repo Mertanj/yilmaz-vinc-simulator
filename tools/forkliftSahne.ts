@@ -13,7 +13,7 @@
 import { ForkliftSahnesi } from '../src/sim/forkliftSahne';
 import { FORKLIFT, forkliftKapasitesi } from '../src/sim/forklift';
 import {
-  FORKLIFT_TASKS, GIRIS_X, PALET_AYAK, RAF_YARI, rafGozu,
+  FORKLIFT_TASKS, GIRIS_X, PALET_AYAK, RAF_DERINLIK, RAF_X, katAdi, katKotu,
 } from '../src/game/forkliftTasks';
 import { Mission } from '../src/game/mission';
 import { IDLE, type SceneInput } from '../src/sim/scene';
@@ -113,16 +113,16 @@ function main(): number {
   say('=== FORKLIFT: Depo, sevkiyat koridoru ===');
   say('--- calisma zarfi: hangi yuk hangi gozde ne okuyor? ---');
   for (const g of FORKLIFT_TASKS) {
-    const goz = rafGozu(g.hedef);
-    if (!goz) continue;
+    const kot = katKotu(g.hedef);
+    if (kot === undefined) continue;
     // Yuk merkezi olculuyor; catal tam dibe girerse halfWidth kadar olur.
     const alcak = forkliftKapasitesi(g.halfWidth, 0);
-    const rafta = forkliftKapasitesi(g.halfWidth, goz.kot + 0.4);
+    const rafta = forkliftKapasitesi(g.halfWidth, kot + PALET_AYAK);
     say(`  ${g.kod}  ${g.ad.padEnd(16)} ${g.tonnes.toFixed(2)}t`
-      + `  merkez ${g.halfWidth.toFixed(2)}m  goz ${goz.ad} (x${goz.x.toFixed(1)},`
-      + ` ${goz.kot.toFixed(2)}m)  alcakta %${((g.tonnes / alcak) * 100).toFixed(0)}`
+      + `  merkez ${g.halfWidth.toFixed(2)}m  kat ${katAdi(g.hedef)} (${kot.toFixed(2)}m)`
+      + `  alcakta %${((g.tonnes / alcak) * 100).toFixed(0)}`
       + `  rafta %${((g.tonnes / rafta) * 100).toFixed(0)}`
-      + `  pay ${(RAF_YARI - g.halfWidth).toFixed(2)}m`);
+      + `  pay ${((RAF_DERINLIK - g.halfWidth * 2) / 2).toFixed(2)}m`);
   }
 
   for (let n = 0; n < FORKLIFT_TASKS.length; n++) {
@@ -186,7 +186,7 @@ function main(): number {
       + `  (palet yarisi ${task.halfWidth.toFixed(2)}m)`);
 
     // --- 4) Gozun onune goturup kaldır ---
-    const kot = rafGozu(task.hedef)?.kot ?? 0;
+    const kot = katKotu(task.hedef) ?? 0;
     const merkez = r.sahne.forklift.loadCentreM;
     // Yükü gözün ortasına koyacak çatal konumu.
     const konumX = hedef.x - merkez;
@@ -231,15 +231,15 @@ function main(): number {
     // kalip geri yaslandiginda bicak kirisin ustune oturuyor, geri cekilirken
     // krikoya donusup makinenin burnunu kaldiriyordu (olculdu: bicak 4.77'de,
     // kiris ustu 4.75, makine dogu yonunde 1.7 m/s suruklendi).
-    r.runUntil(14, (x) => x.sahne.forklift.liftM <= kot + 0.20,
-      (x) => ({ ...x.kaldir(kot + 0.18), ...x.dur() }));
+    r.runUntil(14, (x) => x.sahne.forklift.liftM <= kot + 0.22,
+      (x) => ({ ...x.kaldir(kot + 0.20), ...x.dur() }));
     r.asama = 'cekilme'; iz('birakildi');
     // Bıçağı çek.
     // Bicak gozun BATISINA tamamen cikana kadar cek. Kot degistirmeden
     // once bunu dogrulamak sart: bicak gozun icindeyken asagi inince
     // kirisin altina giriyor, makinenin burnunu kaldiriyor ve araba 45
     // derece sahlaniyordu (olculdu: t=120.2s, cekilme asamasi).
-    const gozBati = (rafGozu(task.hedef)?.x ?? 0) - RAF_YARI - 0.3;
+    const gozBati = RAF_X - 0.3;
     r.runUntil(40, (x) => x.sahne.forklift.forkTip.x < gozBati,
       (x) => x.suru(gozBati - FORKLIFT.forkLengthM - 0.3, 3.0));
     r.run(0.8, (x) => x.dur());

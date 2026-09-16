@@ -316,15 +316,15 @@ tablosu mantığı vinçle birebir aynı (moment / izin verilen moment), ama dev
 ekseni ÖN AKS ve araç lastik üstünde duruyor — yani vinçte ayaklar yüzünden
 erişilemeyen devrilme burada gerçekten oluyor.
 
-| | Yük | Ton | Yük merkezi | Göz | LMI (ölçülen zirve) |
+| | Yük | Ton | Yük merkezi | Kat | LMI (ölçülen zirve) |
 |---|---|---|---|---|---|
-| D1 | Çimento paleti | 1.30 | 0.58 m | C · 1.85 m | %64 |
-| D2 | Fayans paleti | 1.47 | 0.60 m | B · 3.30 m | %78 |
-| D3 | Boya varilleri | 1.20 | 0.88 m | B · 3.30 m | %87 |
-| D4 | Yalıtım balyası | 1.00 | 0.95 m | A · 4.75 m | %94 |
-| D5 | Çelik profil | 1.74 | 0.52 m | A · 4.75 m | %103 |
+| D1 | Çimento paleti | 1.29 | 0.58 m | R1 · 1.70 m | %58 |
+| D2 | Fayans paleti | 1.49 | 0.60 m | R2 · 3.40 m | %86 |
+| D3 | Boya varilleri | 1.23 | 0.88 m | R2 · 3.40 m | %92 |
+| D4 | Yalıtım balyası | 1.02 | 0.95 m | R3 · 5.10 m | %97 |
+| D5 | Çelik profil | 1.62 | 0.52 m | R3 · 5.10 m | %97 |
 
-Başsız tur: 5/5, 264 saniye, not A (86), çarpma 0, devrilme yok.
+Başsız tur: 5/5, 244 saniye, not A (87), çarpma 0, devrilme yok.
 
 ## Yük alma tuşu YOK — çatal paleti fiziken kaldırıyor
 
@@ -386,18 +386,35 @@ Gerçek forkliftte palete dokunan tek şey çataldır. Bu olmadan, çatal palete
 yanlış kotta girdiğinde oluşan iç içe geçmeyi solver şasi üzerinden çözmeye
 çalışıyor ve makineyi 2.8 metre havaya fırlatıyordu.
 
-## Kademeli raf — çok katlı raf 2B'de çalışmıyor
+## Tek raf, çok katlı — üç ayrı göz yürümüyordu
 
-Önce üç gözlü, üç katlı klasik raf yapıldı. Yükü bir gözün ALT katına koymak
-paleti iki kirişin arasından geçirmek demek; makine ise yük altında 1.4° öne
-yatıyor ve bu çatal ucunda 6 santim düşüş yapıyor. Ölçümde palet her seferinde
-üstteki kirişin kenarına takıldı ve makine tam gazda ilerleyemedi. Yandan bakan
-bir oyunda bu, oyuncunun göremeyeceği bir hassasiyet.
+Önce üç göz koridora yayılmıştı. Sahadan gelen itiraz haklıydı: *"rafler yolun
+ortasında ama yükler sağ tarafta, yükleri alıp rack'e koyarken bir önceki
+rack'e çarpıyorsun."* Uzaktaki göze giderken çatal yukarıdaysa yük yakındaki
+rafın kirişine biniyordu ve oyuncunun bunu önceden görmesinin yolu yoktu.
 
-Şimdi her gözün TEK katı var ve katlar kademeli yükseliyor: girişe en yakın göz
-en alçak (C, 1.85 m), en uzak göz en yüksek (A, 4.75 m). Hedefin üstü açık,
-zorluk YÜKSEKLİKTE ve MESAFEDE. Palet gözün ön kenarına konuyor — sahada da
-öyle, çatal ancak paletin boyu kadar içeri girer.
+Şimdi vinç bölümündeki bina gibi TEK yapı, üç kat. Makine giriş alanı ile rafın
+önü arasında gidip geliyor; raf hep batısında, paletler hep doğusunda.
+
+İki sayı bunu ayakta tutuyor, ikisi de ölçümden:
+
+- **En alt kat 1.70 m.** Raf makinenin iki çalışma noktası ARASINDA olduğu için
+  yüklü makine her turda önünden geçiyor. 1.40'ta kiriş altı 1.24'tü, taşınan
+  paletin üstü 1.25 — palet kirişi sıyırıp bıçağın ucuna doğru 60 santim
+  kaydı, ölçülen yük merkezi 0.63'ten 1.20'ye çıktı ve makine kendi kendini
+  aşırı yüke soktu. 1.70'te 23 cm boşluk var.
+- **Kiriş ön kenarı PAHLI.** Dikdörtgen kiriş çatalı yakalıyordu: bırakma
+  sonrası bıçak kirişle aynı kota denk gelirse altına giriyor, krikoya dönüşüp
+  makineyi 146 dereceye kadar döndürüyordu. Gerçek raf kirişinin ön yüzü de
+  kıvrıktır; kama profil bıçağı yakalamak yerine kaydırıyor. Bu tek değişiklik
+  başsız turda devrilmeyi tamamen bitirdi.
+
+Aşırı yük kilidi de buna göre gevşetildi: direği düşeyin ötesine yatırmak hâlâ
+kilitli ama geriye yatık direği DÜZLEŞTİRMEK serbest. Kurtarma hareketini de
+kilitlemek oyuncuyu kapana kıstırıyordu.
+
+Palet rafın ön kenarına konuyor — sahada da öyle, çatal ancak paletin boyu
+kadar içeri girer.
 
 ## Koridor — 2B'de dönemeyen makinenin level tasarımı
 

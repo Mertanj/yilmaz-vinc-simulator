@@ -1,10 +1,10 @@
-import { Box, Vec2, type Body, type Contact, type World } from 'planck';
+import { Box, Polygon, Vec2, type Body, type Contact, type World } from 'planck';
 import { createWorld, createGround, KATEGORI, MASKE, Snapshotter, SIM } from './world';
 import { Forklift, forkliftKapasitesi, FORKLIFT_NEUTRAL } from './forklift';
 import type { Grabbable } from './crane';
 import { LmiZone, type LmiReading } from './loadChart';
 import {
-  FORKLIFT_TASKS, GIRIS_X, PALET_AYAK, RAF_GOZLERI, RAF_YARI, rafGozu,
+  FORKLIFT_TASKS, GIRIS_X, PALET_AYAK, RAF_DERINLIK, RAF_KATLARI, RAF_X, katKotu,
 } from '../game/forkliftTasks';
 import type { Task } from '../game/tasks';
 import type { SceneInput } from './scene';
@@ -22,15 +22,28 @@ import type { Gosterge, OyunSahnesi, PanelSatiri, Uyari } from './sahne';
 export function createRaf(world: World): Body {
   const body = world.createBody();
   const filtre = { filterCategoryBits: KATEGORI.raf, filterMaskBits: MASKE.raf };
-  for (const goz of RAF_GOZLERI) {
-    // Kat kirişi
-    body.createFixture(new Box(RAF_YARI, 0.08, new Vec2(goz.x, goz.kot - 0.08), 0),
-      { friction: 0.9, ...filtre });
-    // Arka dayanak: yük gözü geçip arkaya düşmesin. **Tam boy dikme DEĞİL** —
+  for (const kot of RAF_KATLARI) {
+    // Kat kirişi. **Ön kenarı PAHLI** — dikdörtgen kiriş çatalı yakalıyordu:
+    // bırakma sonrası bıçak kirişle aynı kota denk gelirse geri çekilirken
+    // altına giriyor, krikoya dönüşüp makineyi 146 dereceye kadar döndürüyordu.
+    // Gerçek raf kirişinin de ön yüzü kıvrık; kama profil bıçağı yakalamak
+    // yerine yukarı ya da aşağı kaydırıyor.
+    const on = RAF_X;
+    const arka = RAF_X + RAF_DERINLIK;
+    body.createFixture(new Polygon([
+      new Vec2(on, kot - 0.08),
+      new Vec2(on + 0.12, kot - 0.16),
+      new Vec2(arka, kot - 0.16),
+      new Vec2(arka, kot),
+      new Vec2(on + 0.12, kot),
+    ]), { friction: 0.9, ...filtre });
+    // Arka dayanak: yük rafı geçip arkaya düşmesin. **Tam boy dikme DEĞİL** —
     // dikme koridoru kapatıyor ve makine rafın doğusundaki giriş alanına hiç
     // geçemiyordu. Gerçek rafta da dikmeler derinlik yönünde durur.
-    body.createFixture(new Box(0.07, 0.26, new Vec2(goz.x + RAF_YARI, goz.kot + 0.26), 0),
-      { friction: 0.6, ...filtre });
+    body.createFixture(
+      new Box(0.07, 0.26, new Vec2(RAF_X + RAF_DERINLIK, kot + 0.26), 0),
+      { friction: 0.6, ...filtre },
+    );
   }
   return body;
 }
@@ -114,22 +127,22 @@ export class ForkliftSahnesi implements OyunSahnesi {
   /** Ölçülen tur: görev başına 26–35 s. Forklift bölümü kısa, eşik de öyle. */
   readonly hizEsikleri = { tam: 22, sifir: 70 };
   hedefNoktasi(t: Task): { x: number; y: number } | null {
-    const g = rafGozu(t.hedef);
-    if (!g) return null;
-    // **Gözün ORTASI değil, ÖN KENARI.** Paleti gözün dibine kadar sokmak
-    // çatalı bir buçuk metre rafın içine sokmak demek; geri çekilirken bıçak
-    // kirişe takılıyor ve makine şahlanıyordu. Sahada da palet gözün ön
-    // kenarına konur — çatal ancak paletin boyu kadar içeri girer.
+    const kot = katKotu(t.hedef);
+    if (kot === undefined) return null;
+    // **Rafın ORTASI değil, ÖN KENARI.** Paleti dibine kadar sokmak çatalı
+    // bir buçuk metre rafın içine sokmak demek; geri çekilirken bıçak kirişe
+    // takılıyor ve makine şahlanıyordu. Sahada da palet gözün ön kenarına
+    // konur — çatal ancak paletin boyu kadar içeri girer.
     // Palet rafa AYAKLARIYLA oturuyor: tabanı kirişin `PALET_AYAK` üstünde.
-    return { x: g.x - RAF_YARI + t.halfWidth + 0.06, y: g.kot + PALET_AYAK };
+    return { x: RAF_X + t.halfWidth + 0.06, y: kot + PALET_AYAK };
   }
   /**
-   * Gözün içine oturmalı: raf yarı derinliği 1.2 m, yani geniş bir palet için
-   * hata payı 10 cm'ye kadar iniyor. Vinçteki 2 metrelik pencere burada
-   * anlamsız olurdu — teras geniş, raf gözü değil.
+   * Rafın içine oturmalı. Vinçteki 2 metrelik pencere burada anlamsız olurdu
+   * — teras geniş bir düzlem, raf katı ise paletten birkaç on santim büyük.
    */
   yerlestirmeToleransi(t: Task): { x: number; y: number } {
-    return { x: Math.max(0.18, RAF_YARI - t.halfWidth), y: 0.32 };
+    // Yük rafın derinliğine sığmalı: geniş palette hata payı 30 cm'e iniyor.
+    return { x: Math.max(0.2, (RAF_DERINLIK - t.halfWidth * 2) / 2), y: 0.32 };
   }
   get sasiHizi(): number { return this.forklift.chassis.getLinearVelocity().x; }
   /** Küçük makine, dar koridor: vinçten belirgin biçimde daha yakın. */
@@ -315,4 +328,4 @@ export class ForkliftSahnesi implements OyunSahnesi {
   reset(): void { this.forklift.reset(); }
 }
 
-export { FORKLIFT_NEUTRAL, FORKLIFT_TASKS, RAF_GOZLERI, RAF_YARI };
+export { FORKLIFT_NEUTRAL, FORKLIFT_TASKS, RAF_KATLARI, RAF_X, RAF_DERINLIK };
