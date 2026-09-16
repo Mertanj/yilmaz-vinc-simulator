@@ -1,5 +1,7 @@
 import { araclar, type AracTanimi } from '../game/araclar';
+import { enIyiOku } from '../game/enIyi';
 import { DILLER, M, dilSec, sozluk, type Dil } from './dil';
+import { oku, yaz } from './kayit';
 
 /**
  * Açılış ekranı — oyuncu önce DİLİ, sonra makineyi seçiyor.
@@ -20,11 +22,11 @@ import { DILLER, M, dilSec, sozluk, type Dil } from './dil';
 const ANAHTAR = 'yv.arac';
 
 export function sonSecim(): string | null {
-  try { return localStorage.getItem(ANAHTAR); } catch { return null; }
+  return oku(ANAHTAR);
 }
 
 export function secimiYaz(id: string): void {
-  try { localStorage.setItem(ANAHTAR, id); } catch { /* gizli sekme */ }
+  yaz(ANAHTAR, id);
 }
 
 /** Kartları basar ve oyuncu birine basana kadar bekler. */
@@ -75,6 +77,22 @@ function dilDugmesi(d: Dil): string {
     + `${secili ? ' aria-current="true"' : ''}>${sozluk(d).ad}</button>`;
 }
 
+/**
+ * Karttaki en iyi derece.
+ *
+ * Hiç oynanmamış araçta satır BASILMIYOR — "en iyi: yok" yazmak boş bir
+ * vaat, üstelik kartı da uzatıyor. Satırın olmaması zaten "burayı henüz
+ * denemedin" demek.
+ */
+function enIyiSatiri(a: AracTanimi): string {
+  if (!a.hazir) return '';
+  const k = enIyiOku(a.id);
+  if (!k) return '';
+  return `<div class="en-iyi" data-not="${k.not}">`
+    + `${M.secim.enIyi(String(k.puan), k.not)}`
+    + `${k.usta ? ' ★' : ''}</div>`;
+}
+
 function kart(a: AracTanimi, sonKullanilan: boolean): string {
   const noktalar = [1, 2, 3]
     .map((n) => `<i${n <= a.seviye ? ' class="dolu"' : ''}></i>`).join('');
@@ -89,5 +107,6 @@ function kart(a: AracTanimi, sonKullanilan: boolean): string {
       <div class="zorluk"><span>${M.secim.zorluk}</span>
         <div class="noktalar">${noktalar}</div></div>
       <div class="ipucu">${a.zorluk}</div>
+      ${enIyiSatiri(a)}
     </button>`;
 }

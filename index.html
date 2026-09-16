@@ -227,6 +227,14 @@
   }
   #sonuc-ic .puan { font-size: 14px; color: #8E9BA2; margin: 14px 0 4px; }
   #sonuc-ic .note { font-size: 11px; color: #6C7C84; margin: 0; }
+  /* Rekor kırılınca söylenir, kırılmayınca hedef gösterilir: ikisi de aynı
+     yerde, biri diğerinin yerine. */
+  #sonuc-ic .rekor {
+    display: inline-block; background: #E8A62C; color: #16191B;
+    border-radius: 3px; padding: 4px 14px; letter-spacing: 0.12em;
+    font-size: 12px; font-weight: 700; margin: 0 0 12px;
+  }
+  #sonuc-ic .onceki { font-size: 12px; color: #6C7C84; margin: 0 0 12px; }
 
   /* --- açılış: araç seçimi ---
      Oyun bir ayar menüsüyle değil, bir KARARLA başlıyor: hangi makine.
@@ -295,6 +303,15 @@
     width: 8px; height: 8px; border-radius: 50%; background: #2F3A42; display: block;
   }
   #secim .noktalar i.dolu { background: #E8A62C; }
+  /* Karttaki en iyi derece. Zorluk ipucundan bir çizgiyle ayrılıyor: biri
+     makineyi tanıtıyor, diğeri oyuncunun kendi geçmişi. */
+  #secim .en-iyi {
+    margin-top: 9px; padding-top: 9px; border-top: 1px solid #222B31;
+    font-size: 11.5px; letter-spacing: 0.02em; color: #5FB07C;
+  }
+  #secim .en-iyi[data-not="B"] { color: #9FC46B; }
+  #secim .en-iyi[data-not="C"] { color: #E8A62C; }
+  #secim .en-iyi[data-not="D"] { color: #B08A6A; }
   #secim .ipucu {
     margin-top: 10px; padding-top: 10px; border-top: 1px solid #242E35;
     font-size: 11.5px; color: #7C878E; line-height: 1.5;

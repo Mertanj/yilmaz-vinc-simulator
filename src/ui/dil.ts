@@ -17,6 +17,8 @@
  * o bir marka, tabela değil.
  */
 
+import { oku, yaz } from './kayit';
+
 export type Dil = 'tr' | 'en';
 
 /** Yerleştirme onay panelinin satırları — sayılar çağıran tarafta. */
@@ -35,6 +37,8 @@ export interface Metinler {
   secim: {
     baslik: string; soru: string; altBilgi: string;
     zorluk: string; yakinda: string; sonOynadigin: string;
+    /** Karttaki en iyi derece satırı; hiç oynanmamışsa basılmıyor. */
+    enIyi: (puan: string, not_: string) => string;
   };
 
   ust: { puan: (n: number) => string; bolumTamam: string };
@@ -104,6 +108,9 @@ export interface Metinler {
     /** Saniye kısaltması — TR'de "sn", EN'de "s". */
     saniye: string;
     basari: (p: string) => string; yeniden: string;
+    rekor: string;
+    oncekiEnIyi: (puan: string) => string;
+    makineDegistir: string;
   };
 
   dekor: { sanayi: string; kurulum: string; sevkiyat: string; malKabul: string };
@@ -126,8 +133,9 @@ const TR: Metinler = {
     baslik: 'YILMAZ VİNÇ',
     soru: 'Hangi makineyle çalışacaksın?',
     altBilgi: 'Her makinenin kendi bölümü, kendi yük tablosu ve kendi tehlikesi var.'
-      + ' İstediğin zaman <kbd>R</kbd> ile sıfırlayabilirsin.',
+      + ' Oyunun içinde <kbd>R</kbd> bölümü sıfırlar, <kbd>Esc</kbd> buraya döner.',
     zorluk: 'zorluk', yakinda: 'yakında', sonOynadigin: 'son oynadığın',
+    enIyi: (puan, not_) => `en iyi ${puan} puan · not ${not_}`,
   },
   ust: { puan: (n) => `${n} puan`, bolumTamam: 'bölüm tamamlandı' },
   panel: {
@@ -144,7 +152,8 @@ const TR: Metinler = {
       + '<b>kurulum</b> <kbd>Q</kbd> ayak aç/kapa<br>'
       + '<b>vinç</b> <kbd>W</kbd><kbd>S</kbd> bom <kbd>⇧W</kbd><kbd>⇧S</kbd> teleskop<br>'
       + '<kbd>↑</kbd><kbd>↓</kbd> kanca <kbd>boşluk</kbd> bağla/bırak<br>'
-      + '<kbd>K</kbd> halat katı <kbd>I</kbd> detay <kbd>R</kbd> sıfırla',
+      + '<kbd>K</kbd> halat katı <kbd>I</kbd> detay <kbd>R</kbd> sıfırla'
+      + ' <kbd>Esc</kbd> makine değiştir',
     baslik: 'KALDIRMA MOMENTİ',
     durum: {
       tabloDisi: 'YARIÇAP TABLO DIŞI', asiriYuk: 'AŞIRI YÜK',
@@ -202,7 +211,7 @@ const TR: Metinler = {
       + '<b>çatal</b> <kbd>W</kbd><kbd>S</kbd> kaldır/indir '
       + '<kbd>⇧W</kbd><kbd>⇧S</kbd> direk eğimi<br>'
       + '<b>yük alma tuşu yok</b> — bıçağı paletin cebine sok ve kaldır'
-      + ' <kbd>I</kbd> detay <kbd>R</kbd> sıfırla',
+      + ' <kbd>I</kbd> detay <kbd>R</kbd> sıfırla <kbd>Esc</kbd> makine değiştir',
     baslik: 'DEVRİLME PAYI',
     durum: {
       devrilir: 'DEVRİLİR — ÇOK AĞIR', dikkat: 'DİKKAT · ARKA TEKER HAFİFLİYOR',
@@ -265,6 +274,9 @@ const TR: Metinler = {
     kirmizi: 'kırmızıda geçen süre', salinim: 'en geniş salınım', carpma: 'çarpma',
     sapma: 'ortalama yerleştirme sapması', saniye: 'sn',
     basari: (p) => `başarı %${p}`, yeniden: 'R ile yeniden başla',
+    rekor: 'YENİ REKOR',
+    oncekiEnIyi: (puan) => `önceki en iyi ${puan} puan`,
+    makineDegistir: 'Esc ile makine değiştir',
   },
   dekor: {
     sanayi: 'SANAYİ SİTESİ · C BLOK', kurulum: 'KURULUM ALANI',
@@ -293,8 +305,10 @@ const EN: Metinler = {
     baslik: 'YILMAZ VİNÇ',
     soru: 'Which machine are you running today?',
     altBilgi: 'Each machine has its own level, its own load chart and its own way'
-      + ' of going wrong. <kbd>R</kbd> restarts at any time.',
+      + ' of going wrong. In game, <kbd>R</kbd> restarts the level and'
+      + ' <kbd>Esc</kbd> brings you back here.',
     zorluk: 'difficulty', yakinda: 'soon', sonOynadigin: 'last played',
+    enIyi: (puan, not_) => `best ${puan} pts · grade ${not_}`,
   },
   ust: { puan: (n) => `${n} pts`, bolumTamam: 'level complete' },
   panel: {
@@ -311,7 +325,8 @@ const EN: Metinler = {
       + '<b>setup</b> <kbd>Q</kbd> outriggers<br>'
       + '<b>crane</b> <kbd>W</kbd><kbd>S</kbd> boom <kbd>⇧W</kbd><kbd>⇧S</kbd> telescope<br>'
       + '<kbd>↑</kbd><kbd>↓</kbd> hoist <kbd>space</kbd> hook on/off<br>'
-      + '<kbd>K</kbd> parts of line <kbd>I</kbd> detail <kbd>R</kbd> restart',
+      + '<kbd>K</kbd> parts of line <kbd>I</kbd> detail <kbd>R</kbd> restart'
+      + ' <kbd>Esc</kbd> switch machine',
     baslik: 'LOAD MOMENT',
     durum: {
       tabloDisi: 'RADIUS OFF CHART', asiriYuk: 'OVERLOAD',
@@ -370,7 +385,7 @@ const EN: Metinler = {
       + '<b>forks</b> <kbd>W</kbd><kbd>S</kbd> raise/lower '
       + '<kbd>⇧W</kbd><kbd>⇧S</kbd> mast tilt<br>'
       + '<b>no pick-up key</b> — slide the blades into the pocket and lift'
-      + ' <kbd>I</kbd> detail <kbd>R</kbd> restart',
+      + ' <kbd>I</kbd> detail <kbd>R</kbd> restart <kbd>Esc</kbd> switch machine',
     baslik: 'TIPPING MARGIN',
     durum: {
       devrilir: 'WILL TIP — TOO HEAVY', dikkat: 'CAUTION · REAR AXLE GOING LIGHT',
@@ -433,6 +448,9 @@ const EN: Metinler = {
     kirmizi: 'time spent in the red', salinim: 'widest swing', carpma: 'impacts',
     sapma: 'average placement error', saniye: 's',
     basari: (p) => `score ${p}%`, yeniden: 'press R to run it again',
+    rekor: 'NEW BEST',
+    oncekiEnIyi: (puan) => `previous best ${puan} pts`,
+    makineDegistir: 'press Esc to switch machines',
   },
   dekor: {
     sanayi: 'INDUSTRIAL ESTATE · BLOCK C', kurulum: 'SET-UP ZONE',
@@ -472,15 +490,13 @@ export function dilSec(d: Dil): void {
   // çalışıyor. Belge `lang="tr"` kalırsa tarayıcı "difficulty" kelimesini
   // Türkçe kurallarıyla büyütüp "DİFFİCULTY" yazıyor.
   if (typeof document !== 'undefined') document.documentElement.lang = d;
-  try { localStorage.setItem(ANAHTAR, d); } catch { /* gizli sekme */ }
+  yaz(ANAHTAR, d);
 }
 
 /** Kayıtlı tercih, yoksa tarayıcının dili, o da yoksa Türkçe. */
 export function baslangicDili(): Dil {
-  try {
-    const kayitli = localStorage.getItem(ANAHTAR);
-    if (kayitli === 'tr' || kayitli === 'en') return kayitli;
-  } catch { /* gizli sekme */ }
+  const kayitli = oku(ANAHTAR);
+  if (kayitli === 'tr' || kayitli === 'en') return kayitli;
   const tarayici = typeof navigator === 'undefined' ? 'tr' : navigator.language;
   return tarayici.toLowerCase().startsWith('tr') ? 'tr' : 'en';
 }

@@ -31,6 +31,8 @@ export class Keyboard {
   katToggled = false;
   /** I'ya basıldığı karede bir kez true olur — panelin detay satırları. */
   detayToggled = false;
+  /** Esc'e basıldığı karede bir kez true olur — araç seçimine dön. */
+  cikisIstendi = false;
 
   constructor(target: EventTarget = window) {
     target.addEventListener('keydown', (e) => {
@@ -42,6 +44,7 @@ export class Keyboard {
       if (ev.code === 'Space') this.hookToggled = true;
       if (ev.code === 'KeyK') this.katToggled = true;
       if (ev.code === 'KeyI') this.detayToggled = true;
+      if (ev.code === 'Escape') this.cikisIstendi = true;
       // Boşluk ve ok tuşları sayfayı kaydırmasın.
       if (ev.code === 'Space' || ev.code.startsWith('Arrow')) ev.preventDefault();
     });
@@ -105,5 +108,30 @@ export class Keyboard {
     const r = this.detayToggled;
     this.detayToggled = false;
     return r;
+  }
+
+  /** Araç seçimine dönülsün mü. */
+  consumeCikis(): boolean {
+    const r = this.cikisIstendi;
+    this.cikisIstendi = false;
+    return r;
+  }
+
+  /**
+   * Basılı tuşları ve bekleyen komutları temizler.
+   *
+   * Klavye araç değişiminde YENİDEN KURULMUYOR — her kurulum window'a bir
+   * dinleyici daha ekler ve eskiler asılı kalırdı. Onun yerine aynı nesne
+   * yeni makineye temiz bir durumla giriyor: seçim ekranında basılı kalmış
+   * bir tuş ya da yutulmamış bir Esc, yeni bölümün ilk karesine taşmasın.
+   */
+  sifirla(): void {
+    this.down.clear();
+    this.resetRequested = false;
+    this.outriggerToggled = false;
+    this.hookToggled = false;
+    this.katToggled = false;
+    this.detayToggled = false;
+    this.cikisIstendi = false;
   }
 }

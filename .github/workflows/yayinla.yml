@@ -45,6 +45,9 @@ jobs:
       - name: Fizik regresyonu (bölümü baştan sona oyna)
         run: npm run sahne
 
+      - name: Skor kaydı birim testi
+        run: npm run skor
+
       - name: Derle
         run: npm run build
         env:
