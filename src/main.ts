@@ -47,20 +47,7 @@ async function boot(): Promise<void> {
   // ve görev adları hep aynı sözlükten besleniyor.
   dilSec(baslangicDili());
 
-  // Yan çevirme çağrısı: görünürlüğüne CSS karar veriyor (dar + dikey +
-  // dokunmatik), metni buradan bir kez yazılıyor.
-  const cevir = document.getElementById('cevir');
-  if (cevir) {
-    // Simge Unicode değil çizim: `▯` gibi bir karakter telefonun kendi
-    // fontunda yoksa boş kutu olarak çıkıyor — hem de tam "telefonunu çevir"
-    // derken.
-    cevir.innerHTML = '<svg class="simge" viewBox="0 0 40 64" aria-hidden="true">'
-      + '<rect x="2.5" y="2.5" width="35" height="59" rx="6" fill="none"'
-      + ' stroke="currentColor" stroke-width="3"/>'
-      + '<line x1="15" y1="55" x2="25" y2="55" stroke="currentColor"'
-      + ' stroke-width="3" stroke-linecap="round"/></svg>'
-      + `<div class="bas">${M.cevir.bas}</div><p>${M.cevir.govde}</p>`;
-  }
+  yatayCagrisiniKur();
 
   const stage = await createStage(host);
   const keys = new Kumanda();
@@ -158,10 +145,21 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
     };
   })();
 
+  /** Kumandanın kapladığı alt şeridi kameraya bildir. */
+  const altPayiniOlc = (): void => {
+    const kume = padHost?.querySelector<HTMLElement>('.pad.sol');
+    if (!kume) { camera.altPayi(0); return; }
+    const ust = kume.getBoundingClientRect().top;
+    camera.altPayi(Math.max(0, window.innerHeight - ust + 8));
+  };
+  altPayiniOlc();
+
   // --- arka plan, ekran boyutuna bağlı ---
   let arkaPlan = gorunum.arkaPlan(stage.app.screen.width, stage.app.screen.height);
   stage.backdrop.addChild(arkaPlan);
   const yenidenBoyutlandi = (): void => {
+    // Ekran döndüğünde kumanda yeniden diziliyor: kapladığı şerit de değişiyor.
+    altPayiniOlc();
     arkaPlan.destroy({ children: true });
     arkaPlan = gorunum.arkaPlan(stage.app.screen.width, stage.app.screen.height);
     stage.backdrop.addChild(arkaPlan);
@@ -387,6 +385,40 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
       // yardımcılar kalıyor, yoksa telefonda turu bitirmenin yolu olmuyor.
       document.body.classList.add('bitti');
     }
+  });
+}
+
+/**
+ * "Yatay tutunca daha iyi" çağrısı.
+ *
+ * Bir zamanlar KAPI'ydı ve sahadan gelen geri bildirim onu yıktı: *"telefonda
+ * denedim ama artifact içinde açıldığı için telefon yatay çevirmeyi tanımıyor,
+ * oyunu başlatamıyorum."* Sebebi şu: `orientation: portrait` bir iframe içinde
+ * ÇERÇEVENİN en-boyunu okuyor, cihazın değil. Artifact panelinde çerçeve dikey
+ * kalıyor, telefon çevrilse bile. Yani oyuncu, sağlayamayacağı bir koşulun
+ * arkasına kilitlenmişti.
+ *
+ * Artık öneri: dikey de oynanıyor (kumanda dar ekranda iki sütuna diziliyor),
+ * çağrı kapatılabiliyor ve kapatıldığı hatırlanıyor.
+ */
+const YATAY_ANAHTARI = 'yv.yatayCagri';
+
+function yatayCagrisiniKur(): void {
+  const cevir = document.getElementById('cevir');
+  if (!cevir) return;
+  if (oku(YATAY_ANAHTARI) === 'kapali') document.body.classList.add('cevir-kapali');
+  // Simge Unicode değil çizim: `▯` gibi bir karakter telefonun kendi fontunda
+  // yoksa boş kutu olarak çıkıyor — hem de tam "telefonunu çevir" derken.
+  cevir.innerHTML = '<svg class="simge" viewBox="0 0 40 64" aria-hidden="true">'
+    + '<rect x="2.5" y="2.5" width="35" height="59" rx="6" fill="none"'
+    + ' stroke="currentColor" stroke-width="3"/>'
+    + '<line x1="15" y1="55" x2="25" y2="55" stroke="currentColor"'
+    + ' stroke-width="3" stroke-linecap="round"/></svg>'
+    + `<div class="bas">${M.cevir.bas}</div><p>${M.cevir.govde}</p>`
+    + `<button type="button" class="yine">${M.cevir.yineOyna}</button>`;
+  cevir.querySelector('button.yine')?.addEventListener('click', () => {
+    document.body.classList.add('cevir-kapali');
+    yaz(YATAY_ANAHTARI, 'kapali');
   });
 }
 

@@ -144,7 +144,7 @@ export interface Metinler {
   };
 
   /** Dar dikey ekranda yan çevirme çağrısı. */
-  cevir: { bas: string; govde: string };
+  cevir: { bas: string; govde: string; yineOyna: string };
 
   dekor: { sanayi: string; kurulum: string; sevkiyat: string; malKabul: string };
 
@@ -320,10 +320,11 @@ const TR: Metinler = {
     dokunmaNot: 'köşedeki ⟲ yeniden başlatır, ⊞ makineleri açar',
   },
   cevir: {
-    bas: 'TELEFONU YAN ÇEVİR',
+    bas: 'YATAY TUTUNCA DAHA İYİ',
     govde: 'Bölüm uzun bir koridorda geçiyor. Yatay tutunca makineyi ve '
       + 'hedefi aynı kadrajda görüyorsun; kumanda da iki başparmağın altına '
-      + 'geliyor.',
+      + 'geliyor. Çeviremiyorsan dikeyde de oynanıyor.',
+    yineOyna: 'dikey oyna',
   },
   dekor: {
     sanayi: 'SANAYİ SİTESİ · C BLOK', kurulum: 'KURULUM ALANI',
@@ -508,9 +509,11 @@ const EN: Metinler = {
     dokunmaNot: '⟲ in the corner runs it again, ⊞ opens the machines',
   },
   cevir: {
-    bas: 'TURN YOUR PHONE',
+    bas: 'BETTER IN LANDSCAPE',
     govde: 'The level runs down a long aisle. Landscape keeps the machine and '
-      + 'the target in the same frame, and puts the controls under both thumbs.',
+      + 'the target in the same frame, and puts the controls under both thumbs. '
+      + 'If you cannot turn it, portrait works too.',
+    yineOyna: 'play in portrait',
   },
   dekor: {
     sanayi: 'INDUSTRIAL ESTATE · BLOCK C', kurulum: 'SET-UP ZONE',

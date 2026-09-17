@@ -39,7 +39,8 @@ export class Camera {
   private readonly maxLookAhead = 9;
   private readonly maxOffset = 11;
   /** Zemin çizgisinin ekranın altından bu kadar piksel yukarıda durması hedefi. */
-  private readonly zeminPayiPx = 46;
+  private static readonly TABAN_PAYI_PX = 46;
+  private zeminPayiPx = Camera.TABAN_PAYI_PX;
 
   /**
    * Ölçek sınırları ARACA GÖRE veriliyor.
@@ -123,6 +124,18 @@ export class Camera {
     this.x = approach(this.x, hedefX + look, this.tauX, dt);
     this.x = clamp(this.x, hedefX - this.maxOffset, hedefX + this.maxOffset);
     this.y = approach(this.y, hedefY, this.tauY, dt);
+  }
+
+  /**
+   * Ekranın altındaki DOLU şeridi kameraya bildirir (piksel).
+   *
+   * Ekran kumandası açıkken alt bantta düğmeler duruyor ve makine tam
+   * onların arkasına düşüyordu — özellikle dikeyde, kumanda iki sıraya
+   * sarınca. Kamera zaten "zemin çizgisi alttan şu kadar yukarıda dursun"
+   * diye çalışıyor; kumanda yeni bir mekanizma değil, o payı büyütüyor.
+   */
+  altPayi(px: number): void {
+    this.zeminPayiPx = Camera.TABAN_PAYI_PX + Math.max(0, px);
   }
 
   snapTo(x: number, y: number): void {

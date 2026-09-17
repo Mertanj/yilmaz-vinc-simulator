@@ -284,14 +284,44 @@
     #dokunmatik .pad.yardimci { top: calc(38px + env(safe-area-inset-top, 0px)); }
   }
 
-  /* --- dar dikey ekran: yan çevir ---
-     Bölüm 60 metrelik bir koridorda geçiyor, oyun da yandan bakıyor. 390
-     piksel genişlikte iki başparmak kümesi yan yana SIĞMIYOR (194 + 262 > 390)
-     ve sığsa bile oyun alanı bir şeride düşüyor, kamera makineyi noktaya kadar
-     küçültüyor. Düğmeleri dikeye dizmek bunu çözmez; ekranı çevirmek çözer.
-     Eşik 560 piksel: onun üstünde iki küme zaten yan yana sığıyor, yani
-     dikey tutulan bir tablette çağrı hiç çıkmıyor. z-index seçim ekranının
-     (40) ALTINDA — makine seçmek dikeyde gayet rahat. */
+  /* --- dar dikey ekran ---
+     Kumanda iki sütuna diziliyor: 390 pikselde iki küme YAN YANA sığmıyor
+     (194 + 262), alt alta sığıyor (144 + 144). Düğmeler küçülmüyor, sadece
+     sarıyorlar — dokunma hedefini kısmak en son çare.
+     Üstüne bir de "yatay tutunca daha iyi" ÖNERİSİ çıkıyor. Bir zamanlar kapı
+     olarak yazılmıştı ve sahada kırıldı: artifact bir iframe içinde açılıyor,
+     `orientation: portrait` orada ÇERÇEVENİN en-boyunu okuyor, cihazınkini
+     değil — telefon çevrilse bile çerçeve dikey kalıyor ve oyun hiç
+     başlamıyordu. Artık kapatılabiliyor ve kapatıldığı hatırlanıyor.
+     z-index seçim ekranının (40) ALTINDA — makine seçmek dikeyde zaten rahat. */
+  @media (orientation: portrait) and (max-width: 560px) {
+    #dokunmatik .pad.sol, #dokunmatik .pad.sag {
+      display: grid; grid-template-columns: repeat(2, auto); gap: 8px;
+    }
+    /* Fren iki sütunu birden: ayrı bir eylem ve geniş hedef işine yarıyor. */
+    #dokunmatik .pad.sol button:last-child { grid-column: 1 / -1; }
+
+    /* Panel dikeyde ekranın yarısını yiyordu: üstte panel, altta kumanda,
+       arada makineye kalan bir şerit. Aynı sıkıştırma yatay telefondakiyle
+       aynı mantık — dikeyde kıt olan yine yükseklik. */
+    #panel {
+      box-sizing: border-box; width: 186px; top: 50px; padding: 10px 11px 8px;
+    }
+    #panel .baslik { font-size: 10px; margin-bottom: 6px; }
+    #panel .bar { height: 10px; }
+    #moment-yuzde { font-size: 22px; margin-top: 4px; }
+    #moment-durum { font-size: 10px; margin-bottom: 7px; }
+    #panel dl { font-size: 11px; gap: 2px 8px; padding-top: 7px; margin-bottom: 6px; }
+    /* Bu iki satır 186 pikselde zaten "…" ile kesiliyordu; aynı bilgi satır
+       listesinde tam hâliyle duruyor. */
+    #p-alt1, #p-alt2 { display: none; }
+    #p-detay { font-size: 9.5px; }
+    #p-detay.dokunulur { padding: 4px 7px; margin: 0 0 7px; }
+    #hint { font-size: 10.5px; padding-top: 7px; }
+    /* Uyarı şeridi dar ekranda kenarlara yapışmasın. */
+    #uyari { left: 12px; right: 12px; transform: none; max-width: none; }
+  }
+
   #cevir { display: none; }
   @media (pointer: coarse) and (orientation: portrait) and (max-width: 560px) {
     #cevir {
@@ -309,6 +339,14 @@
       font-size: 26px; letter-spacing: 0.06em; color: #E8A62C;
     }
     #cevir p { margin: 0; font-size: 12.5px; line-height: 1.6; max-width: 20rem; }
+    #cevir button.yine {
+      margin-top: 6px; font: inherit; font-size: 12px; cursor: pointer;
+      background: #E8A62C; border: none; border-radius: 4px; color: #16191B;
+      padding: 10px 20px; font-weight: 600; letter-spacing: 0.03em;
+    }
+    #cevir button.yine:focus-visible { outline: 2px solid #E4E9EB; outline-offset: 2px; }
+    /* Bir kez kapatıldı: bu oyuncu ya çeviremiyor ya da istemiyor. */
+    body.cevir-kapali #cevir { display: none; }
   }
   @keyframes cevirSallan {
     0%, 55%, 100% { transform: rotate(0deg); }
