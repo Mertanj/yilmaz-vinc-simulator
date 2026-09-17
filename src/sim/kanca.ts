@@ -1,6 +1,6 @@
 import { Box, DistanceJoint, RevoluteJoint, Vec2,
   type Body, type World, type DistanceJoint as DJ } from 'planck';
-import type { Snapshotter } from './world';
+import { TRUCK_GROUP, type Snapshotter } from './world';
 
 /**
  * Kanca düzeneği: kanca bloğu, halat ve yüke bağlanma.
@@ -84,8 +84,20 @@ export class Kanca {
   ) {
     const uc = ucGovde.getWorldPoint(ucYerel);
     this.hook = world.createDynamicBody({ x: uc.x, y: uc.y - halatM });
+    // **Kanca aracın kendi takımı — şasiye ve tekerlere çarpmaz.**
+    //
+    // Teleskopik vinçte hiç ortaya çıkmadı, çünkü orada kanca kamyonun
+    // üstüne hiç gelmiyor. Dirsekli bomda ise YOL KONUMUNUN TANIMI bu:
+    // bom Z gibi katlanıp kanca kasanın üstünde duruyor.
+    //
+    // Filtresiz halinde ölçüm şunu gösterdi: kanca ilk karede şasi
+    // kutusunun (y 0.97–1.81) içinde, y=1.25'te doğuyor. Temas çözücü onu
+    // dışarı itiyor, RİJİT halat geri çekiyor ve kavga büyüyor —
+    // 20.8 kN (t=0) → 2732 kN (t=0.6). O kuvveti şasiye elle uyguladığımız
+    // için kamyon 1.4 saniyede 16.5 dereceye yatıyordu. Devrilmenin sebebi
+    // bom değil, kendi kancasına çarpan kamyondu.
     this.hook.createFixture(new Box(ayar.yariEn, ayar.yariBoy), {
-      density: 1, friction: 0.8,
+      density: 1, friction: 0.8, filterGroupIndex: TRUCK_GROUP,
     });
 
     // Kanca bloğu HİÇ dönmez: ucunda ağırlık var gibi hep aşağı bakar. Gerçek
