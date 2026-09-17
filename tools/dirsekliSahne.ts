@@ -103,19 +103,20 @@ class Rig {
    * Hedef erişilemezse HEDEFİ ALÇALTARAK en yakın çözümü arıyor; uydurulmuş
    * bir açıyla sürmek sessizce yanlış yere giderdi.
    */
-  ucaSur(tx: number, ty: number): { luff: number; telescope: number } {
+  ucaSur(tx: number, ty: number): { luff: number; telescope: number; uzat: number } {
     const b = this.scene.bom;
     const yerel = b.dunyadanYerele({ x: tx, y: ty });
     let c = dirsekliCozum(yerel);
     for (let dy = 0.25; !c && dy <= 8; dy += 0.25) {
       c = dirsekliCozum({ x: yerel.x, y: yerel.y - dy });
     }
-    if (!c) return { luff: 0, telescope: 0 };
+    if (!c) return { luff: 0, telescope: 0, uzat: 0 };
     const band = (e: number, k: number): number => clamp(e / k, -1, 1);
     return {
       luff: band(c.anaDeg - b.anaAciDeg, 3.0),
       // Kırma komutu TERS: +1 "aç" demek ve açı KÜÇÜLÜRKEN açılıyor.
       telescope: band(b.kirmaAciDeg - c.kirmaDeg, 4.0),
+      uzat: band(c.uzamaM - b.uzamaBoyuM, 0.4),
     };
   }
 
@@ -128,14 +129,16 @@ class Rig {
    * Rig 40 saniye kilide karşı sürüp görevi tamamlayamadı. Vinç riginde aynı
    * tuzağa düşülmüş ve çözümü de aynı olmuştu.
    */
-  ucaSurSonumlu(tx: number, ty: number): { luff: number; telescope: number } {
+  ucaSurSonumlu(tx: number, ty: number): { luff: number; telescope: number; uzat: number } {
     const b = this.scene.bom;
     const uc = b.tipWorld;
     const h = b.hook.getPosition();
     const kayma = Math.hypot(h.x - uc.x, uc.y - h.y - b.halatBoyuM);
     const kazanc = Math.max(0.10, Math.min(1, 1 - kayma / 0.8));
     const s = this.ucaSur(tx, ty);
-    return { luff: s.luff * kazanc, telescope: s.telescope * kazanc };
+    return {
+      luff: s.luff * kazanc, telescope: s.telescope * kazanc, uzat: s.uzat * kazanc,
+    };
   }
 
   /** Halatı hedef boya süren oransal komut. +1 sarıyor (kısaltıyor). */
@@ -169,7 +172,7 @@ class Rig {
   dur(maxSec = 25, esik = 0.10): void {
     this.runUntil(maxSec, (rig) => rig.sarkacKaymasi < esik
       && Math.abs(rig.scene.bom.hook.getLinearVelocity().x) < 0.08,
-      () => ({ crane: { luff: 0, telescope: 0, winch: 0 } }));
+      () => ({ crane: { uzat: 0, luff: 0, telescope: 0, winch: 0 } }));
   }
 }
 
@@ -184,13 +187,24 @@ function main(): void {
   // **Durdu mu? SÜREKLİ durmus olmali.** Tek kare "hiz ~0" okumak yetmiyor:
   // suspansiyon salinimi hizi bir karede sifirdan geciriyor ve olcum kamyonu
   // takoza degmeden once "parkti" sayabiliyor.
-  // Fiziksel takoz yok (bkz. AVLU.parkX): rig de oyuncu gibi park cebine
-  // bakarak duruyor. Hedefin biraz oncesinde gazi kesip firenle oturtuyoruz,
-  // yoksa 24 km/s'ten gelen 25 tonluk arac cebi 3 metre gecip duruyor.
-  r.runUntil(40, (rig) => rig.scene.truck.chassis.getPosition().x <= AVLU.parkX + 2.2,
+  // **Fiziksel takoz yok (bkz. AVLU.parkX), o yuzden rig de oyuncu gibi cebe
+  // BAKARAK duruyor — ve yakinsamasi gerekiyor.**
+  //
+  // Ilk hali "cebin 2.2 m oncesinde gazi kes" diyordu ve frenleme mesafesi
+  // son konumu belirliyordu: `parkX` 30 santim degisince arac 58 santim
+  // baska yerde durdu, butun yaricaplar kaydi ve gorev yuzdeleri bozuldu
+  // (S5 %97 yerine %103, yani tablo disi). Simdi kaba yaklasip sonra kisa
+  // darbelerle oturuyor; gercek operator de son yarim metreyi boyle alir.
+  r.runUntil(40, (rig) => rig.scene.truck.chassis.getPosition().x <= AVLU.parkX + 3.5,
     () => ({ drive: { throttle: -1, handbrake: false } }));
   r.runUntil(20, (rig) => Math.abs(rig.scene.truck.chassis.getLinearVelocity().x) < 0.05,
     () => ({ drive: { throttle: 0, handbrake: true } }));
+  for (let i = 0; i < 24; i++) {
+    if (r.scene.truck.chassis.getPosition().x <= AVLU.parkX + 0.15) break;
+    r.run(0.22, () => ({ drive: { throttle: -1, handbrake: false } }));
+    r.runUntil(6, (rig) => Math.abs(rig.scene.truck.chassis.getLinearVelocity().x) < 0.04,
+      () => ({ drive: { throttle: 0, handbrake: true } }));
+  }
   const sasiX = r.scene.truck.chassis.getPosition().x;
   say(`PARK  sasi x ${sasiX.toFixed(2)} (cep ${AVLU.parkX}±${AVLU.parkPayiM})`
     + `  tabla ${r.scene.bom.tablaWorld.x.toFixed(2)} (tasarim ${AVLU.tablaX})`
@@ -214,7 +228,7 @@ function main(): void {
     const detay = DIRSEKLI_GOREVLER.filter((g) => g.hedef === i)
       .map((g) => `${g.kod} %${(((g.tonnes + S.hookBlockTonnes) / kap) * 100).toFixed(0)}`)
       .join(' ');
-    say(`  hedef${i}   x ${h.x} y ${h.y}  R ${R.toFixed(2)} m  kap ${kap.toFixed(2)} t`
+    say(`  hedef${i}   x ${h.x.toFixed(2)} y ${h.y.toFixed(1)}  R ${R.toFixed(2)} m  kap ${kap.toFixed(2)} t`
       + `   ${detay || '(gorev yok)'}`);
   });
 
@@ -237,7 +251,10 @@ function main(): void {
       say(`   iz ${etiket.padEnd(12)} ana ${b.anaAciDeg.toFixed(0)}° kirma ${b.kirmaAciDeg.toFixed(0)}°`
         + ` uc ${b.tipWorld.x.toFixed(2)},${b.tipWorld.y.toFixed(2)} halat ${b.halatBoyuM.toFixed(2)}`
         + ` kanca ${b.hook.getPosition().x.toFixed(2)},${b.hook.getPosition().y.toFixed(2)}`
-        + ` yuk ${l.x.toFixed(2)},${l.y.toFixed(2)} bagli ${b.hasLoad ? 'E' : 'H'}`
+        + ` yuk ${l.x.toFixed(2)},${l.y.toFixed(2)}`
+        + ` aci ${((r.scene.load.getAngle() * 180) / Math.PI).toFixed(0)}°`
+        + ` hiz ${r.scene.load.getLinearVelocity().y.toFixed(2)}`
+        + ` bagli ${b.hasLoad ? 'E' : 'H'}`
         + ` R ${b.radiusM.toFixed(2)} LMI %${Math.min(999, r.scene.olcum.percent).toFixed(0)}`);
     };
 
@@ -246,7 +263,7 @@ function main(): void {
     // donerken duvara surunur.
     iz('alma-basi');
     r.runUntil(12, (rig) => rig.scene.bom.halatBoyuM < 0.7,
-      () => ({ crane: { luff: 0, telescope: 0, winch: 1 } }));
+      () => ({ crane: { uzat: 0, luff: 0, telescope: 0, winch: 1 } }));
     // Ucu yukun ustune getir, halat kisa kalsin.
     r.runUntil(60, (rig) => rig.ucHatasi(yukX, almaUcY) < 0.15,
       (rig) => ({ crane: { ...rig.ucaSur(yukX, almaUcY), winch: rig.halata(0.6) } }));
@@ -263,7 +280,7 @@ function main(): void {
     const yukUstu = (): number => r.scene.load.getPosition().y + task.halfHeight;
     r.runUntil(30, (rig) => rig.scene.bom.grabPoint.y <= yukUstu() + 0.10
         && rig.scene.bom.canAttach(rig.scene.grabbables),
-      (rig) => ({ crane: { luff: 0, telescope: 0,
+      (rig) => ({ crane: { uzat: 0, luff: 0, telescope: 0,
         winch: rig.halata(rig.scene.bom.tipWorld.y - yukUstu() - DIRSEKLI.hookThroatM) } }));
     r.run(1.5, () => ({}));
     iz('kanca-indi');
@@ -287,7 +304,10 @@ function main(): void {
     // + pay. Ucu once AYNI yaricapla yukselt, sonra disari goturuyoruz —
     // yatay once gidilirse yuk duvara carpiyor.
     const tasimaHalat = 1.0;
+    // Duvar gecisi ve TERAS gecisi ayri iki kot: hedef yukselince asilacak
+    // engel duvar degil, terasin korkulugu oluyor.
     const gecisY = AVLU.duvarY + task.halfHeight * 2 + tasimaHalat + 0.8;
+    const terasY = hedef.y + AVLU.korkulukY + task.halfHeight * 2 + tasimaHalat + 0.6;
 
     // **Once DUVARIN USTUNE, sonra avluya.** Iki ayri tuzak var ve ikisi de
     // olculdu:
@@ -313,10 +333,30 @@ function main(): void {
       (rig) => ({ crane: { ...rig.ucaSurSonumlu(duvarX, gecisY),
         winch: rig.halata(tasimaHalat) } }));
     iz('duvarin-ustunde');
-    r.runUntil(60, (rig) => Math.abs(rig.scene.bom.tipWorld.x - hedef.x) < 0.20
-        && rig.ucHatasi(hedef.x, gecisY) < 0.6,
-      (rig) => ({ crane: { ...rig.ucaSurSonumlu(hedef.x, gecisY),
+    // **Once TIRMAN, sonra iceri gir.** Duvari astiktan sonra dogrudan hedefe
+    // surmek olmuyor: yuk ucun gerisinden geliyor ve daha yukselmeden binanin
+    // yuzune variyor. Olcumde S3'te yuk ust katin cephesine (x 5.0) bastirdi,
+    // halat gerilimi 8.05 tona cikti (LMI %612) ve rig 139 saniye kirmizida
+    // kaldi. Tirmanma yaricapi binanin ONUNDE, avlu zemininin ustunde.
+    const tirmanX = AVLU.evSagKenar + 0.7;
+    const asmaKotu = hedef.y + AVLU.korkulukY + task.halfHeight + 0.25;
+    r.runUntil(60, (rig) => rig.scene.load.getPosition().y > asmaKotu,
+      (rig) => ({ crane: { ...rig.ucaSurSonumlu(tirmanX, Math.max(gecisY, terasY)),
         winch: rig.halata(tasimaHalat) } }));
+    iz('tirmandi');
+
+    // **Cikis sarti UCUN degil YUKUN konumu.**
+    //
+    // Once ucun x'ine bakiyordu ve yuk halatin ucunda geriden geliyor: uc
+    // hedefe varinca yuk hala 1.15 metre saginda kaliyor, sonra halat
+    // salindiginda yuk terasin KORKULUGUNUN ustune oturuyordu (olcumde
+    // yuk 6.60,3.71 — korkuluk tepesi 3.65). Gercek sart iki parcali:
+    // yuk hedefin ustunde OLACAK ve korkulugu asmis olacak.
+    r.runUntil(90, (rig) => {
+      const l = rig.scene.load.getPosition();
+      return Math.abs(l.x - hedef.x) < 0.22 && l.y > asmaKotu;
+    }, (rig) => ({ crane: { ...rig.ucaSurSonumlu(hedef.x, Math.max(gecisY, terasY)),
+      winch: rig.halata(tasimaHalat) } }));
     r.dur();
     say(`${task.kod} GEC  duvar payi ${r.duvarPayi < -90 ? '—'
       : r.duvarPayi.toFixed(2) + ' m'}  (duvar ${AVLU.duvarY} m)`);
@@ -324,7 +364,7 @@ function main(): void {
 
     // --- KOYMA ---
     r.etiket = `${task.kod}-koyma`;
-    const koymaUcY = hedef.y + task.halfHeight * 2 + 1.2;
+    const koymaUcY = hedef.y + task.halfHeight * 2 + AVLU.korkulukY + 0.6;
     r.runUntil(40, (rig) => rig.ucHatasi(hedef.x, koymaUcY) < 0.20,
       (rig) => ({ crane: { ...rig.ucaSurSonumlu(hedef.x, koymaUcY), winch: rig.halata(tasimaHalat) } }));
     r.dur();
@@ -337,7 +377,7 @@ function main(): void {
       const l = rig.scene.load.getPosition();
       return Math.abs(l.y - (hedef.y + task.halfHeight)) < 0.12
         && Math.abs(rig.scene.load.getLinearVelocity().y) < 0.05;
-    }, (rig) => ({ crane: { luff: 0, telescope: 0,
+    }, (rig) => ({ crane: { uzat: 0, luff: 0, telescope: 0,
       winch: rig.halata(rig.scene.bom.tipWorld.y
         - (hedef.y + task.halfHeight + pimOfset + DIRSEKLI.hookThroatM) + 0.04) } }));
     r.run(1.0, () => ({}));

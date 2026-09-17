@@ -36,7 +36,8 @@ function yaz(etiket: string): void {
   const uc = bom.tipWorld;
   // Geometri modülü tabla merkezine göre söylüyor; dünyaya çevirip
   // kinematik gövdenin gerçek ucuyla karşılaştırıyoruz.
-  const bek = ucNoktasi({ anaDeg: bom.anaAciDeg, kirmaDeg: bom.kirmaAciDeg });
+  const bek = ucNoktasi({ anaDeg: bom.anaAciDeg, kirmaDeg: bom.kirmaAciDeg,
+    uzamaM: bom.uzamaBoyuM });
   // Sasi egimini hesaba kat: geometri tabla merkezine gore soyluyor, dunyaya
   // cevirirken aracin acisiyla dondurmek gerekiyor.
   const aci = truck.chassis.getAngle();
@@ -54,7 +55,8 @@ function yaz(etiket: string): void {
   // ayni mi? Bir kez ayrilmislardi (pivotOffset iki kez eklenmis, 35 cm) ve
   // uc dogru yerde oldugu icin SAPMA sutunu bunu goremiyordu. Kapasite
   // tablosu R'den okundugu icin sessiz bir yalan oluyordu.
-  const bekR = calismaYaricapi({ anaDeg: bom.anaAciDeg, kirmaDeg: bom.kirmaAciDeg });
+  const bekR = calismaYaricapi({ anaDeg: bom.anaAciDeg, kirmaDeg: bom.kirmaAciDeg,
+    uzamaM: bom.uzamaBoyuM });
   const rFark = Math.abs(bom.radiusM - bekR);
   console.log(
     `${etiket.padEnd(30)} ana ${bom.anaAciDeg.toFixed(0).padStart(3)}°`

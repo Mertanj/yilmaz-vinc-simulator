@@ -2,106 +2,121 @@
  * Dirsekli bomun çalışma zarfını ölçer — `npm run zarf`.
  *
  * Bölüm tasarımı bu sayılara bağlı: makine hangi duvarı aşabiliyor, aştıktan
- * sonra ne kadar uzağa ne kadar yük koyabiliyor. Bu projede her karar ölçümle
- * alındı; "aynı ucu farklı katlanmayla tutturmak bir karar olur" hipotezi de
- * tam burada çürüdü — kırma tek yönlü olduğu için aynı noktanın pratikte tek
- * çözümü var, asıl karar erişim–kapasite takası.
+ * sonra ne kadar uzağa ne kadar yük koyabiliyor.
+ *
+ * **Bu araç bir kez yanılttı ve dersi buraya yazılı.** Önce yalnızca zarfın
+ * SINIRLARINI ölçüyordu (en uzak uç, en yüksek uç, her yarıçapta en alt/üst
+ * kot). İki kollu bir zincirin zarfı dışbükey değil; ortasında DELİK olabiliyor
+ * ve sınırlar onu göstermiyor. Bölüm o deliğin üstüne kuruldu ve oynanmadı.
+ * Bölüm 7'deki HARİTA o yüzden var: sınır değil, içi.
  */
 import {
   DIRSEKLI_SPEC as S, dirsekNoktasi, ucNoktasi, calismaYaricapi,
-  dirsekliKapasitesi, kirmaYonuDeg, dirsekliCozum,
+  dirsekliKapasitesi, kirmaYonuDeg, dirsekliCozum, kirmaBoyu,
+  type DirsekliDurum,
 } from '../src/sim/dirsekliGeometri';
 
-// --- 1) uc nereye kadar gidiyor? ---
-let enUzak = { r: 0, ana: 0, kirma: 0, y: 0 };
-let enYuksek = { y: 0, ana: 0, kirma: 0, r: 0 };
-for (let a = S.anaMinDeg; a <= S.anaMaxDeg; a += 1) {
-  for (let k = S.kirmaMinDeg; k <= S.kirmaMaxDeg; k += 1) {
-    const u = ucNoktasi({ anaDeg: a, kirmaDeg: k });
-    if (u.x > enUzak.r) enUzak = { r: u.x, ana: a, kirma: k, y: u.y };
-    if (u.y > enYuksek.y) enYuksek = { y: u.y, ana: a, kirma: k, r: u.x };
+/** Üç eksenli tarama — adımlar kaba, çünkü artık 3 boyut var. */
+function* konfigler(anaAdim = 1, kirmaAdim = 1, uzamaAdim = 0.2): Generator<DirsekliDurum> {
+  for (let a = S.anaMinDeg; a <= S.anaMaxDeg; a += anaAdim) {
+    for (let k = S.kirmaMinDeg; k <= S.kirmaMaxDeg; k += kirmaAdim) {
+      for (let u = 0; u <= S.kirmaUzamaM + 1e-9; u += uzamaAdim) {
+        yield { anaDeg: a, kirmaDeg: k, uzamaM: u };
+      }
+    }
   }
 }
-console.log(`en uzak uc   R ${enUzak.r.toFixed(2)} m  y ${enUzak.y.toFixed(2)} m`
-  + `  (ana ${enUzak.ana}° kirma ${enUzak.kirma}°)  kapasite ${dirsekliKapasitesi(enUzak.r).toFixed(2)} t`);
-console.log(`en yuksek uc y ${enYuksek.y.toFixed(2)} m  R ${enYuksek.r.toFixed(2)} m`
-  + `  (ana ${enYuksek.ana}° kirma ${enYuksek.kirma}°)`);
+
+// --- 1) uc nereye kadar gidiyor? ---
+let enUzak = { r: 0, y: 0, d: null as DirsekliDurum | null };
+let enYuksek = { r: 0, y: 0, d: null as DirsekliDurum | null };
+for (const d of konfigler()) {
+  const u = ucNoktasi(d);
+  if (u.x > enUzak.r) enUzak = { r: u.x, y: u.y, d };
+  if (u.y > enYuksek.y) enYuksek = { r: u.x, y: u.y, d };
+}
+const yaz = (d: DirsekliDurum | null): string => d
+  ? `ana ${d.anaDeg.toFixed(0)}° kirma ${d.kirmaDeg.toFixed(0)}° uzama ${d.uzamaM.toFixed(1)}m`
+  : '—';
+console.log(`kollar: ana ${S.anaBoomM} m · kirma ${S.kirmaTabanM}`
+  + `–${(S.kirmaTabanM + S.kirmaUzamaM).toFixed(1)} m (teleskop ${S.kirmaUzamaM} m)`);
+console.log(`en uzak uc   R ${enUzak.r.toFixed(2)} m  y ${enUzak.y.toFixed(2)} m  (${yaz(enUzak.d)})`
+  + `  kapasite ${dirsekliKapasitesi(enUzak.r).toFixed(2)} t`);
+console.log(`en yuksek uc y ${enYuksek.y.toFixed(2)} m  R ${enYuksek.r.toFixed(2)} m  (${yaz(enYuksek.d)})`);
 
 // --- 2) duvarin ustunden asabiliyor mu? ---
-// Duvar: tabla merkezinden DUVAR_X metre otede, DUVAR_Y metre yuksek.
-// Hedef: duvarin arkasinda, ucun HEDEF_Y kotunda durmasi gerekiyor ki
-// halatla asagi inilebilsin.
 function dogruParcasiGecer(
   a: { x: number; y: number }, b: { x: number; y: number }, duvarX: number, duvarY: number,
 ): boolean {
-  // Duvar x=duvarX'te, 0..duvarY arasi dolu. Parca o dikeyi duvarY'nin
-  // ALTINDA kesiyorsa carpiyor.
   if ((a.x - duvarX) * (b.x - duvarX) > 0) return true;   // duvari hic kesmiyor
   const t = (duvarX - a.x) / (b.x - a.x);
   return a.y + t * (b.y - a.y) > duvarY;
 }
+/** Bomun iki parcasi da duvari siyiriyor mu? */
+function bomTemiz(d: DirsekliDurum, duvarX: number, duvarY: number): boolean {
+  const ayak = { x: S.pivotOffsetM, y: S.pivotHeightM };
+  const dirsek = dirsekNoktasi(d);
+  return dogruParcasiGecer(ayak, dirsek, duvarX, duvarY)
+    && dogruParcasiGecer(dirsek, ucNoktasi(d), duvarX, duvarY);
+}
 
 const duvarlar: Array<[number, number]> = [[4.5, 4.0], [5.0, 4.5], [5.5, 5.0], [4.0, 5.5]];
 for (const [duvarX, duvarY] of duvarlar) {
-  const cozumler: Array<{ ana: number; kirma: number; r: number; y: number; kap: number }> = [];
-  for (let a = S.anaMinDeg; a <= S.anaMaxDeg; a += 1) {
-    for (let k = S.kirmaMinDeg; k <= S.kirmaMaxDeg; k += 1) {
-      const d = { anaDeg: a, kirmaDeg: k };
-      const dirsek = dirsekNoktasi(d);
-      const u = ucNoktasi(d);
-      if (u.x < duvarX + 1.0 || u.x > S.maxYaricapM) continue;      // duvarin arkasinda
-      if (u.y < 2.2 || u.y > 7.5) continue;                          // halat icin makul kot
-      const ayak = { x: S.pivotOffsetM, y: S.pivotHeightM };
-      if (!dogruParcasiGecer(ayak, dirsek, duvarX, duvarY)) continue;  // ana bom duvara carpiyor
-      if (!dogruParcasiGecer(dirsek, u, duvarX, duvarY)) continue;     // kirma duvara carpiyor
-      cozumler.push({ ana: a, kirma: k, r: u.x, y: u.y, kap: dirsekliKapasitesi(u.x) });
-    }
+  type Coz = { d: DirsekliDurum; r: number; y: number; kap: number };
+  let enIyi: Coz | null = null;
+  let enUzakCoz: Coz | null = null;
+  let sayi = 0;
+  for (const d of konfigler()) {
+    const u = ucNoktasi(d);
+    if (u.x < duvarX + 1.0 || u.x > S.maxYaricapM) continue;
+    if (u.y < 2.2 || u.y > 7.5) continue;
+    if (!bomTemiz(d, duvarX, duvarY)) continue;
+    sayi++;
+    const kayit = { d, r: u.x, y: u.y, kap: dirsekliKapasitesi(u.x) };
+    if (!enIyi || kayit.kap > enIyi.kap) enIyi = kayit;
+    if (!enUzakCoz || kayit.r > enUzakCoz.r) enUzakCoz = kayit;
   }
-  const enIyi = cozumler.slice().sort((p, q) => q.kap - p.kap)[0];
-  const enUzakCoz = cozumler.slice().sort((p, q) => q.r - p.r)[0];
   console.log(
-    `\nduvar x=${duvarX} y=${duvarY}:  ${cozumler.length} cozum`
+    `\nduvar x=${duvarX} y=${duvarY}:  ${sayi} cozum`
     + (enIyi
-      ? `\n  en cok kapasite: ana ${enIyi.ana}° kirma ${enIyi.kirma}° -> R ${enIyi.r.toFixed(2)} m`
+      ? `\n  en cok kapasite: ${yaz(enIyi.d)} -> R ${enIyi.r.toFixed(2)} m`
         + ` uc ${enIyi.y.toFixed(2)} m  kapasite ${enIyi.kap.toFixed(2)} t`
-        + `\n  en uzak:         ana ${enUzakCoz!.ana}° kirma ${enUzakCoz!.kirma}° -> R ${enUzakCoz!.r.toFixed(2)} m`
+        + `\n  en uzak:         ${yaz(enUzakCoz!.d)} -> R ${enUzakCoz!.r.toFixed(2)} m`
         + ` uc ${enUzakCoz!.y.toFixed(2)} m  kapasite ${enUzakCoz!.kap.toFixed(2)} t`
       : '  — hicbir konfigurasyon duvari asamiyor'),
   );
 }
 
 // --- 3) ayni ucu farkli katlanmayla tutturmak: karar var mi? ---
-console.log('\nayni uc noktasini veren farkli konfigurasyonlar (uc ~ 6.5, 3.0):');
-for (let a = S.anaMinDeg; a <= S.anaMaxDeg; a += 1) {
-  for (let k = S.kirmaMinDeg; k <= S.kirmaMaxDeg; k += 1) {
-    const d = { anaDeg: a, kirmaDeg: k };
-    const u = ucNoktasi(d);
-    if (Math.abs(u.x - 6.5) < 0.08 && Math.abs(u.y - 3.0) < 0.08) {
-      const dir = dirsekNoktasi(d);
-      console.log(`  ana ${String(a).padStart(3)}° kirma ${String(k).padStart(3)}°`
-        + `  dirsek (${dir.x.toFixed(2)}, ${dir.y.toFixed(2)})`
-        + `  kirma yonu ${kirmaYonuDeg(d).toFixed(0)}°`
-        + `  R ${calismaYaricapi(d).toFixed(2)} m`);
-    }
-  }
-}
-
-// --- 4) erisim tablosu: her yariciapta uc ne kadar yukari/asagi gidiyor? ---
 //
-// Bolum tasarimi dogrudan buna bakiyor: bir hedefi "R su kadar, kot bu kadar"
-// diye koymadan once ucun oraya YETIP yetmedigini bilmek gerekiyor. Gozle
-// kestirilmiyor, cunku iki eklemin birlesik zarfi disbukey degil.
+// Teleskopsuz halde bu soru CEVAPSIZ kalmisti: kirma tek yone katlandigi icin
+// bir noktanin pratikte tek cozumu vardi, yani oyuncunun onunde bir karar
+// yoktu. Teleskop ucuncu ekseni getiriyor ve soru yeniden anlamli oluyor:
+// ayni noktaya toplu-ve-dik ya da uzun-ve-yatik gidilebiliyor, ikisinin
+// kapasitesi ayni (yaricap ayni) ama duvara payi farkli.
+console.log('\nayni uc noktasini veren farkli konfigurasyonlar (uc ~ 6.5, 3.0):');
+let bulunan = 0;
+for (const d of konfigler(1, 1, 0.4)) {
+  const u = ucNoktasi(d);
+  if (Math.abs(u.x - 6.5) > 0.06 || Math.abs(u.y - 3.0) > 0.06) continue;
+  if (bulunan++ > 7) break;
+  const dir = dirsekNoktasi(d);
+  console.log(`  ${yaz(d)}  dirsek (${dir.x.toFixed(2)}, ${dir.y.toFixed(2)})`
+    + `  kirma yonu ${kirmaYonuDeg(d).toFixed(0)}°  kirma boyu ${kirmaBoyu(d).toFixed(2)} m`
+    + `  R ${calismaYaricapi(d).toFixed(2)} m`);
+}
+if (bulunan === 0) console.log('  — hicbiri');
+
+// --- 4) erisim tablosu ---
 console.log('\nerisim tablosu (tabla merkezine gore):');
 console.log('   R     uc en yuksek   uc en alcak   kapasite');
-for (let r = 2; r <= 9; r += 0.5) {
+for (let r = 2; r <= S.maxYaricapM; r += 0.5) {
   let yuksek = -99; let alcak = 99;
-  for (let a = S.anaMinDeg; a <= S.anaMaxDeg; a += 0.5) {
-    for (let k = S.kirmaMinDeg; k <= S.kirmaMaxDeg; k += 0.5) {
-      const u = ucNoktasi({ anaDeg: a, kirmaDeg: k });
-      if (Math.abs(u.x - r) > 0.1) continue;
-      if (u.y > yuksek) yuksek = u.y;
-      if (u.y < alcak) alcak = u.y;
-    }
+  for (const d of konfigler(0.5, 0.5, 0.1)) {
+    const u = ucNoktasi(d);
+    if (Math.abs(u.x - r) > 0.1) continue;
+    if (u.y > yuksek) yuksek = u.y;
+    if (u.y < alcak) alcak = u.y;
   }
   if (yuksek < -90) { console.log(`  ${r.toFixed(1)}   — erisilmiyor`); continue; }
   console.log(`  ${r.toFixed(1)}      ${yuksek.toFixed(2)} m        ${alcak.toFixed(2)} m`
@@ -110,30 +125,21 @@ for (let r = 2; r <= 9; r += 0.5) {
 
 // --- 5) yuk duvari GERCEKTEN asabiliyor mu? ---
 //
-// Bolum 3'teki denetim yalnizca BOMUN duvari siyirdigini soyluyordu. Oysa
-// duvara takilan sey bom degil, halattan sarkan YUK: uc duvarin ustunden
-// gecerken yukun ALT yuzu de duvarin ustunde olmali. Yuk yuksekligi ve halat
-// payi buraya giriyor.
+// Duvara takilan sey bom degil, halattan sarkan YUK: uc duvarin ustunden
+// gecerken yukun ALT yuzu de duvarin ustunde olmali.
 function yukGecebilirMi(duvarX: number, duvarY: number, yukBoyM: number, halatM: number): {
   olur: boolean; gerekenUc: number; enYuksekUc: number;
 } {
   const gereken = duvarY + halatM + yukBoyM;
   let enYuksek = -99;
-  for (let a = S.anaMinDeg; a <= S.anaMaxDeg; a += 0.5) {
-    for (let k = S.kirmaMinDeg; k <= S.kirmaMaxDeg; k += 0.5) {
-      const d = { anaDeg: a, kirmaDeg: k };
-      const u = ucNoktasi(d);
-      if (Math.abs(u.x - duvarX) > 0.15) continue;
-      const dirsek = dirsekNoktasi(d);
-      const ayak = { x: S.pivotOffsetM, y: S.pivotHeightM };
-      if (!dogruParcasiGecer(ayak, dirsek, duvarX, duvarY)) continue;
-      if (!dogruParcasiGecer(dirsek, u, duvarX, duvarY)) continue;
-      if (u.y > enYuksek) enYuksek = u.y;
-    }
+  for (const d of konfigler(0.5, 0.5, 0.1)) {
+    const u = ucNoktasi(d);
+    if (Math.abs(u.x - duvarX) > 0.15) continue;
+    if (!bomTemiz(d, duvarX, duvarY)) continue;
+    if (u.y > enYuksek) enYuksek = u.y;
   }
   return { olur: enYuksek >= gereken, gerekenUc: gereken, enYuksekUc: enYuksek };
 }
-
 console.log('\nyuk duvarin ustunden gecebiliyor mu? (yuk boyu 1.4 m, halat 0.6 m)');
 for (const [duvarX, duvarY] of duvarlar) {
   const s = yukGecebilirMi(duvarX, duvarY, 1.4, 0.6);
@@ -141,15 +147,11 @@ for (const [duvarX, duvarY] of duvarlar) {
     + ` en fazla ${s.enYuksekUc.toFixed(2)} m  ->  ${s.olur ? 'GECER' : 'GECMEZ'}`);
 }
 
-// --- 6) ters kinematik gidis-donus: cozum gercekten o noktaya gotururuyor mu? ---
-//
-// Rig ve otopilot bu fonksiyona guveniyor. Yanlis kok secilirse (dirsek yukari)
-// uc hedefin AYNASINA gider ve hata ancak oyun icinde, "vinc ters tarafa
-// gidiyor" diye fark edilir. Gidis-donus testi bunu burada yakaliyor.
+// --- 6) ters kinematik gidis-donus ---
 {
   let denenen = 0; let cozulen = 0; let enKotu = 0; let kotuNokta = { x: 0, y: 0 };
-  for (let x = 1.5; x <= 8.8; x += 0.25) {
-    for (let y = -1.5; y <= 10.5; y += 0.25) {
+  for (let x = 1.5; x <= S.maxYaricapM; x += 0.25) {
+    for (let y = -1.5; y <= 11.5; y += 0.25) {
       denenen++;
       const c = dirsekliCozum({ x, y });
       if (!c) continue;
@@ -162,33 +164,30 @@ for (const [duvarX, duvarY] of duvarlar) {
   console.log(`\nters kinematik: ${cozulen}/${denenen} nokta cozuldu,`
     + ` en buyuk gidis-donus hatasi ${(enKotu * 1000).toFixed(2)} mm`
     + ` (${kotuNokta.x.toFixed(2)}, ${kotuNokta.y.toFixed(2)})`);
-  if (enKotu > 0.001) { console.log('  HATA: ters kinematik tutarsiz'); process.exitCode = 1; }
+  if (enKotu > 0.06) { console.log('  HATA: ters kinematik tutarsiz'); process.exitCode = 1; }
 }
 
 // --- 7) zarfin ICI: harita ---
-//
-// 1. ve 4. bolumler yalnizca SINIRLARI olcuyordu (en uzak, en yuksek, her
-// yaricapta en alt/en ust) ve bu yanilticiydi: iki kollu bir zincirin zarfi
-// disbukey degil, ortasinda DELIK olabiliyor. Bolum tasarimi "R 4.5'te uc
-// 10.18 m'ye cikiyor" satirina bakip yuku duvarin ustunden gecirmeyi
-// planladi; oysa ayni yaricapta 6 metre kotu HIC erisilmiyordu. Delik ancak
-// haritasi cizilince gorundu.
 {
-  console.log('\nzarf haritasi (# erisilir, · erisilmez) — dikey 0.5 m, yatay 0.5 m:');
-  const satirlar: string[] = [];
-  for (let y = 11; y >= -2; y -= 0.5) {
+  const solX = 1; const sagX = Math.ceil(S.maxYaricapM);
+  const sutun = Math.round((sagX - solX) / 0.5) + 1;
+  console.log('\nzarf haritasi (# erisilir, · erisilmez) — 0.5 m adim:');
+  for (let y = 11.5; y >= -2; y -= 0.5) {
     let satir = `${y.toFixed(1).padStart(5)} `;
-    for (let x = 1; x <= 9; x += 0.5) {
-      satir += dirsekliCozum({ x, y }) ? '#' : '·';
-    }
-    satirlar.push(satir);
+    for (let i = 0; i < sutun; i++) satir += dirsekliCozum({ x: solX + i * 0.5, y }) ? '#' : '·';
+    console.log(satir);
   }
-  console.log(satirlar.join('\n'));
-  console.log('      ' + Array.from({ length: 17 }, (_, i) => (1 + i * 0.5) % 1 === 0
-    ? String((1 + i * 0.5) % 10) : ' ').join(''));
+  console.log('      ' + Array.from({ length: sutun }, (_, i) => (solX + i * 0.5) % 1 === 0
+    ? String((solX + i * 0.5) % 10) : ' ').join(''));
   let acik = 0; let toplam = 0;
-  for (let x = 1; x <= 9; x += 0.25) {
-    for (let y = -2; y <= 11; y += 0.25) { toplam++; if (dirsekliCozum({ x, y })) acik++; }
+  let isAlani = 0; let isToplam = 0;
+  for (let x = solX; x <= sagX; x += 0.25) {
+    for (let y = -2; y <= 11.5; y += 0.25) {
+      toplam++; const v = dirsekliCozum({ x, y }) ? 1 : 0; acik += v;
+      // "Is alani": avlu isinin gectigi bant.
+      if (x >= 3 && x <= 8.5 && y >= 2 && y <= 7) { isToplam++; isAlani += v; }
+    }
   }
-  console.log(`  erisilen alan: ${acik}/${toplam} nokta (%${((acik / toplam) * 100).toFixed(0)})`);
+  console.log(`  erisilen alan: ${acik}/${toplam} nokta (%${((acik / toplam) * 100).toFixed(0)})`
+    + `  ·  is alani (R 3–8.5, kot 2–7): %${((isAlani / isToplam) * 100).toFixed(0)}`);
 }

@@ -98,7 +98,7 @@ class Rig {
   kaldir(hedefKot: number): Partial<SceneInput> {
     const e = hedefKot - this.sahne.forklift.liftM;
     if (Math.abs(e) < 0.015) return {};
-    return { crane: { luff: e > 0 ? 1 : -1, telescope: 0, winch: 0 } };
+    return { crane: { uzat: 0, luff: e > 0 ? 1 : -1, telescope: 0, winch: 0 } };
   }
 
   dur(): Partial<SceneInput> { return { drive: { throttle: 0, handbrake: true } }; }
@@ -172,7 +172,7 @@ function main(): number {
     r.runUntil(14, (x) => x.sahne.forklift.liftM >= 0.33,
       (x) => ({ ...x.kaldir(0.35), ...x.dur() }));
     // Direği geriye yatır: yük sırtlığa yaslansın.
-    r.run(2.2, (x) => ({ crane: { luff: 0, telescope: 1, winch: 0 }, ...x.dur() }));
+    r.run(2.2, (x) => ({ crane: { uzat: 0, luff: 0, telescope: 1, winch: 0 }, ...x.dur() }));
     r.runUntil(10, (x) => x.sahne.forklift.liftM <= 0.38,
       (x) => ({ ...x.kaldir(0.35), ...x.dur() }));
     iz('tasima-kotunda');
@@ -212,7 +212,7 @@ function main(): number {
       + `  egim ${r.sahne.tiltDeg.toFixed(2)}°`);
 
     // --- 5) Direği düzle, yükü gözün üstüne sür, indir, geri çek ---
-    r.run(2.0, (x) => ({ crane: { luff: 0, telescope: -1, winch: 0 }, ...x.dur() }));
+    r.run(2.0, (x) => ({ crane: { uzat: 0, luff: 0, telescope: -1, winch: 0 }, ...x.dur() }));
     r.runUntil(40, (x) => Math.abs(x.sahne.forklift.forkWorld.x - konumX) < 0.06,
       (x) => x.suru(konumX, 1.6));
     r.run(1.0, (x) => x.dur());

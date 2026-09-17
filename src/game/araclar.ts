@@ -174,12 +174,16 @@ function dirsekliPadi(sahne: DirsekliSahne): DokunmatikDuzeni {
       yardimci,
     };
   }
+  // Sol sutun ALTI dugme: uc eksen, her biri bir cift. Vincte dort vardi;
+  // buradaki ucuncu eksen (teleskop) makinenin karakteri, gizlenemez.
   return {
     sol: [
       { komut: 'bomIndir', isaret: '▼', ad: d.bomIndir },
       { komut: 'bomKaldir', isaret: '▲', ad: d.bomKaldir },
       { komut: 'teleskopKis', isaret: '↙', ad: d.kirmaKatla },
       { komut: 'teleskopUzat', isaret: '↗', ad: d.kirmaAc },
+      { komut: 'uzamaKis', isaret: '⇤', ad: d.uzamaKis },
+      { komut: 'uzamaAc', isaret: '⇥', ad: d.uzamaAc },
     ],
     sag: [
       { komut: 'kancaAsagi', isaret: '↓', ad: d.kancaAsagi },

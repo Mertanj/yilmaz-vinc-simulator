@@ -2,7 +2,7 @@ import { Box, type Body, type Contact } from 'planck';
 import { createWorld, createGround, Snapshotter, SIM } from './world';
 import { Truck } from './truck';
 import { Outriggers } from './outriggers';
-import { Dirsekli, DIRSEKLI, DIRSEKLI_NEUTRAL } from './dirsekli';
+import { Dirsekli, DIRSEKLI, DIRSEKLI_NEUTRAL, type DirsekliInput } from './dirsekli';
 import { DIRSEKLI_SPEC as S } from './dirsekliGeometri';
 import type { Grabbable } from './kanca';
 import { AVLU, avluHedefleri, createAvlu } from './avlu';
@@ -27,12 +27,13 @@ import { M, kumandaAdi } from '../ui/dil';
  * makine onları kendi eklemine bağlıyor. Klavye ve dokunmatik böylece üçüncü
  * makineyi hiç bilmeden sürüyor.
  *
- *   luff      -> ana bom (kaldır / indir)
- *   telescope -> kırma   (aç / katla)
- *   winch     -> vinç    (sar / sal)
+ *   luff      -> ana bom  (kaldır / indir)
+ *   telescope -> kırma    (aç / katla)
+ *   uzat      -> teleskop (uzat / topla)
+ *   winch     -> vinç     (sar / sal)
  */
-const girdiyiCevir = (c: SceneInput['crane']): { ana: number; kirma: number; winch: number } =>
-  ({ ana: c.luff, kirma: c.telescope, winch: c.winch });
+const girdiyiCevir = (c: SceneInput['crane']): DirsekliInput =>
+  ({ ana: c.luff, kirma: c.telescope, uzat: c.uzat, winch: c.winch });
 
 /** Bunun üstündeki normal impuls (N·s) çarpma sayılıyor. */
 const CARPMA_ESIGI_NS = 4500;
@@ -91,10 +92,12 @@ export class DirsekliSahne implements OyunSahnesi {
   // --- bölüm ---
   readonly gorevler = DIRSEKLI_GOREVLER;
   /**
-   * Hız eşikleri — ölçülen turdan. Eklemler yavaş (ana 5°/s, kırma 7°/s) ve
-   * bölüm kısa; vinçin 90/240 eşiği burada her göreve tam bonus verirdi.
+   * Hız eşikleri — ölçülen turdan. Başsız tur görev başına 90–321 saniye
+   * sürüyor (yük 7.8 metre tırmanıyor ve üç eksen birden sürülüyor); ilk
+   * kalibrasyon 55/150 idi ve bölüm dikeyleşince her görev sıfır bonus
+   * alıyordu. Vinçteki oran korunuyor: rig tam bonus eşiğinin biraz üstünde.
    */
-  readonly hizEsikleri = { tam: 55, sifir: 150 };
+  readonly hizEsikleri = { tam: 100, sifir: 340 };
   private readonly hedefler = avluHedefleri();
   hedefNoktasi(t: Task): { x: number; y: number } | null {
     return this.hedefler[t.hedef] ?? null;
@@ -196,6 +199,7 @@ export class DirsekliSahne implements OyunSahnesi {
       { etiket: d.satir.yaricap, deger: `${this.bom.radiusM.toFixed(1)} m` },
       { detay: true, etiket: k.satir.anaBom, deger: `${this.bom.anaAciDeg.toFixed(0)}°` },
       { detay: true, etiket: k.satir.kirma, deger: `${this.bom.kirmaAciDeg.toFixed(0)}°` },
+      { detay: true, etiket: k.satir.uzama, deger: `${this.bom.uzamaBoyuM.toFixed(1)} m` },
       { detay: true, etiket: d.satir.halat, deger: `${this.bom.halatBoyuM.toFixed(1)} m`,
         ...(this.bom.ikiBlokta ? { vurgu: 'kotu' as const } : {}) },
       { detay: true, etiket: k.satir.ucKotu, deger: `${this.bom.tipWorld.y.toFixed(1)} m` },

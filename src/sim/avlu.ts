@@ -1,62 +1,79 @@
 import { Box, type Body, type World } from 'planck';
 
 /**
- * Bölüm 1 — "Dar Sokak": bahçe duvarı, avlu ve yarım kalmış ev.
+ * Bölüm 1 — "Dar Sokak": bahçe duvarı ve duvarın ardında yükselen kaba inşaat.
  *
- * **Bölümün varlık sebebi makinenin kendisi.** Teleskopsuz düz bir bomun ucu
- * her zaman ayaktan sabit uzaklıkta, yani bir ÇEMBER üstünde gezer. Kırma
- * bomun ucu ise bir ALANIN içini tarıyor: aynı yarıçapta ucu yukarı da aşağı
- * da götürebiliyor. Duvarın ardındaki avluya inmek tam olarak bunu istiyor.
+ * **Bölüm bir kez yeniden kuruldu ve sebebi geri bildirimdi:** ilk hâlinde
+ * hedefler 0 ile 2.6 metre arasındaydı, yani bütün iş 2.6 metrelik bir bantta
+ * geçiyordu. Sahadan gelen cümle şuydu: *"yerleştirme forklifte benzemiş ve
+ * çok kaliteli durmuyor."* Haklı çıkan teşhis: vinç bölümünü vinç bölümü yapan
+ * şey yükün YUKARI gitmesi. Orada yük beş katlı bir binanın teraslarına
+ * çıkıyor; burada yerde bir yerden yerde başka bir yere gidiyordu.
  *
- * **Yerleşim zarf HARİTASINDAN çıkarıldı, sınırlarından değil.** İlk yerleşim
- * "R 4.5'te uç 10.18 metreye çıkıyor" satırına bakılarak kurulmuştu ve
- * oynanamadı: aynı yarıçapta 6 metre kotu hiç erişilmiyordu, çünkü iki kollu
- * zincirin zarfı ortasında delikli. `npm run zarf` artık haritayı çiziyor ve
- * buradaki her kot o haritadan seçildi:
+ * Şimdi hedefler 0 · 2.8 · 5.6 · 8.4 metrede, yani yük 8.4 metre tırmanıyor.
+ * Bunu mümkün kılan şey teleskop: sabit kollu hâlinde makinenin R 4.5'te
+ * erişebildiği en yüksek kot 4.5 metreydi (zarf haritasındaki delik), şimdi
+ * 13.2 metre.
  *
- *   yükün duvarı aşması  → uç R 4.3–4.7'de 6.0–6.5 m'ye çıkmalı   ✓ harita
- *   zemin kat döşemesi   → uç R 5.5'te 4.0 m                      ✓ harita
- *   üst kat döşemesi     → uç R 6.8'de 6.4 m                      ✓ harita
- *   avlu zemini          → uç R 8.3'te 1.9 m                      ✓ harita
+ * **Teleskopik vinçten farkı ne, o zaman?** Orada bina 34 metre uzunluğunda ve
+ * vinç 22 metre yarıçapta çalışıyor; burada her şey 10 metrelik bir avluda ve
+ * arada 3 metrelik bir duvar var. Aynı işin dar alan hâli — ve bu makinenin
+ * sahadaki gerekçesi tam olarak o.
  *
- * Kamyonun ayak izi de ölçüldü (ön pabuç şasi+4.93, arka pabuç şasi-5.43,
- * tabla şasi-4.20); malzeme arka pabucun 1.9 m ötesinde duruyor.
+ * Yerleşim zarf HARİTASINDAN çıkarıldı, sınırlarından değil (bkz. `npm run
+ * zarf` bölüm 7). Kamyonun ayak izi de ölçüldü: ön pabuç şasi+4.93, arka pabuç
+ * şasi-5.43, tabla şasi-4.20.
  */
 export const AVLU = {
   /**
-   * Yarım kalmış ev — TEK KATLI, avlunun dibinde.
+   * Kaba inşaat — KADEMELİ, dört kat.
    *
-   * Önce kademeli iki kat denendi (üst kat geri çekik) ve oynanamadı: evin
-   * sağ ucu ile bahçe duvarı arasında 30 santimlik bir yarık kalıyor, kanca
-   * oraya düşüp sıkışıyordu — rig ikinci görevde yükü hiç alamadı. Evi
-   * genişletmek yarığı kapatıyor ama bu sefer bırakma cebi 1.2 metreye
-   * iniyor; üst katı uzağa koymak ise erişilemez hâle getiriyor (o kotta
-   * makinenin menzili R 7.5'te bitiyor, ev ise 8'in ötesinde).
+   * Kademe fabrika binasındaki kararın aynısı ve sebebi de aynı: düz cepheli
+   * bir blokta üst kat alttakinin üstünü kapatıyor ve alt terasa yük indirmek
+   * fiziksel olarak imkânsız hale geliyor. Her kat 1.1 m geri çekiliyor,
+   * altındakinin damı üsttekinin terası oluyor.
    *
-   * Beş metrelik bir avluya üç yapı sığmıyor. Tek katlı ev, açık avlu: iki
-   * hedef damın üstünde farklı derinliklerde, biri açık zeminde. Vinç
-   * bölümündeki teras deseninin aynısı, ve o desen ölçülerek oturmuştu.
+   * En üst dam korkuluksuz ve hedef: fabrika binasında çatı erişilemediği
+   * için hedef değildi, burada kat sayısı üçe indiği için erişiliyor.
    */
-  evSol: 1.9,
-  evSag: 4.2,
-  evDosemeY: 2.6,
+  evSagKenar: 6.6,
+  evSolKenar: 1.8,
+  katYuksekligi: 2.6,
+  katSayisi: 3,
+  /**
+   * Kademe (m) — TERAS CEBİNİN genişliği bundan çıkıyor ve ölçümle büyüdü.
+   *
+   * 1.1 idi ve oynanmadı: korkuluğun 14 santimi düşünce cep 96 santim
+   * kalıyor, en geniş yük ise 1.16 metre. Yük cebe girmiyor, 63 dereceye
+   * dönüp üst katın yüzü ile alt terasın korkuluğu arasına kama gibi
+   * sıkışıyordu (ölçümde hız 0.00, açı 63°, iki dakika boyunca öyle kaldı).
+   * 1.6'da cep 1.46 metre ve en geniş yük iki yanında 15 santim payla
+   * oturuyor.
+   *
+   * Kademeyi büyütmenin bedeli var ve o da ölçüldü: her kat geriye gidince
+   * yarıçap büyüyor. Bu yüzden kat sayısı 4'ten 3'e, kat yüksekliği 2.8'den
+   * 2.6'ya indi — en üst teras (7.8 m) R 9.03'te ve orada ucun çıkabildiği
+   * en yüksek kot 10.13 m, gereken 9.5. 4 kat / 1.6 kademe denendi ve en üst
+   * teras erişilemez çıktı.
+   */
+  kademe: 1.6,
+  /** Teras kenarındaki korkuluk — yükün önce aşıp sonra inmesini zorluyor. */
+  korkulukY: 0.85,
+
+  /** Bahçe duvarı: x aralığı ve yüksekliği. */
+  duvarSol: 8.0,
+  duvarSag: 8.4,
+  duvarY: 3.0,
 
   /**
-   * Bahçe duvarı: x aralığı ve yüksekliği.
+   * Malzemenin sokağa indirildiği nokta.
    *
-   * 3.2 m, 4.2 değil. Yükün duvarı aşması için ucun duvarın yarıçapında
-   * `duvar + yük + halat` kadar yükselmesi gerekiyor ve zarf haritası o kotu
-   * kısa yarıçapta vermiyor: 4.2'lik duvar için gereken 6.1 metrelik uç,
-   * R 4.5'te zarfın deliğine düşüyordu. 3.2'de gereken 5.1 metre ve harita
-   * onu R 3'ten itibaren veriyor — yani duvarı aşmak artık bir hüner, imkânsız
-   * değil. (Ölçülen pay: 28 cm.)
+   * Arka pabuç (şasi-5.43) ile duvarın sağ yüzü arasında 2 metre var; yük
+   * ortasına, 0.6 metrelik yarı genişlikle iki tarafa 30–47 santim payla
+   * oturuyor. Daha geniş bir yük bu cebe sığmaz — görev listesindeki yarı
+   * genişlik sınırı buradan geliyor.
    */
-  duvarSol: 6.9,
-  duvarSag: 7.3,
-  duvarY: 3.2,
-
-  /** Malzemenin sokağa indirildiği nokta. */
-  malzemeX: 8.3,
+  malzemeX: 9.4,
 
   /**
    * Park yeri: şasi merkezinin geleceği yer. **Fiziksel takoz YOK.**
@@ -64,71 +81,75 @@ export const AVLU = {
    * Takoz denendi ve ölçüm eledi. Arkaya konamıyor: açılmış arka pabuç
    * kuyruğun 63 cm ÖTESİNE bastığı için kuyruğu durduran her şey pabucun
    * ineceği yerde kalıyor. Pabucun altından geçecek kadar alçak bir takoz
-   * (0.25–0.45 m) ise aracı hiç durdurmuyor — tarama yapıldı, üçünde de arka
-   * teker takozu tırmanıp yoluna devam etti; ancak 0.55 m'de durdu, o da
-   * tekerle değil toplu pabuçla. Öne konamıyor, çünkü bu makine kuyruğunun
-   * üstünden çalışıyor ve öne yanaşmak çalışma alanını arkada bırakıyor.
+   * (0.25–0.45 m) ise aracı hiç durdurmuyor — tarandı, üçünde de arka teker
+   * tırmandı; ancak 0.55 m'de durdu, o da tekerle değil toplu pabuçla. Öne
+   * konamıyor, çünkü bu makine kuyruğunun üstünden çalışıyor.
    *
-   * Yerine sokağa boyalı bir park cebi çizildi. Oyuncu geri geri yanaşıp
-   * cebe oturuyor; erken durursa hedefler yaklaşır, geç durursa uzaklaşır ve
-   * ikisini de HUD'daki yarıçap satırı anında söylüyor. Fazla kaçarsa kuyruk
-   * bahçe duvarına çarpıyor — gerçek ve okunur bir ceza.
+   * Yerine sokağa boyalı bir park cebi çizildi; cebi geçerse ipucu söylüyor.
    */
-  parkX: 15.1,
-  /** Park cebinin yarı uzunluğu (m) — çizim ve "yerinde mi" denetimi için. */
+  parkX: 15.7,
   parkPayiM: 1.2,
 
-  /**
-   * Kamyonun doğduğu yer — sokağın ilerisi.
-   *
-   * **Geri geri yanaşıyor, çünkü başka türlü olmuyor.** Vinç bölümünde kamyon
-   * ileri gidip takoza yanaşıyor; orada çalışma alanı BURUNDA. Burada arkada,
-   * ve bir aracın işi yapacağı yerin ötesine geçip oraya ileri yanaşması
-   * mümkün değil — geçerken çalışma alanının üstünden geçmiş olur. Dar sokakta
-   * vinç kamyonunu geri geri yanaştırmak zaten sahadaki hâli.
-   */
+  /** Kamyonun doğduğu yer — sokağın ilerisi; geri geri yanaşıyor. */
   spawnX: 24,
 
-  /**
-   * Park edildiğinde tablanın geleceği yer — ÖLÇÜLEN değer.
-   *
-   * Şasi 15.11'de duruyor, tabla şasi-4.20'de, ama ayaklar açılırken araç
-   * 31 santim ileri kayıyor; tabla 11.16'ya oturuyor. Hedef yarıçapları
-   * buna göre, kağıt üstündeki 10.7'ye göre değil.
-   */
-  tablaX: 11.16,
+  /** Park edildiğinde tablanın geleceği yer. Hedef yarıçapları buna göre. */
+  tablaX: 11.49,
 } as const;
+
+/** Bir katın sağ (sokağa bakan) kenarı. */
+function katSagKenar(kat: number): number {
+  return AVLU.evSagKenar - AVLU.kademe * kat;
+}
 
 /**
  * Hedefler: yükün bırakılacağı noktalar.
  *
- * Üç yer, beş görev. Ölçülen tablaya (11.16) göre yarıçaplar 5.56 · 7.46 ·
- * 8.36 m, kapasiteler 1.62 · 1.21 · 1.08 t.
+ * Dört yer, beş görev. Kotlar 0 · 2.8 · 5.6 · 8.4 m ve yarıçaplar tabla
+ * 11.2'ye göre 4.5 · 5.7 · 6.8 · 8.3 m; kapasiteler 2.00 · 1.58 · 1.32 ·
+ * 1.08 t. Yük yukarı çıktıkça hem uzaklaşıyor hem hafiflemek zorunda —
+ * sahadaki kuralın ta kendisi.
  *
- * **En uzak hedef 2.4'ten 2.8'e alındı.** 2.4'te yarıçap 8.76 çıkıyor ve
- * makinenin menzili 8.95'te bitiyor — 19 santimlik payla çalışmak ters
- * kinematiği zarfın kenarına dayıyor, rig yükü 86 cm eksik bırakıyordu.
- *
- * İkisi aynı damda, farklı derinlikte: oyuncu tablonun YER değil YARIÇAP
- * meselesi olduğunu aynı düzlemin üstünde görüyor.
+ * Teras hedefleri kademenin ORTASINA konuyor: kademe 1.1 m ve korkuluk
+ * terasın ön kenarında, dolayısıyla yükün 0.6 metreden geniş olmaması
+ * gerekiyor.
  */
 export function avluHedefleri(): Array<{ x: number; y: number }> {
-  return [
-    { x: 5.6, y: 0 },                // 0 · avlu zemini, duvarın hemen ardı
-    { x: 3.7, y: AVLU.evDosemeY },   // 1 · damın ön ucu
-    { x: 2.8, y: AVLU.evDosemeY },   // 2 · damın dibi — en uzak
+  const out: Array<{ x: number; y: number }> = [
+    // 0 · avlu zemini, duvar ile binanın arası — ısınma turu
+    { x: 7.3, y: 0 },
   ];
+  // 1..n · her katın damı: bir üst katın önünde kalan şerit
+  for (let k = 1; k <= AVLU.katSayisi - 1; k++) {
+    out.push({ x: katSagKenar(k) + AVLU.kademe / 2, y: AVLU.katYuksekligi * k });
+  }
+  // Son: en üst dam, korkuluksuz.
+  out.push({
+    x: (AVLU.evSolKenar + katSagKenar(AVLU.katSayisi - 1)) / 2,
+    y: AVLU.katYuksekligi * AVLU.katSayisi,
+  });
+  return out;
 }
 
-/** Bahçe duvarı ve yarım kalmış ev — tek statik gövde. */
+/** Bahçe duvarı ve kaba inşaat — tek statik gövde. */
 export function createAvlu(world: World): Body {
   const body = world.createBody();
-  const kutu = (sol: number, sag: number, ust: number): void => {
+  const kutu = (sol: number, sag: number, alt: number, ust: number): void => {
     const hw = (sag - sol) / 2;
-    body.createFixture(new Box(hw, ust / 2, { x: sol + hw, y: ust / 2 }, 0),
-      { friction: 0.8 });
+    const hh = (ust - alt) / 2;
+    body.createFixture(new Box(hw, hh, { x: sol + hw, y: alt + hh }, 0), { friction: 0.8 });
   };
-  kutu(AVLU.evSol, AVLU.evSag, AVLU.evDosemeY);
-  kutu(AVLU.duvarSol, AVLU.duvarSag, AVLU.duvarY);
+
+  for (let k = 0; k < AVLU.katSayisi; k++) {
+    const sag = katSagKenar(k);
+    const ust = AVLU.katYuksekligi * (k + 1);
+    kutu(AVLU.evSolKenar, sag, 0, ust);
+    // Korkuluk: son katın damında yok (oraya yük konmuyor).
+    if (k < AVLU.katSayisi - 1) {
+      kutu(sag - 0.14, sag, ust, ust + AVLU.korkulukY);
+    }
+  }
+
+  kutu(AVLU.duvarSol, AVLU.duvarSag, 0, AVLU.duvarY);
   return body;
 }

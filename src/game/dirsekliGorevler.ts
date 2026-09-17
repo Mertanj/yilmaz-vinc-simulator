@@ -12,16 +12,18 @@ import type { Task } from './tasks';
  * **Ağırlıklar ölçülen kapasiteden geriye hesaplandı.** `npm run zarf` erişim
  * tablosu hedeflerin yarıçapını ve kapasitesini veriyor —
  *
- *   H0 (avlu zemini)     R 5.56 m   kapasite 1.62 t
- *   H1 (damın ön ucu)    R 7.46 m   kapasite 1.21 t
- *   H2 (damın dibi)      R 8.36 m   kapasite 1.08 t
+ *   H0 (avlu zemini)     kot 0.0 m   R 4.53 m   kapasite 1.99 t
+ *   H1 (1. kat terası)   kot 2.6 m   R 6.03 m   kapasite 1.49 t
+ *   H2 (2. kat terası)   kot 5.2 m   R 7.63 m   kapasite 1.18 t
+ *   H3 (en üst dam)      kot 7.8 m   R 9.23 m   kapasite 0.97 t
  *
- * — ve yükler hedeflenen LMI eğrisini (%63 → %76 → %85 → %90 → %97) verecek
+ * — ve yükler hedeflenen LMI eğrisini (%60 → %74 → %85 → %92 → %96) verecek
  * şekilde seçildi; kanca 0.12 t brüte dahil.
  *
- * **Yarı genişlikler 0.6 m'yi geçmiyor** ve bu da ölçüyle konmuş bir sınır:
- * avluda bırakma cepleri dar (alt döşemenin açık ucu 1.2 m, üst kat 1.4 m) ve
- * daha geniş bir yük salınımın en ufak artığında eve çarpıp sıkışıyordu.
+ * **Yarı genişlikler 0.6 m'yi geçmiyor** ve bu iki yerden birden geliyor:
+ * teras cebi 1.46 m (kademe 1.6, eksi korkuluğun 14 santimi), ve malzemenin
+ * sokaktaki cebi arka pabuçla duvar arasında 2 metre. 1.1'lik kademede cep
+ * 96 santimdi ve yük SIĞMIYORDU: 63 dereceye dönüp kama gibi sıkışıyordu.
  *
  * **Sıralama iki kontrollü deney içeriyor.** G1 ile G2 aynı yükü FARKLI
  * yarıçapa taşıyor, G1 ile G3 ise aynı yere FARKLI ağırlık koyuyor. Tablonun
@@ -31,30 +33,35 @@ import type { Task } from './tasks';
  *
  * Yükler bahçe inşaatından: briket, donatı, kum, kalıp, beton kovası.
  */
+/**
+ * Yük YUKARI ÇIKTIKÇA HAFİFLİYOR ve bu tesadüf değil: kapasite moment/yarıçap,
+ * yukarı çıkan teras aynı zamanda uzaklaşıyor. Fabrika bölümünde de aynı eğri
+ * vardı ve sahadaki kuralın ta kendisi.
+ */
 export const DIRSEKLI_GOREVLER: readonly Task[] = [
   {
-    kod: 'S1', ad: 'Briket paleti', tonnes: 0.90,
+    kod: 'S1', ad: 'Briket paleti', tonnes: 1.05,
     halfWidth: 0.55, halfHeight: 0.42, kind: 'briket', hedef: 0,
-    brif: 'Briket paleti — duvarı aş, avlu zeminine bırak',
+    brif: 'Briket paleti — duvarı aş, avlu zeminine bırak. Isınma turu.',
   },
   {
-    kod: 'S2', ad: 'Demir donatı', tonnes: 0.80,
-    halfWidth: 0.60, halfHeight: 0.22, kind: 'donati', hedef: 1,
-    brif: 'Daha hafif ama damın üstüne — yarıçap 1.9 metre uzadı, ibre yükseldi',
+    kod: 'S2', ad: 'Kum torbası', tonnes: 0.98,
+    halfWidth: 0.55, halfHeight: 0.50, kind: 'kum', hedef: 1,
+    brif: 'Aynı ağırlık, bu kez 1. kat terasına — korkuluğu aşıp arkasına inecek',
   },
   {
-    kod: 'S3', ad: 'Kum torbası', tonnes: 1.25,
-    halfWidth: 0.58, halfHeight: 0.50, kind: 'kum', hedef: 0,
-    brif: 'S1 ile aynı yere, 350 kilo daha ağır — sınırı yer değil ağırlık koyuyor',
+    kod: 'S3', ad: 'Demir donatı', tonnes: 0.88,
+    halfWidth: 0.55, halfHeight: 0.22, kind: 'donati', hedef: 2,
+    brif: '2. kat terası — 5.2 metre yukarı, teleskobu uzatmadan varamazsın',
   },
   {
-    kod: 'S4', ad: 'Kalıp paneli', tonnes: 0.85,
-    halfWidth: 0.60, halfHeight: 0.35, kind: 'kalip', hedef: 2,
-    brif: 'Kalıp panelleri — damın dibine, bomun sonu',
+    kod: 'S4', ad: 'Kalıp paneli', tonnes: 0.77,
+    halfWidth: 0.55, halfHeight: 0.35, kind: 'kalip', hedef: 3,
+    brif: 'En üst dam — 7.8 metre, bomun sonu. Korkuluk yok, pay da yok.',
   },
   {
-    kod: 'S5', ad: 'Beton kovası', tonnes: 1.05,
-    halfWidth: 0.50, halfHeight: 0.62, kind: 'kova', hedef: 1,
-    brif: 'Dolu beton kovası — ağır ve uzak, ibre %97',
+    kod: 'S5', ad: 'Beton kovası', tonnes: 1.01,
+    halfWidth: 0.50, halfHeight: 0.62, kind: 'kova', hedef: 2,
+    brif: 'Dolu beton kovası — 2. kata, en ağır yük. İbre %96.',
   },
 ];
