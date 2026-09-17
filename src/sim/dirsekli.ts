@@ -26,8 +26,30 @@ import {
  */
 export const DIRSEKLI = {
   ...S,
-  /** Bom ayağının şasi yerel çerçevesindeki yeri. Kabinin arkasında. */
-  pivot: new Vec2(-1.4, 1.05),
+  /**
+   * Bom ayağının şasi yerel çerçevesindeki yeri — kasanın EN ARKASI.
+   *
+   * Kabinin arkasına (yerel -1.4) konmuştu ve ölçüm bunu eledi. Orta montajda
+   * bomun ayağı ile ön tamponun arası 6.2 metre, makinenin menzili ise 8.95 —
+   * yani kendi burnunun ÖTESİNDE yalnızca 2.75 metre çalışma alanı kalıyor.
+   * Yükü oradan alıp oraya koymak imkânsız, üstelik yükün yolu kabinin
+   * üstünden geçiyor. Gerçek hayatta orta montajlı vinçler bu yüzden yana
+   * döner (slew) — bizde henüz yok.
+   *
+   * Arka montajda kolon arka tamponun 60 cm berisinde, dolayısıyla kuyruğun
+   * ötesinde 8.45 metre boş çalışma alanı var. Kamyon üstü kırma bomlu
+   * vinçlerin en yaygın hâli de bu, tam da bu sebeple.
+   */
+  pivot: new Vec2(-4.2, 1.05),
+  /**
+   * Bomun çalışma yönü: -1 kuyruğa doğru (-x), +1 buruna doğru.
+   *
+   * Geometri modülü her şeyi +x'te kuruyor ve öyle kalıyor — saf matematiği
+   * makinenin montaj yönüyle kirletmenin âlemi yok. Ayna burada, tek yerde:
+   * yerel (x, y) -> (yon·x, y), açı θ -> π - θ. Slew geldiğinde bu işaret
+   * zaten tablanın işi olacak.
+   */
+  yon: -1 as 1 | -1,
   /** Kolların kütlesi (t) — moment hesabına elle giriyor. */
   anaBomTon: 0.95,
   kirmaBomTon: 0.55,
@@ -35,8 +57,13 @@ export const DIRSEKLI = {
   /** Halat: kancanın bom ucuna dayanma eşiği (m). */
   minHalatM: 0.5,
   maxHalatM: 12.0,
-  /** Yol konumunda kanca bom ucuna toplanır. */
-  yolHalatM: 0.9,
+  /**
+   * Yol konumunda kanca bom ucuna toplanır (m).
+   *
+   * `minHalatM`'den kısa olması kasıtlı: nakliyede kanca ucun dibine
+   * çekilip bağlanır, çalışma sınırı orada geçerli değil.
+   */
+  yolHalatM: 0.35,
 
   hookThroatM: 0.34,
   attachCentreToleranceM: 0.42,
@@ -89,8 +116,8 @@ export class Dirsekli {
   private readonly kanca: Kanca;
 
   /** Eklem durumu (derece) — kinematik gövdelere her adımda yazılıyor. */
-  private anaDeg: number = S.anaMaxDeg;
-  private kirmaDeg: number = S.kirmaMaxDeg;
+  private anaDeg: number = S.yolAnaDeg;
+  private kirmaDeg: number = S.yolKirmaDeg;
   private halatM: number = DIRSEKLI.yolHalatM;
   private yolda = true;
 
@@ -119,8 +146,9 @@ export class Dirsekli {
 
     this.govdeleriYerlestir();
 
-    // Halat kırmanın UCUNDAN sarkıyor: yerel çerçevede kolun yarısı kadar
-    // ileride, çünkü gövdenin merkezi kolun ortasında.
+    // Halat kırmanın UCUNDAN sarkıyor. Gövdenin KENDİ yerel çerçevesinde uç
+    // her zaman +x tarafta (gövde açısı aynayı zaten taşıyor), o yüzden
+    // burada `yon` yok.
     this.kanca = new Kanca(
       world, snaps, KANCA_AYARI, this.kirmaBom,
       new Vec2(S.kirmaBoomM / 2, 0), this.halatM,
@@ -190,8 +218,8 @@ export class Dirsekli {
     this.kilitliDenendi = false;
     if (this.yolda) {
       // Yol konumu: bom katlı ve kanca toplu.
-      this.anaDeg += clamp(S.anaMaxDeg - this.anaDeg, -1, 1) * S.anaHizDegPerSec * dt * 3;
-      this.kirmaDeg += clamp(S.kirmaMaxDeg - this.kirmaDeg, -1, 1)
+      this.anaDeg += clamp(S.yolAnaDeg - this.anaDeg, -1, 1) * S.anaHizDegPerSec * dt * 3;
+      this.kirmaDeg += clamp(S.yolKirmaDeg - this.kirmaDeg, -1, 1)
         * S.kirmaHizDegPerSec * dt * 3;
       this.halatM += clamp(DIRSEKLI.yolHalatM - this.halatM, -1, 1) * 2 * dt;
       this.govdeleriYerlestir();
@@ -234,24 +262,34 @@ export class Dirsekli {
     const sasiAci = this.chassis.getAngle();
     const durum = { anaDeg: this.anaDeg, kirmaDeg: this.kirmaDeg };
 
-    // Yerel geometri tabla merkezine göre; şasi eğimini üstüne bindiriyoruz.
-    const ana = (this.anaDeg * Math.PI) / 180 + sasiAci;
-    const ayak = {
-      x: taban.x + S.pivotOffsetM * Math.cos(sasiAci),
-      y: taban.y + S.pivotOffsetM * Math.sin(sasiAci),
-    };
+    // Gövde merkezleri kolun ORTASINDA: ayak/dirsek noktasından kolun yarısı
+    // kadar kendi doğrultusunda ileride.
+    const ayak = this.yereldenDunyaya(
+      { x: S.pivotOffsetM, y: S.pivotHeightM }, taban, sasiAci,
+    );
+    const ana = this.dunyaAcisi(this.anaDeg, sasiAci);
     this.anaBom.setTransform({
       x: ayak.x + (S.anaBoomM / 2) * Math.cos(ana),
       y: ayak.y + (S.anaBoomM / 2) * Math.sin(ana),
     }, ana);
 
-    const d = dirsekNoktasi(durum);
-    const dirsekDunya = this.yereldenDunyaya(d, taban, sasiAci);
-    const kirmaAci = (kirmaYonuDeg(durum) * Math.PI) / 180 + sasiAci;
+    const dirsekDunya = this.yereldenDunyaya(dirsekNoktasi(durum), taban, sasiAci);
+    const kirmaAci = this.dunyaAcisi(kirmaYonuDeg(durum), sasiAci);
     this.kirmaBom.setTransform({
       x: dirsekDunya.x + (S.kirmaBoomM / 2) * Math.cos(kirmaAci),
       y: dirsekDunya.y + (S.kirmaBoomM / 2) * Math.sin(kirmaAci),
     }, kirmaAci);
+  }
+
+  /**
+   * Yerel (geometri) açısını dünya açısına çevirir.
+   *
+   * Ayna bir doğrultuyu düşey eksende yansıtıyor: θ -> π - θ. Şasi eğimi
+   * aynadan SONRA biniyor, çünkü araç dönünce bomun montajı da onunla dönüyor.
+   */
+  private dunyaAcisi(yerelDeg: number, sasiAci: number): number {
+    const a = (yerelDeg * Math.PI) / 180;
+    return sasiAci + (DIRSEKLI.yon > 0 ? a : Math.PI - a);
   }
 
   /** Tabla merkezine göre verilmiş noktayı dünyaya taşır. */
@@ -259,8 +297,8 @@ export class Dirsekli {
     p: { x: number; y: number }, taban: { x: number; y: number }, aci: number,
   ): { x: number; y: number } {
     // Geometri modülü y'yi ZEMİNDEN ölçüyor; tabla merkezi de zeminden
-    // `pivotHeightM` yukarıda, o yüzden farkı alıyoruz.
-    const dx = p.x;
+    // `pivotHeightM` yukarıda, o yüzden farkı alıyoruz. x ise aynadan geçiyor.
+    const dx = p.x * DIRSEKLI.yon;
     const dy = p.y - S.pivotHeightM;
     return {
       x: taban.x + dx * Math.cos(aci) - dy * Math.sin(aci),

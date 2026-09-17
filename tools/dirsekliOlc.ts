@@ -40,7 +40,10 @@ function yaz(etiket: string): void {
   // Sasi egimini hesaba kat: geometri tabla merkezine gore soyluyor, dunyaya
   // cevirirken aracin acisiyla dondurmek gerekiyor.
   const aci = truck.chassis.getAngle();
-  const dx = bek.x;
+  // Ayna makinenin degil, montajin ozelligi: burada da elle uyguluyoruz.
+  // Aracin kendi donusturucusunu cagirsaydik bu olcum sadece setTransform
+  // defter tutmasini dogrulardi, matematigi degil.
+  const dx = bek.x * DIRSEKLI.yon;
   const dy = bek.y - S.pivotHeightM;
   const bekDunya = {
     x: tabla.x + dx * Math.cos(aci) - dy * Math.sin(aci),

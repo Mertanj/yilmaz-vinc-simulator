@@ -22,8 +22,16 @@
 export const DIRSEKLI_SPEC = {
   /** Döner tabla merkezinden bomun ayağına yatay ofset (m). */
   pivotOffsetM: 0.35,
-  /** Bom ayağının yerden yüksekliği (m). Kabinin arkasında, kasanın üstünde. */
-  pivotHeightM: 2.35,
+  /**
+   * Bom ayağının yerden yüksekliği (m), AYAKLAR AÇIKKEN.
+   *
+   * Kolon kasanın en arkasında, arka ayakların tam üstünde — bu makine
+   * kuyruğunun üstünden çalışıyor (aşağıda `yon` notu). 2.35 yazıyordu ve
+   * ölçüm 2.65 gösterdi: ayaklar aracı 21 cm kaldırıyor. Fark duvar
+   * payını hesaplayan `npm run zarf` için önemli, çünkü o bu sayıyı
+   * doğrudan kullanıyor.
+   */
+  pivotHeightM: 2.6,
 
   /** Ana bom (birinci kol) boyu (m). */
   anaBoomM: 4.2,
@@ -36,11 +44,28 @@ export const DIRSEKLI_SPEC = {
   /**
    * Kırma açısı: ana bomun DOĞRULTUSUNDAN sapma, derece.
    *
-   * 0 = düz devam (tek uzun bom gibi). Büyüdükçe kırma aşağı katlanıyor;
-   * 165°'de neredeyse ana bomun üstüne kapanıyor — nakliye hâli.
+   * 0 = düz devam (tek uzun bom gibi). Büyüdükçe kırma aşağı katlanıyor.
+   *
+   * **178, 165 değil.** 165 ihtiyattan seçilmişti ve yol konumunu bozuyordu:
+   * katlanan uç kolonun 1.45 m ötesinde, yani kuyruğun 85 cm ARKASINDA
+   * kalıyordu. Gerçek kırma bomlu vinçte nakliye hâli tam da budur —
+   * kırma ana bomun üstüne YATAR. 178'de uç kolonun 46 cm berisine,
+   * kasanın üstüne geliyor.
    */
   kirmaMinDeg: 0,
-  kirmaMaxDeg: 165,
+  kirmaMaxDeg: 178,
+
+  /**
+   * Nakliye (yol) konumu — eklemlerin ucuna dayanmak DEĞİL, kendi duruşu.
+   *
+   * Sınırların ucunu (78 / 178) kullanmak denendi ve katlanan uç şasi
+   * kutusunun içine, kuyruğun 14 cm berisine düşüyordu. Ölçüyle seçildi:
+   * 170'te uç kolonun 1.07 m ötesinde, yani arka tamponun 47 cm ARKASINDA
+   * ve kasanın üstünde kalıyor. Gerçek makinede de nakliye hâli ayrı bir
+   * duruştur, "her kolu sonuna kadar it" değil.
+   */
+  yolAnaDeg: 78,
+  yolKirmaDeg: 170,
 
   /** Eklem hızları (derece/s). Kırma daha çevik: kısa ve hafif. */
   anaHizDegPerSec: 5.0,
