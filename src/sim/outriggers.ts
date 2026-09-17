@@ -181,10 +181,53 @@ export class Outriggers {
       snaps.track(foot);
       this.legs.push({ joint, foot, mountLocal, axisLocal: axis });
     }
+
+    // Tek dinleyici, bacaklar kurulduktan sonra: hangi pabuca ait olduğunu
+    // temasın gövdesinden buluyoruz.
+    world.on('post-solve', (contact, impulse: { normalImpulses: number[] }) => {
+      const a = contact.getFixtureA().getBody();
+      const b = contact.getFixtureB().getBody();
+      const i = this.legs.findIndex((l) => l.foot === a || l.foot === b);
+      if (i < 0) return;
+      for (const j of impulse.normalImpulses ?? []) this.ham[i] = (this.ham[i] ?? 0) + j;
+    });
+  }
+
+  /**
+   * Pabuçların zemine bastığı kuvvet (N) — vincin devrilme göstergesi.
+   *
+   * Yük tablosu "kaldırabilir misin"i söylüyor; bu ise "şu anda ne kadar payın
+   * kaldı"yı. Forkliftte aynı iş arka aksla yapılıyor ve orada ölçü solverın
+   * temasa verdiği normal impulstan okunuyor — burada da öyle, tahmin değil.
+   *
+   * Bom doğuya, yani kabinin üstüne baktığı için devrilme ÖN pabuç etrafında
+   * oluyor ve önce ARKA pabuç boşalıyor. Sıfıra inmesi tam olarak "arka pabuç
+   * yerden kesildi" demek.
+   */
+  get onPabucN(): number { return this.suzulmus[0] ?? 0; }
+  get arkaPabucN(): number { return this.suzulmus[1] ?? 0; }
+
+  /**
+   * Arka pabucun toplam pabuç yükündeki payı (0..1), ayaklar yerde değilse
+   * `null`.
+   *
+   * Paydası toplam pabuç yükü, statik bir referans DEĞİL: makinenin ağırlık
+   * merkezi bom açısıyla ve teleskopla sürekli gezdiği için "boştaki değer"
+   * diye sabit bir sayı yok. Toplamın payı ise her an anlamlı: "makinenin
+   * ağırlığının ne kadarı hâlâ arka pabuçta".
+   */
+  get arkaPabucPayi(): number | null {
+    const toplam = this.onPabucN + this.arkaPabucN;
+    // Eşik gürültü için: pabuçlar havadayken impuls sıfıra yakın seğiriyor.
+    if (toplam < 5000) return null;
+    return Math.max(0, Math.min(1, this.arkaPabucN / toplam));
   }
 
   /** 0 toplu · 1 yarı açık · 2 tam açık. */
   private stage = 0;
+  /** Pabuçların bu adımdaki zemin impulsu (N·s) ve süzülmüş hâli (N). */
+  private readonly ham = [0, 0];
+  private readonly suzulmus = [0, 0];
 
   /** Q her basışta bir kademe ilerletir, sonra başa döner. */
   toggle(): void { this.stage = (this.stage + 1) % OUTRIGGER.stageHeights.length; }
@@ -199,7 +242,16 @@ export class Outriggers {
    * bomun kendi ağırlığı burnu aşağı bastırıyor, arka ayak yerden kesiliyor ve
    * araç kalıcı olarak yatık kalıyordu.
    */
-  update(): void {
+  update(dt: number): void {
+    // Geçen adımın temasları ölçüldü; süz ve sıfırla. Ham değer adım adım
+    // zıplıyor, gösterge okunaksız olurdu — forkliftteki arka aksla aynı süzgeç.
+    for (let i = 0; i < this.ham.length; i++) {
+      const ham = (this.ham[i] ?? 0) / dt;
+      const onceki = this.suzulmus[i] ?? 0;
+      this.suzulmus[i] = onceki + (ham - onceki) * Math.min(1, dt / 0.15);
+      this.ham[i] = 0;
+    }
+
     if (this.stage === 0) {
       for (const leg of this.legs) leg.joint.setMotorSpeed(-OUTRIGGER.extendSpeed);
       return;

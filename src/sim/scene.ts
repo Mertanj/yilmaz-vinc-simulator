@@ -233,6 +233,9 @@ export class Scene implements OyunSahnesi {
         ? d.satir.sinirHalat : d.satir.sinirTablo}`,
         deger: this.tabloDisi ? d.satir.tabloDisi : `${r.capacityTonnes.toFixed(2)} t` },
       { etiket: d.satir.yaricap, deger: `${this.crane.radiusM.toFixed(1)} m` },
+      // Devrilmenin ÖLÇÜLEN yüzü — yük tablosunun söylediğinin yanındaki
+      // ikinci tanık. Forkliftte aynı işi arka aks yapıyor.
+      this.arkaPabucSatiri(d),
       // Gerisi detay: makineyi zaten bilen için.
       { detay: true, etiket: d.satir.bom,
         deger: `${this.crane.lengthM.toFixed(1)} m · ${this.crane.angleDeg.toFixed(0)}°` },
@@ -249,6 +252,35 @@ export class Scene implements OyunSahnesi {
       { detay: true, etiket: M.panel.hiz,
         deger: `${this.truck.speedKmh.toFixed(0)} ${M.panel.hizBirimi}` },
     ];
+  }
+
+  /**
+   * Arka pabuç payı satırı.
+   *
+   * **Ne ölçüyor:** arka pabucun, iki pabuca binen toplam yükteki payı.
+   * Solverın o temaslara verdiği normal impulstan okunuyor, tahmin değil —
+   * forkliftteki arka aksla aynı teknik. Düşmesi ağırlığın öne, yani bomun
+   * altına gitmesi demek; sıfır, arka pabucun yerden kesilmesi.
+   *
+   * **Ne ölçmüyor:** pabuçtaki gerçek kuvveti. Ayak silindirleri makinenin
+   * ağırlığının on katı güçte konum servosu (3000 kN/bacak) ve mafsal
+   * limitleri de yük taşıyor; ölçüldü, iki pabucun toplamı 506 kN çıkıyor,
+   * oysa dünyadaki tüm dinamik ağırlık 304 kN. Motor gücü düşürülünce toplam
+   * gerçeğe yaklaşıyor (373 kN) ama boştaki pay da %31'den %41'e kayıyor,
+   * yani mutlak değer servonun izini taşıyor. Bu yüzden satır bir yük hücresi
+   * gibi sunulmuyor: PAY gösteriyor, kilonewton değil.
+   *
+   * Eşikler bölümün kendi ölçümünden: başsız tur boyunca pay %60.4 ile %23.8
+   * arasında geziyor ve en dibi LMI %128'e denk geliyor.
+   */
+  private arkaPabucSatiri(d: typeof M.vinc): PanelSatiri {
+    const pay = this.outriggers.arkaPabucPayi;
+    if (pay === null) return { etiket: d.satir.arkaPabuc, deger: '—' };
+    return {
+      etiket: d.satir.arkaPabuc, deger: M.yuzde((pay * 100).toFixed(0)),
+      ...(pay < 0.25 ? { vurgu: 'kotu' as const }
+        : pay < 0.40 ? { vurgu: 'uyari' as const } : {}),
+    };
   }
 
   uyari(): Uyari | null {
@@ -373,7 +405,7 @@ export class Scene implements OyunSahnesi {
 
     // Ayaklar yerdeyken sürüş kilitli — gerçekte de öyle.
     this.truck.drive(craneMode ? { throttle: 0, handbrake: true } : input.drive);
-    this.outriggers.update();
+    this.outriggers.update(dt);
 
     this.crane.update(craneMode ? input.crane : NEUTRAL, dt, this.crane.lmi);
     // Kinematik bomu konumlandır ve yükü şasiye aktar — adımdan hemen önce.

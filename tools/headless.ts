@@ -32,6 +32,14 @@ class Rig {
 
   /** En yüksek LMI'nin nerede olduğunu da tutuyoruz — zirveyi bulmak için. */
   zirve = { lmi: 0, t: 0, etiket: '', R: 0, ton: 0, halat: 0 };
+  /**
+   * Arka pabucun toplam pabuç yükündeki EN DÜŞÜK payı ve o andaki LMI.
+   *
+   * Forklift riginde devrilme payı arka aksla ölçülüyor; vinçte karşılığı bu.
+   * Gösterge yapmadan önce sorulacak soru: bu sayı gerçek yük altında
+   * KIPIRDIYOR mu? Kıpırdamıyorsa okunacak bir şey yok demektir.
+   */
+  pabuc = { enAz: 1, lmi: 0, etiket: '', enCok: 0 };
   etiket = 'baslangic';
 
   /** Koşul sağlanana kadar sür; en fazla maxSec. Sağlandı mı döner. */
@@ -50,6 +58,14 @@ class Rig {
       this.scene.step({ ...IDLE, ...input(this) }, DT);
       this.mission.update(DT);
       this.t += DT;
+      const pay = this.scene.outriggers.arkaPabucPayi;
+      if (pay !== null) {
+        if (pay < this.pabuc.enAz) {
+          this.pabuc = { ...this.pabuc, enAz: pay, lmi: this.scene.crane.lmi.percent,
+            etiket: this.etiket };
+        }
+        if (pay > this.pabuc.enCok) this.pabuc.enCok = pay;
+      }
       const l = this.scene.crane.lmi;
       if (Number.isFinite(l.percent) && l.percent > this.zirve.lmi) {
         this.zirve = {
@@ -347,6 +363,10 @@ function main(): void {
   say('--- sonuc ---');
   say(`  LMI zirvesi %${r.zirve.lmi.toFixed(0)} · ${r.zirve.etiket} · t=${r.zirve.t.toFixed(0)}s`
     + `  R ${r.zirve.R.toFixed(1)}m  kuvvet ${r.zirve.ton.toFixed(2)}t  halat ${r.zirve.halat.toFixed(1)}m`);
+  say(`  arka pabuc payi: en az %${(r.pabuc.enAz * 100).toFixed(1)}`
+    + `  en cok %${(r.pabuc.enCok * 100).toFixed(1)}`
+    + `  (en az iken LMI %${Number.isFinite(r.pabuc.lmi) ? r.pabuc.lmi.toFixed(0) : '—'}`
+    + ` · ${r.pabuc.etiket})`);
   say(`  faz ${r.mission.phase}  tamamlanan ${s.sapmalar.length}/${TASKS.length}`
     + `  sure ${s.sure.toFixed(0)}s  not ${res?.not ?? '-'} (${res?.puan.toFixed(0) ?? '-'})`
     + `  usta ${res?.usta ? 'E' : 'H'}`);

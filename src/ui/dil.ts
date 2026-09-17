@@ -102,6 +102,8 @@ export interface Metinler {
        * satır dar ekranda gizli.
        */
       sinirHalat: string; sinirTablo: string;
+      /** Arka pabucun toplam pabuç yükündeki payı — devrilmenin ölçülen yüzü. */
+      arkaPabuc: string;
       toplu: string; yariAcik: string; tamAcik: string;
     };
     alt: {
@@ -233,7 +235,7 @@ const TR: Metinler = {
     satir: {
       kancada: 'kancada', yaricap: 'yarıçap', bom: 'bom', halat: 'halat',
       ayaklar: 'ayaklar', tabloDisi: 'tablo dışı',
-      sinirHalat: 'halat', sinirTablo: 'tablo',
+      sinirHalat: 'halat', sinirTablo: 'tablo', arkaPabuc: 'arka pabuç',
       toplu: 'TOPLU', yariAcik: 'YARI AÇIK', tamAcik: 'TAM AÇIK',
     },
     alt: {
@@ -435,7 +437,7 @@ const EN: Metinler = {
     satir: {
       kancada: 'on hook', yaricap: 'radius', bom: 'boom', halat: 'rope',
       ayaklar: 'outriggers', tabloDisi: 'off chart',
-      sinirHalat: 'rope', sinirTablo: 'chart',
+      sinirHalat: 'rope', sinirTablo: 'chart', arkaPabuc: 'rear pad',
       toplu: 'STOWED', yariAcik: 'HALF', tamAcik: 'FULL',
     },
     alt: {
