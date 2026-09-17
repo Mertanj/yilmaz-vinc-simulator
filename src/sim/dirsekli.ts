@@ -50,9 +50,15 @@ export const DIRSEKLI = {
    * zaten tablanın işi olacak.
    */
   yon: -1 as 1 | -1,
-  /** Kolların kütlesi (t) — moment hesabına elle giriyor. */
-  anaBomTon: 0.95,
-  kirmaBomTon: 0.55,
+  /**
+   * Kolların kütlesi (t) — moment hesabına elle giriyor.
+   *
+   * Toplam 1.5 t sabit; paylaşım kol boylarıyla birlikte değişti (4.2/4.4
+   * iken 0.95/0.55, şimdi 5.2/3.4). Ana bom metre başına da daha ağır: kesiti
+   * büyük, üstelik kırmanın bütün yükünü o taşıyor.
+   */
+  anaBomTon: 1.05,
+  kirmaBomTon: 0.45,
 
   /** Halat: kancanın bom ucuna dayanma eşiği (m). */
   minHalatM: 0.5,
@@ -68,7 +74,20 @@ export const DIRSEKLI = {
   hookThroatM: 0.34,
   attachCentreToleranceM: 0.42,
   attachBelowTopM: 0.6,
-  attachAboveTopM: 1.5,
+  /**
+   * Boğaz yükün üst yüzünden en fazla bu kadar YUKARIDA olabilir (m).
+   *
+   * Vinçten 1.5 kopyalanmıştı ve bu makinede işe yaramadı: kanca yükün bir
+   * metre üstündeyken bağlanabiliyor, mafsal oraya kuruluyor ve yükün ağırlık
+   * merkezi pimin 1.45 m altında kalıyordu. Yük sarkaç gibi peşten sürükleniyor
+   * (ölçümde uçtan 1.8 m geride, salınım 74°) ve duvarı hiç aşamıyordu.
+   * `kanca.ts` aynı tuzağı zaten anlatıyor — orada bağlanma noktası yükün üst
+   * ORTASI seçilmişti ve aynı sebeple elenmişti.
+   *
+   * 0.6, kanca bloğunun kendi boyu kadar: sapancı kancayı yükün üstüne
+   * indirmek zorunda.
+   */
+  attachAboveTopM: 0.6,
   attachMaxSpeedMps: 1.2,
   maxSidePullM: 0.6,
   slungAngularDamping: 6.0,
@@ -378,6 +397,24 @@ export class Dirsekli {
 
   /** Tablo dışı mı — uç makinenin erişemeyeceği kadar uzakta. */
   get tabloDisi(): boolean { return this.radiusM > S.maxYaricapM; }
+
+  /**
+   * Dünyadaki bir noktayı geometri modülünün çerçevesine taşır.
+   *
+   * `yereldenDunyaya`nın tersi ve onun ikizi olarak duruyor: aynayı ve şasi
+   * eğimini geri alıyor. Ters kinematik hedefini bu çerçevede istiyor —
+   * otopilot da, ileride bir yardım oku da dünyada düşünüp burada çözecek.
+   */
+  dunyadanYerele(p: { x: number; y: number }): { x: number; y: number } {
+    const taban = this.chassis.getWorldPoint(DIRSEKLI.pivot);
+    const aci = this.chassis.getAngle();
+    const wx = p.x - taban.x;
+    const wy = p.y - taban.y;
+    // Şasi dönüşünü geri al.
+    const rx = wx * Math.cos(-aci) - wy * Math.sin(-aci);
+    const ry = wx * Math.sin(-aci) + wy * Math.cos(-aci);
+    return { x: rx * DIRSEKLI.yon, y: ry + S.pivotHeightM };
+  }
 
   /** Ucun dünyadaki yeri, geometri modülünün beklediği yerel biçimde. */
   get ucYerel(): { x: number; y: number } {

@@ -132,6 +132,36 @@ export interface Metinler {
     };
   };
 
+  /**
+   * Dirsekli bom — vincin sözlüğünü PAYLAŞIYOR, yalnız farkını yazıyor.
+   *
+   * LMI kelime dağarcığı (kancada, yarıçap, aşırı yük, tablo dışı) iki
+   * makinede de aynı şeyi anlatıyor; ikinci bir kopya iki dilde iki kat
+   * bakım demek olurdu. Burada sadece bu makineye ait olan var: iki eklem
+   * açısı, moment tablosu ve kuyruk üstünden çalışmanın getirdikleri.
+   */
+  dirsekli: {
+    ad: string; sinif: string; ozet: string; zorluk: string; tuslar: string;
+    baslik: string;
+    satir: {
+      anaBom: string; kirma: string; ucKotu: string;
+      /** Vinçte arka pabuç; burada ÖN, çünkü makine kuyruğunun üstünden çalışıyor. */
+      onPabuc: string;
+      /** Sınırı koyan şey: bu makinede her zaman moment tablosu. */
+      sinirMoment: string;
+    };
+    alt: {
+      moment: (tm: string) => string;
+      konum: (ana: string, kirma: string) => string;
+    };
+    uyari: { tabloDisiCozum: string; asiriCozum: string; asiriCozumKilitli: string };
+    ipucu: {
+      yanasma: (k: KumandaAdi) => string;
+      yukBagli: (k: KumandaAdi) => string;
+      uzak: (k: KumandaAdi) => string;
+    };
+  };
+
   forklift: {
     ad: string; sinif: string; ozet: string; zorluk: string; tuslar: string;
     baslik: string;
@@ -283,6 +313,40 @@ const TR: Metinler = {
       uzak: 'kancayı yükün üstüne indir',
     },
   },
+  dirsekli: {
+    ad: 'YV-9 Dirsekli Vinç',
+    sinif: '9 tm · kırma bomlu · dar sokak',
+    ozet: 'Bahçe duvarının ardındaki avluya malzeme indir. Bom kırılıyor: '
+      + 'ucu uzağa değil, AŞAĞI da götürebiliyorsun.',
+    zorluk: 'Sınırı moment koyuyor: 9 ton·metre. 3 metrede 3 ton, 6 metrede 1.5 ton.',
+    tuslar: '<b>sürüş</b> <kbd>←</kbd> geri yanaş <kbd>→</kbd> ileri'
+      + ' <kbd>boşluk</kbd> el freni<br>'
+      + '<b>kurulum</b> <kbd>Q</kbd> ayak aç/kapa<br>'
+      + '<b>bom</b> <kbd>W</kbd><kbd>S</kbd> ana bom <kbd>⇧W</kbd><kbd>⇧S</kbd> kırma<br>'
+      + '<kbd>↑</kbd><kbd>↓</kbd> kanca <kbd>boşluk</kbd> bağla/bırak<br>'
+      + '<kbd>I</kbd> detay <kbd>R</kbd> sıfırla <kbd>Esc</kbd> makine değiştir',
+    baslik: 'KALDIRMA MOMENTİ',
+    satir: {
+      anaBom: 'ana bom', kirma: 'kırma', ucKotu: 'uç kotu',
+      onPabuc: 'ön pabuç', sinirMoment: 'moment',
+    },
+    alt: {
+      moment: (tm) => `moment sınırı ${tm} ton·metre`,
+      konum: (ana, kirma) => `ana ${ana}° · kırma ${kirma}°`,
+    },
+    uyari: {
+      tabloDisiCozum: '⇧S ile kırmayı katla — uç geri gelir, yarıçap kısalır.',
+      asiriCozumKilitli: 'Ana bomu indirmek ve kırmayı açmak KİLİTLİ. W ile ana bomu'
+        + ' kaldır ya da ⇧S ile kırmayı katla — yarıçap kısalır, sınır yükselir.',
+      asiriCozum: '⇧S ile kırmayı katla: yarıçap kısalır, sınır yükselir.',
+    },
+    ipucu: {
+      yanasma: (k) => `geri geri takoza yanaş, sonra ayakları aç (${k.ayaklar})`,
+      yukBagli: (k) => `yük bağlı · duvarı aş, sonra bırak (${k.kanca})`,
+      uzak: (k) => `kancayı yükün üstüne indir (${k.ikisi} ve kanca)`,
+    },
+  },
+
   forklift: {
     ad: 'YF-25 Forklift',
     sinif: '2.5 ton · karşı ağırlıklı · depo',
@@ -484,6 +548,41 @@ const EN: Metinler = {
       ortala: 'centre the hook over the load',
       yukseklik: 'lower the hook a little more',
       uzak: 'lower the hook onto the load',
+    },
+  },
+  dirsekli: {
+    ad: 'YV-9 Knuckle Boom Crane',
+    sinif: '9 tm · articulated boom · narrow street',
+    ozet: 'Set materials down in the courtyard behind the garden wall. The boom '
+      + 'folds: you can take the tip DOWN to a point, not just out to it.',
+    zorluk: 'The limit is moment: 9 tonne-metres. 3 t at 3 m, 1.5 t at 6 m.',
+    tuslar: '<b>drive</b> <kbd>←</kbd> back up <kbd>→</kbd> forward'
+      + ' <kbd>space</kbd> handbrake<br>'
+      + '<b>set-up</b> <kbd>Q</kbd> outriggers<br>'
+      + '<b>boom</b> <kbd>W</kbd><kbd>S</kbd> main boom'
+      + ' <kbd>⇧W</kbd><kbd>⇧S</kbd> knuckle<br>'
+      + '<kbd>↑</kbd><kbd>↓</kbd> hook <kbd>space</kbd> attach/release<br>'
+      + '<kbd>I</kbd> detail <kbd>R</kbd> reset <kbd>Esc</kbd> change machine',
+    baslik: 'LIFTING MOMENT',
+    satir: {
+      anaBom: 'main boom', kirma: 'knuckle', ucKotu: 'tip height',
+      onPabuc: 'front pad', sinirMoment: 'moment',
+    },
+    alt: {
+      moment: (tm) => `moment rating ${tm} tonne-metres`,
+      konum: (ana, kirma) => `main ${ana}° · knuckle ${kirma}°`,
+    },
+    uyari: {
+      tabloDisiCozum: 'Fold the knuckle in with ⇧S — the tip comes back, the radius drops.',
+      asiriCozumKilitli: 'Lowering the main boom and opening the knuckle are LOCKED.'
+        + ' Raise the main boom with W or fold the knuckle in with ⇧S — the radius'
+        + ' drops and the limit rises.',
+      asiriCozum: 'Fold the knuckle in with ⇧S: the radius drops, the limit rises.',
+    },
+    ipucu: {
+      yanasma: (k) => `back up to the block, then set the outriggers (${k.ayaklar})`,
+      yukBagli: (k) => `load on the hook · clear the wall, then release (${k.kanca})`,
+      uzak: (k) => `lower the hook onto the load (${k.ikisi} and hook)`,
     },
   },
   forklift: {

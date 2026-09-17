@@ -33,14 +33,44 @@ export const DIRSEKLI_SPEC = {
    */
   pivotHeightM: 2.6,
 
-  /** Ana bom (birinci kol) boyu (m). */
-  anaBoomM: 4.2,
-  /** Kırma (ikinci kol) boyu (m). */
-  kirmaBoomM: 4.4,
+  /**
+   * Kolların boyu (m) — ana bom KIRMADAN UZUN, ve bu ölçümle seçildi.
+   *
+   * Önce 4.2 / 4.4 idi (neredeyse eşit) ve zarfın SINIRLARI iyi görünüyordu:
+   * en uzak 8.95 m, en yüksek 10.76 m. Sınırlar yanılttı. Zarfın İÇİNİN
+   * haritası çizilince ortaya bir DELİK çıktı: R 4.5'te uç ya 2 metrenin
+   * altında ya 9.5 metrenin üstünde olabiliyor, arası hiç erişilmiyordu.
+   * Bölümün bütün işi (duvarın ardına, 2–7 metre kotuna yük indirmek) tam o
+   * delikte kalıyordu ve rig yükü duvarın üstünden hiç geçiremedi.
+   *
+   * Sebep: kırma yalnızca AŞAĞI katlanıyor, dolayısıyla ana bomun dünya açısı
+   * `hedefin yükselişi + kolların açtığı açı` olmak zorunda. Uzun bir kırma
+   * o ikinci terimi büyütüyor ve üst sınırı (78°) aşıyor. Gerçek kırma bomlu
+   * vinçlerde bu sorunu KIRMANIN TELESKOBU çözüyor; bizde dördüncü bir eksen
+   * kumandaya sığmıyor, o yüzden aynı işi kol oranı yapıyor.
+   *
+   * Ölçülen (çalışma bandı R 3–8.5 m, kot 2–7 m — avlu işinin geçtiği yer):
+   *
+   *   4.2 / 4.4  ana ≤ 78   erişilen %66   en uzak 8.95 m
+   *   4.2 / 4.4  ana ≤ 85   erişilen %74   en uzak 8.95 m
+   *   5.2 / 3.4  ana ≤ 78   erişilen %86   en uzak 8.95 m
+   *   5.2 / 3.4  ana ≤ 85   erişilen %91   en uzak 8.95 m   ← seçilen
+   *   5.8 / 2.8  ana ≤ 85   erişilen %93   en uzak 8.95 m
+   *
+   * 5.8 / 2.8 bir puan daha veriyor ama 2.8 metrelik bir kırma artık
+   * kırılmıyor; makinenin karakterini satın alınan puana değmez.
+   */
+  anaBoomM: 5.2,
+  kirmaBoomM: 3.4,
 
-  /** Ana bom açısı: yataydan yukarı, derece. */
+  /**
+   * Ana bom açısı: yataydan yukarı, derece.
+   *
+   * 85, 78 değil: gerçek kırma bomlu vinçlerin ana bomu düşeye bu kadar
+   * yaklaşır ve yukarıdaki tabloda tek başına %8 kazandırıyor.
+   */
   anaMinDeg: -5,
-  anaMaxDeg: 78,
+  anaMaxDeg: 85,
   /**
    * Kırma açısı: ana bomun DOĞRULTUSUNDAN sapma, derece.
    *
@@ -135,4 +165,46 @@ export function dirsekliKapasitesi(yaricapM: number): number {
   if (yaricapM > s.maxYaricapM) return 0;
   const r = Math.max(yaricapM, s.minYaricapM);
   return Math.min(s.maxKancaTon, s.momentTm / r);
+}
+
+/**
+ * Ters kinematik: ucu verilen noktaya götüren eklem açıları.
+ *
+ * **Neden gerekli.** Tek eksenli kovalama bu makinede kendi kuyruğunu
+ * yakalıyor: ana bomu indirmek ucu uzaklaştırırken ALÇALTIYOR, kırmayı açmak
+ * ise uzaklaştırırken YÜKSELTİYOR. İki eksen birbirinin hatasını besliyor.
+ * Teleskopik vinçte aynı tuzağa düşülmüş ve çözüm de aynı olmuştu: hedef uç
+ * konumundan açıları ANALİTİK çöz, sonra iki ekseni de hedefine sür.
+ *
+ * İki kollu zincirin klasik çözümü (kosinüs teoremi). İki matematiksel çözüm
+ * var — dirsek yukarı ve dirsek aşağı — ama bu makinede kırma yalnızca AŞAĞI
+ * katlanıyor (`kirmaMinDeg` 0), dolayısıyla tek geçerli kök kalıyor: ana bom
+ * hedefe giden doğrunun ÜSTÜNDE.
+ *
+ * Erişilemeyen nokta için `null` döner — uydurulmuş bir açı sessizce yanlış
+ * yere sürerdi.
+ */
+export function dirsekliCozum(hedef: { x: number; y: number }): DirsekliDurum | null {
+  const s = DIRSEKLI_SPEC;
+  const dx = hedef.x - s.pivotOffsetM;
+  const dy = hedef.y - s.pivotHeightM;
+  const d = Math.hypot(dx, dy);
+  const L1 = s.anaBoomM;
+  const L2 = s.kirmaBoomM;
+  if (d > L1 + L2 || d < Math.abs(L1 - L2)) return null;
+
+  // Dirsekteki iç açı: kosinüs teoremi. `kirmaDeg` düzlükten SAPMA olduğu
+  // için 180'den çıkarıyoruz.
+  const cosBeta = (L1 * L1 + L2 * L2 - d * d) / (2 * L1 * L2);
+  const beta = Math.acos(Math.max(-1, Math.min(1, cosBeta)));
+  const kirmaDeg = 180 - (beta * 180) / Math.PI;
+
+  // Ana bomun, hedefe giden doğrudan sapması.
+  const cosGamma = (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d);
+  const gamma = Math.acos(Math.max(-1, Math.min(1, cosGamma)));
+  const anaDeg = ((Math.atan2(dy, dx) + gamma) * 180) / Math.PI;
+
+  if (anaDeg < s.anaMinDeg || anaDeg > s.anaMaxDeg) return null;
+  if (kirmaDeg < s.kirmaMinDeg || kirmaDeg > s.kirmaMaxDeg) return null;
+  return { anaDeg, kirmaDeg };
 }

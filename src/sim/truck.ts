@@ -37,7 +37,7 @@ export class Truck {
   readonly wheels: Body[] = [];
   private readonly joints: WJ[] = [];
 
-  constructor(world: World, snaps: Snapshotter, spawnX = TRUCK.spawnX) {
+  constructor(world: World, snaps: Snapshotter, spawnX: number = TRUCK.spawnX) {
     const restHeight = TRUCK.wheelRadius + TRUCK.chassisHalfHeight + 0.42;
 
     this.chassis = world.createDynamicBody({ x: spawnX, y: restHeight });
@@ -129,7 +129,7 @@ export class Truck {
     return { x: p.x, y: p.y };
   }
 
-  reset(spawnX = TRUCK.spawnX): void {
+  reset(spawnX: number = TRUCK.spawnX): void {
     const restHeight = TRUCK.wheelRadius + TRUCK.chassisHalfHeight + 0.42;
     this.chassis.setTransform({ x: spawnX, y: restHeight }, 0);
     this.chassis.setLinearVelocity({ x: 0, y: 0 });

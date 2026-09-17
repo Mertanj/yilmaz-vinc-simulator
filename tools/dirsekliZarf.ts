@@ -9,7 +9,7 @@
  */
 import {
   DIRSEKLI_SPEC as S, dirsekNoktasi, ucNoktasi, calismaYaricapi,
-  dirsekliKapasitesi, kirmaYonuDeg,
+  dirsekliKapasitesi, kirmaYonuDeg, dirsekliCozum,
 } from '../src/sim/dirsekliGeometri';
 
 // --- 1) uc nereye kadar gidiyor? ---
@@ -84,4 +84,111 @@ for (let a = S.anaMinDeg; a <= S.anaMaxDeg; a += 1) {
         + `  R ${calismaYaricapi(d).toFixed(2)} m`);
     }
   }
+}
+
+// --- 4) erisim tablosu: her yariciapta uc ne kadar yukari/asagi gidiyor? ---
+//
+// Bolum tasarimi dogrudan buna bakiyor: bir hedefi "R su kadar, kot bu kadar"
+// diye koymadan once ucun oraya YETIP yetmedigini bilmek gerekiyor. Gozle
+// kestirilmiyor, cunku iki eklemin birlesik zarfi disbukey degil.
+console.log('\nerisim tablosu (tabla merkezine gore):');
+console.log('   R     uc en yuksek   uc en alcak   kapasite');
+for (let r = 2; r <= 9; r += 0.5) {
+  let yuksek = -99; let alcak = 99;
+  for (let a = S.anaMinDeg; a <= S.anaMaxDeg; a += 0.5) {
+    for (let k = S.kirmaMinDeg; k <= S.kirmaMaxDeg; k += 0.5) {
+      const u = ucNoktasi({ anaDeg: a, kirmaDeg: k });
+      if (Math.abs(u.x - r) > 0.1) continue;
+      if (u.y > yuksek) yuksek = u.y;
+      if (u.y < alcak) alcak = u.y;
+    }
+  }
+  if (yuksek < -90) { console.log(`  ${r.toFixed(1)}   — erisilmiyor`); continue; }
+  console.log(`  ${r.toFixed(1)}      ${yuksek.toFixed(2)} m        ${alcak.toFixed(2)} m`
+    + `      ${dirsekliKapasitesi(r).toFixed(2)} t`);
+}
+
+// --- 5) yuk duvari GERCEKTEN asabiliyor mu? ---
+//
+// Bolum 3'teki denetim yalnizca BOMUN duvari siyirdigini soyluyordu. Oysa
+// duvara takilan sey bom degil, halattan sarkan YUK: uc duvarin ustunden
+// gecerken yukun ALT yuzu de duvarin ustunde olmali. Yuk yuksekligi ve halat
+// payi buraya giriyor.
+function yukGecebilirMi(duvarX: number, duvarY: number, yukBoyM: number, halatM: number): {
+  olur: boolean; gerekenUc: number; enYuksekUc: number;
+} {
+  const gereken = duvarY + halatM + yukBoyM;
+  let enYuksek = -99;
+  for (let a = S.anaMinDeg; a <= S.anaMaxDeg; a += 0.5) {
+    for (let k = S.kirmaMinDeg; k <= S.kirmaMaxDeg; k += 0.5) {
+      const d = { anaDeg: a, kirmaDeg: k };
+      const u = ucNoktasi(d);
+      if (Math.abs(u.x - duvarX) > 0.15) continue;
+      const dirsek = dirsekNoktasi(d);
+      const ayak = { x: S.pivotOffsetM, y: S.pivotHeightM };
+      if (!dogruParcasiGecer(ayak, dirsek, duvarX, duvarY)) continue;
+      if (!dogruParcasiGecer(dirsek, u, duvarX, duvarY)) continue;
+      if (u.y > enYuksek) enYuksek = u.y;
+    }
+  }
+  return { olur: enYuksek >= gereken, gerekenUc: gereken, enYuksekUc: enYuksek };
+}
+
+console.log('\nyuk duvarin ustunden gecebiliyor mu? (yuk boyu 1.4 m, halat 0.6 m)');
+for (const [duvarX, duvarY] of duvarlar) {
+  const s = yukGecebilirMi(duvarX, duvarY, 1.4, 0.6);
+  console.log(`  duvar x=${duvarX} y=${duvarY}: uc ${s.gerekenUc.toFixed(2)} m gerekiyor,`
+    + ` en fazla ${s.enYuksekUc.toFixed(2)} m  ->  ${s.olur ? 'GECER' : 'GECMEZ'}`);
+}
+
+// --- 6) ters kinematik gidis-donus: cozum gercekten o noktaya gotururuyor mu? ---
+//
+// Rig ve otopilot bu fonksiyona guveniyor. Yanlis kok secilirse (dirsek yukari)
+// uc hedefin AYNASINA gider ve hata ancak oyun icinde, "vinc ters tarafa
+// gidiyor" diye fark edilir. Gidis-donus testi bunu burada yakaliyor.
+{
+  let denenen = 0; let cozulen = 0; let enKotu = 0; let kotuNokta = { x: 0, y: 0 };
+  for (let x = 1.5; x <= 8.8; x += 0.25) {
+    for (let y = -1.5; y <= 10.5; y += 0.25) {
+      denenen++;
+      const c = dirsekliCozum({ x, y });
+      if (!c) continue;
+      cozulen++;
+      const geri = ucNoktasi(c);
+      const hata = Math.hypot(geri.x - x, geri.y - y);
+      if (hata > enKotu) { enKotu = hata; kotuNokta = { x, y }; }
+    }
+  }
+  console.log(`\nters kinematik: ${cozulen}/${denenen} nokta cozuldu,`
+    + ` en buyuk gidis-donus hatasi ${(enKotu * 1000).toFixed(2)} mm`
+    + ` (${kotuNokta.x.toFixed(2)}, ${kotuNokta.y.toFixed(2)})`);
+  if (enKotu > 0.001) { console.log('  HATA: ters kinematik tutarsiz'); process.exitCode = 1; }
+}
+
+// --- 7) zarfin ICI: harita ---
+//
+// 1. ve 4. bolumler yalnizca SINIRLARI olcuyordu (en uzak, en yuksek, her
+// yaricapta en alt/en ust) ve bu yanilticiydi: iki kollu bir zincirin zarfi
+// disbukey degil, ortasinda DELIK olabiliyor. Bolum tasarimi "R 4.5'te uc
+// 10.18 m'ye cikiyor" satirina bakip yuku duvarin ustunden gecirmeyi
+// planladi; oysa ayni yaricapta 6 metre kotu HIC erisilmiyordu. Delik ancak
+// haritasi cizilince gorundu.
+{
+  console.log('\nzarf haritasi (# erisilir, · erisilmez) — dikey 0.5 m, yatay 0.5 m:');
+  const satirlar: string[] = [];
+  for (let y = 11; y >= -2; y -= 0.5) {
+    let satir = `${y.toFixed(1).padStart(5)} `;
+    for (let x = 1; x <= 9; x += 0.5) {
+      satir += dirsekliCozum({ x, y }) ? '#' : '·';
+    }
+    satirlar.push(satir);
+  }
+  console.log(satirlar.join('\n'));
+  console.log('      ' + Array.from({ length: 17 }, (_, i) => (1 + i * 0.5) % 1 === 0
+    ? String((1 + i * 0.5) % 10) : ' ').join(''));
+  let acik = 0; let toplam = 0;
+  for (let x = 1; x <= 9; x += 0.25) {
+    for (let y = -2; y <= 11; y += 0.25) { toplam++; if (dirsekliCozum({ x, y })) acik++; }
+  }
+  console.log(`  erisilen alan: ${acik}/${toplam} nokta (%${((acik / toplam) * 100).toFixed(0)})`);
 }

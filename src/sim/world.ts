@@ -158,9 +158,10 @@ export function createGround(world: World): Body {
  * ve test sırasında kamyon defalarca yükün ve binanın içine sürdü. Sanayi
  * avlularında zaten olan bir şeyi koyuyoruz: beton takoz.
  */
-export function createKerb(world: World, x: number): Body {
+export function createKerb(world: World, x: number, yukseklik = 0.68): Body {
   const body = world.createBody();
-  body.createFixture(new Box(0.35, 0.34, { x, y: 0.34 }, 0), { friction: 0.9 });
+  const hh = yukseklik / 2;
+  body.createFixture(new Box(0.35, hh, { x, y: hh }, 0), { friction: 0.9 });
   return body;
 }
 

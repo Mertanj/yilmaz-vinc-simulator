@@ -216,11 +216,23 @@ export class Outriggers {
    * diye sabit bir sayı yok. Toplamın payı ise her an anlamlı: "makinenin
    * ağırlığının ne kadarı hâlâ arka pabuçta".
    */
-  get arkaPabucPayi(): number | null {
+  get arkaPabucPayi(): number | null { return this.pabucPayi('arka'); }
+
+  /**
+   * Hangi pabucun payına bakılacağı MAKİNEYE bağlı.
+   *
+   * Teleskopik vinç bomunu buruna doğru kuruyor: devrilme ön pabuç etrafında
+   * oluyor ve boşalan ARKA pabuç. Dirsekli bom ise kuyruğunun üstünden
+   * çalışıyor, dolayısıyla tam tersi — orada ölçülecek olan ÖN pabuç. İki
+   * durumda da satırın anlamı aynı kalıyor: "uzaktaki pabuçta ne kadar pay
+   * kaldı", ve düşmesi kötü.
+   */
+  pabucPayi(hangi: 'on' | 'arka'): number | null {
     const toplam = this.onPabucN + this.arkaPabucN;
     // Eşik gürültü için: pabuçlar havadayken impuls sıfıra yakın seğiriyor.
     if (toplam < 5000) return null;
-    return Math.max(0, Math.min(1, this.arkaPabucN / toplam));
+    const pay = hangi === 'on' ? this.onPabucN : this.arkaPabucN;
+    return Math.max(0, Math.min(1, pay / toplam));
   }
 
   /** 0 toplu · 1 yarı açık · 2 tam açık. */

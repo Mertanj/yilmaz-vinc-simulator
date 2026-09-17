@@ -17,8 +17,16 @@
  * Boyutlar gerçek katalog ölçülerinden (yan görünüm, yarı-boyut olarak).
  */
 
-/** Yükün nasıl çizileceği. */
-export type LoadKind = 'bobin' | 'tezgah' | 'jenerator' | 'kompresor' | 'klima';
+/**
+ * Yükün nasıl çizileceği.
+ *
+ * İlk beşi sanayi sitesi (vinç ve forklift), son beşi bahçe inşaatı
+ * (dirsekli bom). Ayrı bir tip yapmadık: `Task` üç bölümde de aynı ve
+ * çizim tarafı zaten tek bir `switch` ile karşılıyor.
+ */
+export type LoadKind =
+  | 'bobin' | 'tezgah' | 'jenerator' | 'kompresor' | 'klima'
+  | 'briket' | 'donati' | 'kum' | 'kalip' | 'kova';
 
 export interface Task {
   kod: string;
