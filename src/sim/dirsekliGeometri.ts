@@ -61,6 +61,22 @@ export const DIRSEKLI_SPEC = {
    * kolların açtığı açı` kuralına bağlı ve o ikinci terim kırmanın BOYUYLA
    * büyüyor. Boy değişebiliyorsa aynı noktaya farklı ana bom açılarıyla
    * gidilebiliyor, yani zarf doluyor.
+   *
+   * **2.8 metre eğrinin dirseği, ve bu tarandı.** Üç bant ölçüldü: zarf
+   * kutusu, avlu işinin bandı (R 3–8.5, kot 2–7) ve yapı üstüne/altına
+   * koyma bandı (R 4–10, kot 4–9):
+   *
+   *   uzama      en uzak   en yüksek   kutu   avlu   yapı
+   *   yok        8.95 m    11.17 m     %51    %91    %61
+   *   +1.1      10.05      12.26       %72    %94    %81
+   *   +2.1      11.05      13.26       %81    %94    %94
+   *   +2.8      11.75      13.96       %83    %94    %98   ← seçilen
+   *   +3.6      12.55      14.75       %84    %94    %98
+   *   +4.6      13.55      15.75       %84    %94    %98
+   *
+   * 2.8'den sonrası menzil satın alıyor, zarf satın almıyor. Daha uzun bir
+   * teleskop bölümü de zorlaştırmıyor — yalnızca makineyi sınıfının dışına
+   * çıkarırdı.
    */
   kirmaTabanM: 3.4,
   kirmaUzamaM: 2.8,
