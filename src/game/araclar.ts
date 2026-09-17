@@ -136,9 +136,6 @@ function vincPadi(sahne: Scene): DokunmatikDuzeni {
       { komut: 'kancaAsagi', isaret: '↓', ad: d.kancaAsagi },
       { komut: 'kancaYukari', isaret: '↑', ad: d.kancaYukari },
       { tetik: 'kanca', isaret: kancaSimgesi(), ad: d.kanca },
-      { tetik: 'kat', isaret: katSimgesi(),
-        ad: sahne.crane.reevingSuresi > 0 ? d.katSuruyor
-          : d.katYap(sahne.crane.sonrakiKat) },
       ayak,
     ],
     yardimci,
@@ -146,11 +143,11 @@ function vincPadi(sahne: Scene): DokunmatikDuzeni {
 }
 
 /**
- * Üç simge Unicode değil ÇİZİM.
+ * İki simge Unicode değil ÇİZİM.
  *
- * Ayak, kanca ve halat katı için elverişli bir karakter yok; denenenler
- * telefonun fontunda bulunmayınca boş kutu olarak çıkıyor (bir kez "telefonu
- * çevir" ekranında tam da o oldu). Ok ve üçgenler her fontta var, bunlar yok.
+ * Ayak ve kanca için elverişli bir karakter yok; denenenler telefonun
+ * fontunda bulunmayınca boş kutu olarak çıkıyor (bir kez "telefonu çevir"
+ * ekranında tam da o oldu). Ok ve üçgenler her fontta var, bunlar yok.
  */
 function ayakSimgesi(): string {
   return '<svg viewBox="0 0 24 20" fill="none" stroke="currentColor"'
@@ -161,11 +158,6 @@ function kancaSimgesi(): string {
   return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"'
     + ' stroke-width="2.2" stroke-linecap="round">'
     + '<path d="M12 3v9"/><path d="M12 12a4 4 0 1 0 4 4"/></svg>';
-}
-function katSimgesi(): string {
-  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"'
-    + ' stroke-width="2.2" stroke-linecap="round">'
-    + '<path d="M8 3v18"/><path d="M16 3v18"/></svg>';
 }
 
 export function araclar(): readonly AracTanimi[] {
@@ -209,12 +201,7 @@ export function araclar(): readonly AracTanimi[] {
         sahne,
         gorunum: new VincGorunumu(sahne),
         pad: {
-          // Halat geçirme SÜRESİ anahtara girmiyor, sadece sürüp sürmediği:
-          // saniye saniye yeniden çizmek padi her saniye söküp kurardı ve o
-          // sırada basılı tutulan düğme (halat sal gibi) her seferinde
-          // bırakılırdı.
-          anahtar: () => `${sahne.calismaModunda}|${sahne.outriggers.state}`
-            + `|${sahne.crane.katSayisi}|${sahne.crane.reevingSuresi > 0}`,
+          anahtar: () => `${sahne.calismaModunda}|${sahne.outriggers.state}`,
           duzen: () => vincPadi(sahne),
         },
       };

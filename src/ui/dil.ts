@@ -67,16 +67,12 @@ export interface Metinler {
     /** Vinç: faza göre değişen kümenin düğmeleri. */
     ayaklar: string; bomKaldir: string; bomIndir: string;
     /**
-     * Ayak ve halat katı düğmeleri EYLEMİ yazıyor, durumu değil: ikisi de
-     * sırayla gezen düğmeler ve "ayaklar" / "halat katı" yazınca basınca ne
-     * olacağı hiç söylenmiyordu.
+     * Ayak düğmesi EYLEMİ yazıyor, durumu değil: üç durumu sırayla geziyor ve
+     * "ayaklar" yazınca basınca ne olacağı hiç söylenmiyordu.
      */
     ayakYariAc: string; ayakTamAc: string; ayakTopla: string;
-    katYap: (kat: number) => string;
-    /** Halat geçirilirken: düğme 14 saniye boyunca sessiz kalmasın. */
-    katSuruyor: string;
     teleskopUzat: string; teleskopKis: string;
-    kancaYukari: string; kancaAsagi: string; kanca: string; kat: string;
+    kancaYukari: string; kancaAsagi: string; kanca: string;
   };
 
   ust: { puan: (n: number) => string; bolumTamam: string };
@@ -208,10 +204,8 @@ const TR: Metinler = {
     sifirla: 'sıfırla', makineler: 'makineler', cevir: 'çevir',
     ayaklar: 'ayaklar', bomKaldir: 'bom kaldır', bomIndir: 'bom indir',
     ayakYariAc: 'yarı aç', ayakTamAc: 'tam aç', ayakTopla: 'ayakları topla',
-    katYap: (kat) => `${kat} kat yap`, katSuruyor: 'geçiriliyor…',
     teleskopUzat: 'uzat', teleskopKis: 'kıs',
     kancaYukari: 'halat sar', kancaAsagi: 'halat sal', kanca: 'kanca',
-    kat: 'halat katı',
   },
   ust: { puan: (n) => `${n} puan`, bolumTamam: 'bölüm tamamlandı' },
   panel: {
@@ -412,10 +406,8 @@ const EN: Metinler = {
     sifirla: 'restart', makineler: 'machines', cevir: 'rotate',
     ayaklar: 'outriggers', bomKaldir: 'boom up', bomIndir: 'boom down',
     ayakYariAc: 'half deploy', ayakTamAc: 'full deploy', ayakTopla: 'stow legs',
-    katYap: (kat) => `go to ${kat} parts`, katSuruyor: 'reeving…',
     teleskopUzat: 'extend', teleskopKis: 'retract',
     kancaYukari: 'reel in', kancaAsagi: 'pay out', kanca: 'hook',
-    kat: 'parts of line',
   },
   ust: { puan: (n) => `${n} pts`, bolumTamam: 'level complete' },
   panel: {
