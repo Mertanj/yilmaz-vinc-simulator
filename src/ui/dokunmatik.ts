@@ -32,15 +32,26 @@ export interface DokunmatikDugme {
 }
 
 /**
- * Düzeni ÜRETEN fonksiyon — makinenin fazına göre.
+ * Padin CANLI kaynağı — düzeni makinenin o anki durumundan üretiyor.
  *
- * Vinçte tek bir pad olmuyor: sürerken gaz/fren/ayaklar, ayaklar yerdeyken
- * bom/teleskop/kanca. Hepsini aynı anda göstermek telefonu kokpit paneline
- * çevirir ve yarısı o an işe yaramayan düğme olur. Faz makinenin kendi
- * gerçeği (`calismaModunda`), pad onu takip ediyor. Forklift fazsız: aynı
- * düzeni döndürüyor ve hiç yeniden çizilmiyor.
+ * İki iş yapıyor. Birincisi faz: vinçte tek bir pad olmuyor, sürerken
+ * gaz/fren/ayaklar, ayaklar yerdeyken bom/teleskop/kanca. Hepsini aynı anda
+ * göstermek telefonu kokpit paneline çevirirdi.
+ *
+ * İkincisi düğmenin NE YAPACAĞINI söylemesi. Sahadan gelen geri bildirim:
+ * *"halat katı düğmesini anlamadım."* Haklıydı — düğme sabit bir etiket
+ * taşıyordu ve neye basıldığında ne olacağını söylemiyordu. Aynı kusur
+ * ayaklarda da vardı: üç durumu sırayla geziyor ama hangisine geçeceğini
+ * söylemiyor. Etiket artık eylemi yazıyor ("4 kat yap", "tam aç") ve bunun
+ * için düzenin makineyle birlikte değişmesi gerekiyor.
+ *
+ * `anahtar()` yeniden çizim gerekip gerekmediğini söylüyor: her karede düzen
+ * üretip karşılaştırmak boşuna çöp üretirdi.
  */
-export type DuzenUretici = (calismaModunda: boolean) => DokunmatikDuzeni;
+export interface PadKaynagi {
+  anahtar(): string;
+  duzen(): DokunmatikDuzeni;
+}
 
 export interface DokunmatikDuzeni {
   /** Sol başparmak — sürüş. */
@@ -69,31 +80,32 @@ export function dokunmatikVar(): boolean {
 
 export interface Pad {
   /**
-   * Fazı bildirir. Faz değişmediyse hiçbir şey yapmıyor, o yüzden her kare
-   * çağrılabilir. Yeniden çizdiyse `true` döner — çağıran taraf ancak o zaman
-   * yeniden ölçüm yapsın: `offsetWidth` okumak yerleşimi zorluyor ve bunu her
-   * karede yapmak kare hızını yer.
+   * Makinenin durumunu yoklar. Durum değişmediyse hiçbir şey yapmıyor, o
+   * yüzden her kare çağrılabilir. Yeniden çizdiyse `true` döner — çağıran
+   * taraf ancak o zaman yeniden ölçüm yapsın: `offsetWidth` okumak yerleşimi
+   * zorluyor ve bunu her karede yapmak kare hızını yer.
    */
-  guncelle(calismaModunda: boolean): boolean;
+  guncelle(): boolean;
   sok(): void;
 }
 
 /** Padi kurar. */
 export function dokunmatikKur(
-  host: HTMLElement, uret: DuzenUretici, kumanda: Kumanda,
+  host: HTMLElement, kaynak: PadKaynagi, kumanda: Kumanda,
 ): Pad {
-  let cizili: boolean | null = null;
+  let cizili: string | null = null;
   let sokucular: Array<() => void> = [];
 
-  const guncelle = (calismaModunda: boolean): boolean => {
-    if (cizili === calismaModunda) return false;
-    cizili = calismaModunda;
+  const guncelle = (): boolean => {
+    const a = kaynak.anahtar();
+    if (cizili === a) return false;
+    cizili = a;
     for (const s of sokucular) s();
-    sokucular = ciz(host, uret(calismaModunda), kumanda);
+    sokucular = ciz(host, kaynak.duzen(), kumanda);
     return true;
   };
 
-  guncelle(false);
+  guncelle();
   host.hidden = false;
   // Pad açıkken klavye tuş listesi anlamsız: geniş bir tablette ikisi de
   // sığıyor ama biri yalan söylüyor.

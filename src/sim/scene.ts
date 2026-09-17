@@ -5,7 +5,7 @@ import {
 } from './world';
 import { Truck } from './truck';
 import { Outriggers } from './outriggers';
-import { Crane, NEUTRAL, type CraneInput, type Grabbable } from './crane';
+import { Crane, NEUTRAL, type CraneInput, type Grabbable, type KatRet } from './crane';
 import type { DriveInput } from '../input/kumanda';
 import { TASKS, MALZEME_X, type Task } from '../game/tasks';
 import { OutriggerState } from './loadChart';
@@ -227,7 +227,10 @@ export class Scene implements OyunSahnesi {
     return [
       // Her zaman görünen üç satır: ne taşıyorsun, sınır ne, ne kadar uzakta.
       { etiket: d.satir.kancada, deger: `${r.loadTonnes.toFixed(2)} t` },
-      { etiket: M.panel.sinir,
+      // Etiket sınırı KİMİN koyduğunu da söylüyor: halat katını artırmanın
+      // işe yarayıp yaramayacağı doğrudan buna bağlı.
+      { etiket: `${M.panel.sinir} · ${r.limitedBy === 'halat'
+        ? d.satir.sinirHalat : d.satir.sinirTablo}`,
         deger: this.tabloDisi ? d.satir.tabloDisi : `${r.capacityTonnes.toFixed(2)} t` },
       { etiket: d.satir.yaricap, deger: `${this.crane.radiusM.toFixed(1)} m` },
       // Gerisi detay: makineyi zaten bilen için.
@@ -253,6 +256,18 @@ export class Scene implements OyunSahnesi {
     const u = M.vinc.uyari;
     const kilitli = this.crane.kilitliDenendi;
     if (!this.craneMode) return null;
+
+    // Ret EN ÖNDE: bir düğmeye basmanın doğrudan cevabı, süregelen bir
+    // durumdan daha acil. Üç buçuk saniye sonra kendi kendine çekiliyor ve
+    // altındaki uyarı neyse o geri geliyor.
+    if (this.katRedKalan > 0 && this.katRedNeden !== '') {
+      return {
+        zone: 'amber', carpiyor: false,
+        bas: u.katBas,
+        govde: u.katGovde(this.katRedNeden),
+        cozum: this.katRedNeden === 'suruyor' ? '' : u.katCozum,
+      };
+    }
 
     // İki-blok, yük momentinden ÖNCE gelir: kanca kafaya dayanmışsa mesele
     // ağırlık değil, halatın bitmiş olması. Ama SADECE oyuncuyu fiilen
@@ -296,6 +311,15 @@ export class Scene implements OyunSahnesi {
     const i = M.vinc.ipucu;
     const k = kumandaAdi();
     if (!this.craneMode) return { metin: i.surus(k), mod: 'drive' };
+    // Halat geçirme 14 saniye sürüyor ve o sırada makine hiçbir şey yapmıyor.
+    // Geri sayım gösterge bloğunun alt satırında da var ama o satır dar
+    // ekranda gizli; ipucu satırı her boyutta görünüyor.
+    if (this.crane.reevingSuresi > 0) {
+      return {
+        metin: M.vinc.alt.reeving(this.crane.reevingSuresi.toFixed(0)),
+        mod: 'crane',
+      };
+    }
     if (this.crane.hasLoad) return { metin: i.yukBagli(k), mod: 'crane' };
     const { reason } = this.crane.attachCheck(this.grabbables);
     const say: Record<typeof reason, string> = {
@@ -310,7 +334,18 @@ export class Scene implements OyunSahnesi {
   }
 
   /** Son kat değiştirme denemesinin sonucu — HUD gerekçeyi gösteriyor. */
-  sonKatCevabi: { ok: boolean; neden: string } = { ok: true, neden: '' };
+  /**
+   * Kat değiştirme reddedildiğinde uyarı şeridi bu kadar saniye kalıyor.
+   *
+   * Sahadan gelen geri bildirim: *"halat katı düğmesini anlamadım."* Sebebi
+   * büyük ölçüde şuydu: düğmeye basınca çoğu zaman HİÇBİR ŞEY olmuyordu.
+   * Makine haklı olarak reddediyordu (kancada yük varken ya da kanca havadayken
+   * sapancı halatı yeniden geçiremez) ama sebebi hesaplanıp ÇÖPE ATILIYORDU —
+   * `sonKatCevabi` hiçbir yerde okunmuyordu. Ret bir kerelik bir olay, oysa
+   * uyarı şeridi süregelen durumları gösteriyor; o yüzden kendi sayacı var.
+   */
+  private katRedKalan = 0;
+  private katRedNeden: KatRet = '';
 
   /** Şasi eğimi, derece. Ekranda gördüğümüz işaretle aynı. */
   get tiltDeg(): number {
@@ -327,7 +362,12 @@ export class Scene implements OyunSahnesi {
     const craneMode = this.craneMode;
     this.crane.setStowed(!craneMode);
     if (input.toggleHook && craneMode) this.crane.requestToggleAttach();
-    if (input.toggleKat && craneMode) this.sonKatCevabi = this.crane.katDegistir();
+    if (input.toggleKat && craneMode) {
+      const cevap = this.crane.katDegistir();
+      this.katRedKalan = cevap.ok ? 0 : 3.5;
+      this.katRedNeden = cevap.neden;
+    }
+    this.katRedKalan = Math.max(0, this.katRedKalan - dt);
 
     this.snaps.capture();
 

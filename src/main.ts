@@ -10,6 +10,7 @@ import {
   M, baslangicDili, dilSec, gorevAdi, gorevBrifi, kumandaModunuSec,
 } from './ui/dil';
 import { dokunmatikKur, dokunmatikVar } from './ui/dokunmatik';
+import type { DokunmatikDuzeni } from './ui/dokunmatik';
 import { oku, yaz } from './ui/kayit';
 
 /**
@@ -75,7 +76,7 @@ function temizle(stage: Stage): void {
 
 /** Bir makineyle bir bölüm. Oyuncu seçime dönmek isteyince çözülür. */
 function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
-  const { sahne: scene, gorunum } = arac.kur!();
+  const { sahne: scene, gorunum, pad: padKaynagi } = arac.kur!();
   const mission = new Mission(scene);
 
   document.title = `${arac.ad} · Yılmaz Vinç`;
@@ -104,7 +105,7 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
 
   // Telefonda klavye yok: hem makinenin kumandası hem de detay satırlarını
   // açan anahtar dokunmatik olmak zorunda, yoksa erişilemez kalıyorlar.
-  const dokunmatik = dokunmatikVar() && arac.dokunmatik !== undefined;
+  const dokunmatik = dokunmatikVar() && padKaynagi !== undefined;
   kumandaModunuSec(dokunmatik);
 
   const el = (id: string): HTMLElement | null => document.getElementById(id);
@@ -122,22 +123,24 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
   const padHost = el('dokunmatik');
   // Çevirme düğmesi araç tanımında DEĞİL: makinenin bir fonksiyonu değil,
   // ekranın kendi işi. Her makinenin padine buradan ekleniyor.
-  const aracinDuzeni = arac.dokunmatik;
-  const duzen = aracinDuzeni && ((calisiyor: boolean) => {
-    const d = aracinDuzeni(calisiyor);
-    return {
-      ...d,
-      yardimci: [...d.yardimci, {
-        isaret: '⟳', ad: M.dokunma.cevir,
-        eylem: (): void => {
-          yatayZorla(!document.body.classList.contains('yatay-zorla'));
-          olculeriYaz();
-        },
-      }],
-    };
-  });
-  const pad = dokunmatik && padHost && duzen
-    ? dokunmatikKur(padHost, duzen, keys)
+  const kaynak = padKaynagi && {
+    anahtar: padKaynagi.anahtar,
+    duzen: (): DokunmatikDuzeni => {
+      const d = padKaynagi.duzen();
+      return {
+        ...d,
+        yardimci: [...d.yardimci, {
+          isaret: '⟳', ad: M.dokunma.cevir,
+          eylem: (): void => {
+            yatayZorla(!document.body.classList.contains('yatay-zorla'));
+            olculeriYaz();
+          },
+        }],
+      };
+    },
+  };
+  const pad = dokunmatik && padHost && kaynak
+    ? dokunmatikKur(padHost, kaynak, keys)
     : null;
   const padiSok = (): void => pad?.sok();
 
@@ -305,9 +308,9 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
       }
       if (hud.detay) hud.detay.textContent = detayMetni();
 
-    // Faz değişince pad yeniden çiziliyor ve düğme kümesi değişiyor: ölçüler
+    // Pad yeniden çizilince düğme kümesi de değişmiş olabiliyor: ölçüler
     // ancak O ZAMAN yenileniyor.
-    if (pad?.guncelle(scene.calismaModunda)) olculeriYaz();
+    if (pad?.guncelle()) olculeriYaz();
 
       uyariGoster();
       konduGoster();

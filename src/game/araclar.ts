@@ -5,7 +5,8 @@ import {
   SahneGorunumu, VincGorunumu, ForkliftGorunumu,
 } from '../render/gorunum';
 import { M } from '../ui/dil';
-import type { DokunmatikDuzeni, DuzenUretici } from '../ui/dokunmatik';
+import type { DokunmatikDuzeni, PadKaynagi } from '../ui/dokunmatik';
+import { OutriggerState } from '../sim/loadChart';
 
 /**
  * Oynanabilir araçlar.
@@ -40,9 +41,15 @@ export interface AracTanimi {
    * gerekir" notuyla duruyor: kartı kapatmak yerine dürüstçe söylüyoruz,
    * çünkü klavyeli bir tablette pekâlâ oynanıyor.
    */
-  dokunmatik?: DuzenUretici;
+  dokunmatikVar?: boolean;
   hazir: boolean;
-  kur?: () => { sahne: OyunSahnesi; gorunum: SahneGorunumu };
+  /**
+   * Padin kaynağı `kur()` ile birlikte dönüyor, tanımda durmuyor: düğme
+   * etiketleri makinenin O ANKİ durumundan besleniyor ("4 kat yap"), yani
+   * pade sahnenin kendisi lazım. Seçim ekranının ihtiyacı olan tek şey
+   * padin VAR OLUP OLMADIĞI, o da `dokunmatikVar` bayrağında.
+   */
+  kur?: () => { sahne: OyunSahnesi; gorunum: SahneGorunumu; pad?: PadKaynagi };
 }
 
 /**
@@ -91,13 +98,21 @@ function forkliftPadi(): DokunmatikDuzeni {
  * `ayaklar` iki fazda da duruyor: fazı değiştiren düğme o, gizlemek oyuncuyu
  * kapatırdı.
  */
-function vincPadi(calismaModunda: boolean): DokunmatikDuzeni {
+function vincPadi(sahne: Scene): DokunmatikDuzeni {
   const d = M.dokunma;
+  // Sırayla gezen iki düğme: etiketleri BİR SONRAKİ durumu yazıyor, yani
+  // basınca ne olacağını.
+  const ayakAdi = {
+    [OutriggerState.Stowed]: d.ayakYariAc,
+    [OutriggerState.Half]: d.ayakTamAc,
+    [OutriggerState.Full]: d.ayakTopla,
+  }[sahne.outriggers.state];
+  const ayak = { tetik: 'ayaklar' as const, isaret: ayakSimgesi(), ad: ayakAdi };
   const yardimci = [
     { tetik: 'sifirla' as const, isaret: '⟲', ad: d.sifirla },
     { tetik: 'cikis' as const, isaret: '⊞', ad: d.makineler },
   ];
-  if (!calismaModunda) {
+  if (!sahne.calismaModunda) {
     return {
       sol: [
         { komut: 'geri', isaret: '◀', ad: d.geri },
@@ -106,7 +121,7 @@ function vincPadi(calismaModunda: boolean): DokunmatikDuzeni {
       ],
       // Tek düğme ama sağ başparmağın altındaki DOĞRU düğme: bu fazda
       // oyuncunun yapacağı tek iş ayakları açmak.
-      sag: [{ tetik: 'ayaklar', isaret: ayakSimgesi(), ad: d.ayaklar }],
+      sag: [ayak],
       yardimci,
     };
   }
@@ -121,8 +136,10 @@ function vincPadi(calismaModunda: boolean): DokunmatikDuzeni {
       { komut: 'kancaAsagi', isaret: '↓', ad: d.kancaAsagi },
       { komut: 'kancaYukari', isaret: '↑', ad: d.kancaYukari },
       { tetik: 'kanca', isaret: kancaSimgesi(), ad: d.kanca },
-      { tetik: 'kat', isaret: katSimgesi(), ad: d.kat },
-      { tetik: 'ayaklar', isaret: ayakSimgesi(), ad: d.ayaklar },
+      { tetik: 'kat', isaret: katSimgesi(),
+        ad: sahne.crane.reevingSuresi > 0 ? d.katSuruyor
+          : d.katYap(sahne.crane.sonrakiKat) },
+      ayak,
     ],
     yardimci,
   };
@@ -162,11 +179,17 @@ export function araclar(): readonly AracTanimi[] {
     seviye: 2,
     simge: forkliftSimgesi(),
     tuslar: M.forklift.tuslar,
-    dokunmatik: forkliftPadi,
+    dokunmatikVar: true,
     hazir: true,
     kur: () => {
       const sahne = new ForkliftSahnesi();
-      return { sahne, gorunum: new ForkliftGorunumu(sahne) };
+      return {
+        sahne,
+        gorunum: new ForkliftGorunumu(sahne),
+        // Forklift fazsız ve düğmeleri sabit: sabit anahtar, hiç yeniden
+        // çizilmiyor.
+        pad: { anahtar: () => 'sabit', duzen: forkliftPadi },
+      };
     },
   },
   {
@@ -178,11 +201,23 @@ export function araclar(): readonly AracTanimi[] {
     seviye: 3,
     simge: vincSimgesi(),
     tuslar: M.vinc.tuslar,
-    dokunmatik: vincPadi,
+    dokunmatikVar: true,
     hazir: true,
     kur: () => {
       const sahne = new Scene();
-      return { sahne, gorunum: new VincGorunumu(sahne) };
+      return {
+        sahne,
+        gorunum: new VincGorunumu(sahne),
+        pad: {
+          // Halat geçirme SÜRESİ anahtara girmiyor, sadece sürüp sürmediği:
+          // saniye saniye yeniden çizmek padi her saniye söküp kurardı ve o
+          // sırada basılı tutulan düğme (halat sal gibi) her seferinde
+          // bırakılırdı.
+          anahtar: () => `${sahne.calismaModunda}|${sahne.outriggers.state}`
+            + `|${sahne.crane.katSayisi}|${sahne.crane.reevingSuresi > 0}`,
+          duzen: () => vincPadi(sahne),
+        },
+      };
     },
   },
   {

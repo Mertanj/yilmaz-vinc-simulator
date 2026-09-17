@@ -101,7 +101,7 @@ function enIyiSatiri(a: AracTanimi): string {
  * oynanıyor. Ama oyuncu makineye girip kumandasız kaldığını orada keşfetmesin.
  */
 function klavyeNotu(a: AracTanimi): string {
-  if (!a.hazir || a.dokunmatik || !dokunmatikVar()) return '';
+  if (!a.hazir || a.dokunmatikVar || !dokunmatikVar()) return '';
   return `<div class="klavye">⌨ ${M.secim.klavyeGerek}</div>`;
 }
 

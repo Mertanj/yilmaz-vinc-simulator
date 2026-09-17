@@ -66,6 +66,15 @@ export interface Metinler {
     sifirla: string; makineler: string; cevir: string;
     /** Vinç: faza göre değişen kümenin düğmeleri. */
     ayaklar: string; bomKaldir: string; bomIndir: string;
+    /**
+     * Ayak ve halat katı düğmeleri EYLEMİ yazıyor, durumu değil: ikisi de
+     * sırayla gezen düğmeler ve "ayaklar" / "halat katı" yazınca basınca ne
+     * olacağı hiç söylenmiyordu.
+     */
+    ayakYariAc: string; ayakTamAc: string; ayakTopla: string;
+    katYap: (kat: number) => string;
+    /** Halat geçirilirken: düğme 14 saniye boyunca sessiz kalmasın. */
+    katSuruyor: string;
     teleskopUzat: string; teleskopKis: string;
     kancaYukari: string; kancaAsagi: string; kanca: string; kat: string;
   };
@@ -88,6 +97,15 @@ export interface Metinler {
     satir: {
       kancada: string; yaricap: string; bom: string; halat: string;
       ayaklar: string; tabloDisi: string;
+      /**
+       * Sınırı hangi şeyin koyduğu — her zaman görünen satırın etiketinde.
+       *
+       * Oyuncunun halat katı düğmesi karşısındaki asıl sorusu bu: "kat
+       * artırsam işe yarar mı?" Halat bağlıyorsa yarar, tablo bağlıyorsa
+       * yaramaz. Uzun hâli gösterge bloğunun alt satırında duruyor ama o
+       * satır dar ekranda gizli.
+       */
+      sinirHalat: string; sinirTablo: string;
       toplu: string; yariAcik: string; tamAcik: string;
     };
     alt: {
@@ -102,6 +120,10 @@ export interface Metinler {
       asiriBas: string; asiriGovde: (yuk: string, r: string, sinir: string) => string;
       asiriCozumKilitli: string; asiriCozum: string;
       yakinBas: string; yakinGovde: (yuk: string, sinir: string, r: string) => string;
+      /** Halat katı değiştirilemeyince — düğme sessizce reddediyordu. */
+      katBas: string;
+      katGovde: (neden: 'suruyor' | 'yuklu' | 'yuksek') => string;
+      katCozum: string;
     };
     ipucu: {
       sallaniyor: string; yanCekme: string; ortala: string;
@@ -185,6 +207,8 @@ const TR: Metinler = {
     kaldir: 'kaldır', indir: 'indir', yatGeri: 'geri yat', yatOn: 'öne yat',
     sifirla: 'sıfırla', makineler: 'makineler', cevir: 'çevir',
     ayaklar: 'ayaklar', bomKaldir: 'bom kaldır', bomIndir: 'bom indir',
+    ayakYariAc: 'yarı aç', ayakTamAc: 'tam aç', ayakTopla: 'ayakları topla',
+    katYap: (kat) => `${kat} kat yap`, katSuruyor: 'geçiriliyor…',
     teleskopUzat: 'uzat', teleskopKis: 'kıs',
     kancaYukari: 'halat sar', kancaAsagi: 'halat sal', kanca: 'kanca',
     kat: 'halat katı',
@@ -215,6 +239,7 @@ const TR: Metinler = {
     satir: {
       kancada: 'kancada', yaricap: 'yarıçap', bom: 'bom', halat: 'halat',
       ayaklar: 'ayaklar', tabloDisi: 'tablo dışı',
+      sinirHalat: 'halat', sinirTablo: 'tablo',
       toplu: 'TOPLU', yariAcik: 'YARI AÇIK', tamAcik: 'TAM AÇIK',
     },
     alt: {
@@ -242,6 +267,14 @@ const TR: Metinler = {
       yakinBas: 'SINIRA YAKLAŞIYORSUN',
       yakinGovde: (yuk, sinir, r) => `${yuk} t / ${sinir} t · yarıçap ${r} m.`
         + ' Yarıçapı büyütürsen kollar kilitlenir.',
+      katBas: 'HALAT KATI DEĞİŞTİRİLEMEDİ',
+      katGovde: (neden) => neden === 'yuklu'
+        ? 'Kancada yük var. Sapancı halatı ancak kanca boşken yeniden geçirebilir.'
+        : neden === 'yuksek'
+          ? 'Kanca havada. Halatı yeniden geçirmek için kancanın el altında,'
+            + ' yere yakın olması gerekiyor.'
+          : 'Halat zaten geçiriliyor.',
+      katCozum: 'Yükü bırak, kancayı yere indir, sonra tekrar dene.',
     },
     ipucu: {
       surus: (k) => `çalışma alanına yanaş, sonra ayakları aç (${k.ayaklar})`,
@@ -378,6 +411,8 @@ const EN: Metinler = {
     kaldir: 'raise', indir: 'lower', yatGeri: 'tilt back', yatOn: 'tilt fwd',
     sifirla: 'restart', makineler: 'machines', cevir: 'rotate',
     ayaklar: 'outriggers', bomKaldir: 'boom up', bomIndir: 'boom down',
+    ayakYariAc: 'half deploy', ayakTamAc: 'full deploy', ayakTopla: 'stow legs',
+    katYap: (kat) => `go to ${kat} parts`, katSuruyor: 'reeving…',
     teleskopUzat: 'extend', teleskopKis: 'retract',
     kancaYukari: 'reel in', kancaAsagi: 'pay out', kanca: 'hook',
     kat: 'parts of line',
@@ -408,6 +443,7 @@ const EN: Metinler = {
     satir: {
       kancada: 'on hook', yaricap: 'radius', bom: 'boom', halat: 'rope',
       ayaklar: 'outriggers', tabloDisi: 'off chart',
+      sinirHalat: 'rope', sinirTablo: 'chart',
       toplu: 'STOWED', yariAcik: 'HALF', tamAcik: 'FULL',
     },
     alt: {
@@ -435,6 +471,15 @@ const EN: Metinler = {
       yakinBas: 'APPROACHING THE LIMIT',
       yakinGovde: (yuk, sinir, r) => `${yuk} t / ${sinir} t · radius ${r} m.`
         + ' Go out any further and the levers lock.',
+      katBas: 'CANNOT RE-REEVE',
+      katGovde: (neden) => neden === 'yuklu'
+        ? 'There is a load on the hook. The rope can only be re-reeved with the'
+          + ' hook empty.'
+        : neden === 'yuksek'
+          ? 'The hook is up in the air. Re-reeving needs the hook down at ground'
+            + ' level, where the slinger can reach it.'
+          : 'Already re-reeving.',
+      katCozum: 'Set the load down, lower the hook to the ground, then try again.',
     },
     ipucu: {
       surus: (k) => `pull up to the set-up zone, then set the outriggers (${k.ayaklar})`,

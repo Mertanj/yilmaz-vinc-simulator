@@ -261,6 +261,14 @@ export interface Grabbable {
   ayakM?: number;
 }
 
+/**
+ * Kat değiştirme reddedilince sebebi — metin değil KOD.
+ *
+ * Önceden Türkçe cümle dönüyordu ve zaten hiçbir yerde okunmuyordu; artık
+ * uyarı şeridine çıkıyor, dolayısıyla çevrilebilir olmak zorunda.
+ */
+export type KatRet = '' | 'suruyor' | 'yuklu' | 'yuksek';
+
 export class Crane {
   readonly boomBase: Body;
   readonly boomFly: Body;
@@ -730,11 +738,11 @@ export class Crane {
    * Kat sayısını değiştirmeye başlar. Kanca boş ve yere yakın olmalı —
    * sapancı halatı ancak kanca elinin altındayken yeniden geçirebilir.
    */
-  katDegistir(): { ok: boolean; neden: string } {
-    if (this.reevingKalan > 0) return { ok: false, neden: 'zaten değiştiriliyor' };
-    if (this.attached) return { ok: false, neden: 'önce yükü bırak' };
+  katDegistir(): { ok: boolean; neden: KatRet } {
+    if (this.reevingKalan > 0) return { ok: false, neden: 'suruyor' };
+    if (this.attached) return { ok: false, neden: 'yuklu' };
     if (this.hook.getPosition().y > CRANE.reevingMaxHookY) {
-      return { ok: false, neden: 'kancayı yere indir' };
+      return { ok: false, neden: 'yuksek' };
     }
     const i = KAT_SECENEKLERI.indexOf(this.kat);
     const sonraki = KAT_SECENEKLERI[(i + 1) % KAT_SECENEKLERI.length] ?? 2;
