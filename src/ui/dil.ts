@@ -61,7 +61,7 @@ export interface Metinler {
   dokunma: {
     ileri: string; geri: string; fren: string;
     kaldir: string; indir: string; yatGeri: string; yatOn: string;
-    sifirla: string; makineler: string;
+    sifirla: string; makineler: string; cevir: string;
   };
 
   ust: { puan: (n: number) => string; bolumTamam: string };
@@ -144,7 +144,7 @@ export interface Metinler {
   };
 
   /** Dar dikey ekranda yan çevirme çağrısı. */
-  cevir: { bas: string; govde: string; yineOyna: string };
+  cevir: { bas: string; govde: string; yineOyna: string; yatayOyna: string };
 
   dekor: { sanayi: string; kurulum: string; sevkiyat: string; malKabul: string };
 
@@ -174,7 +174,7 @@ const TR: Metinler = {
   dokunma: {
     ileri: 'ileri', geri: 'geri', fren: 'fren',
     kaldir: 'kaldır', indir: 'indir', yatGeri: 'geri yat', yatOn: 'öne yat',
-    sifirla: 'sıfırla', makineler: 'makineler',
+    sifirla: 'sıfırla', makineler: 'makineler', cevir: 'çevir',
   },
   ust: { puan: (n) => `${n} puan`, bolumTamam: 'bölüm tamamlandı' },
   panel: {
@@ -325,6 +325,7 @@ const TR: Metinler = {
       + 'hedefi aynı kadrajda görüyorsun; kumanda da iki başparmağın altına '
       + 'geliyor. Çeviremiyorsan dikeyde de oynanıyor.',
     yineOyna: 'dikey oyna',
+    yatayOyna: 'yatay oyna',
   },
   dekor: {
     sanayi: 'SANAYİ SİTESİ · C BLOK', kurulum: 'KURULUM ALANI',
@@ -362,7 +363,7 @@ const EN: Metinler = {
   dokunma: {
     ileri: 'forward', geri: 'reverse', fren: 'brake',
     kaldir: 'raise', indir: 'lower', yatGeri: 'tilt back', yatOn: 'tilt fwd',
-    sifirla: 'restart', makineler: 'machines',
+    sifirla: 'restart', makineler: 'machines', cevir: 'rotate',
   },
   ust: { puan: (n) => `${n} pts`, bolumTamam: 'level complete' },
   panel: {
@@ -514,6 +515,7 @@ const EN: Metinler = {
       + 'the target in the same frame, and puts the controls under both thumbs. '
       + 'If you cannot turn it, portrait works too.',
     yineOyna: 'play in portrait',
+    yatayOyna: 'play in landscape',
   },
   dekor: {
     sanayi: 'INDUSTRIAL ESTATE · BLOCK C', kurulum: 'SET-UP ZONE',

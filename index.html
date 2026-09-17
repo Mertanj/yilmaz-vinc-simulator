@@ -16,7 +16,34 @@
     touch-action: none; user-select: none; -webkit-user-select: none;
     -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent;
   }
-  #game { position: fixed; inset: 0; }
+  /* Ölçü sorgularının baktığı kap. `container-type: size` hem sorguları
+     mümkün kılıyor hem de içindeki `position: fixed` katmanları bu kaba
+     bağlıyor. */
+  #sahne {
+    position: fixed; inset: 0;
+    container-type: size; container-name: sahne;
+    /* Alçak ekran yerleşiminin iki ölçüsü. Kabın KENDİSİNDE tanımlılar,
+       ölçü sorgusunun içinde değil: kapsayıcı sorgusu yalnızca kabın
+       TORUNLARINA uyguluyor, `:root` ise onun atası — orada tanımlanan
+       değişken hiç var olmuyor, `calc()` sessizce geçersiz oluyor ve panel
+       içeriğine göre büzülüyordu. */
+    --panel-en: 188px;
+    --yardimci-en: 195px;
+  }
+  /* --- zorlanmış yatay ---
+     Sahadan: "telefonda main'den denediğimde yataya dönmüyor yine." Telefonun
+     döndürme kilidi açıkken tarayıcı yatayı hiç görmüyor; `screen.orientation
+     .lock()` ise tam ekran istiyor ve iOS'ta hiç yok. Kalan dürüst yol oyunu
+     KENDİMİZİN çevirmesi: kap 90° dönüyor, en ve boy yer değiştiriyor,
+     oyuncu telefonu fiziksel olarak çeviriyor. Her tarayıcıda çalışıyor,
+     izin istemiyor, tek kod yolu. */
+  body.yatay-zorla #sahne {
+    inset: auto; top: 0; left: 0;
+    width: 100vh; height: 100vw;
+    transform-origin: 0 0;
+    transform: translateX(100vw) rotate(90deg);
+  }
+  #game { position: absolute; inset: 0; }
   /* --- üst şerit: kim, hangi görev, ne kadar süre, kaç puan --- */
   #ust {
     position: fixed; left: 0; right: 0; top: 0; z-index: 10; pointer-events: none;
@@ -157,7 +184,7 @@
     padding: 1px 5px; color: #E4E9EB; font: inherit; font-size: 11px;
   }
 
-  @media (max-width: 720px) {
+  @container sahne (max-width: 720px) {
     /* Görevin uzun açıklaması dar ekranda satırı taşırıyor; kod, ad ve
        tonaj kalıyor — oyuncunun karar verirken ihtiyacı olan zaten o. */
     #gorev-brif { display: none; }
@@ -225,9 +252,7 @@
      ekranı aşıyor ve ekran kumandasının üstüne biniyor. Panel buradan itibaren
      kendi kendine küçülüyor: ölçüler, detay açıkken bile pad'in üst kenarının
      üstünde bitecek şekilde seçildi. */
-  @media (max-height: 460px) {
-    /* Panelin genişliği tek yerde: ipucu şeridi de buradan hizalanıyor. */
-    :root { --panel-en: 188px; }
+  @container sahne (max-height: 460px) {
     #gorev-brif { display: none; }
     #ust { padding: calc(6px + env(safe-area-inset-top, 0px)) 12px 6px; font-size: 12px; }
     #panel {
@@ -262,7 +287,7 @@
     #hint {
       position: fixed; transform: none; margin: 0;
       left: calc(16px + var(--panel-en) + 10px + env(safe-area-inset-left, 0px));
-      right: calc(136px + env(safe-area-inset-right, 0px));
+      right: calc(var(--yardimci-en) + env(safe-area-inset-right, 0px));
       top: calc(34px + env(safe-area-inset-top, 0px));
       padding: 6px 12px; text-align: center; font-size: 10.5px;
       border: 1px solid #253038; border-radius: 4px;
@@ -294,7 +319,7 @@
      değil — telefon çevrilse bile çerçeve dikey kalıyor ve oyun hiç
      başlamıyordu. Artık kapatılabiliyor ve kapatıldığı hatırlanıyor.
      z-index seçim ekranının (40) ALTINDA — makine seçmek dikeyde zaten rahat. */
-  @media (orientation: portrait) and (max-width: 560px) {
+  @container sahne (orientation: portrait) and (max-width: 560px) {
     #dokunmatik .pad.sol, #dokunmatik .pad.sag {
       display: grid; grid-template-columns: repeat(2, auto); gap: 8px;
     }
@@ -339,12 +364,21 @@
       font-size: 26px; letter-spacing: 0.06em; color: #E8A62C;
     }
     #cevir p { margin: 0; font-size: 12.5px; line-height: 1.6; max-width: 20rem; }
-    #cevir button.yine {
-      margin-top: 6px; font: inherit; font-size: 12px; cursor: pointer;
-      background: #E8A62C; border: none; border-radius: 4px; color: #16191B;
-      padding: 10px 20px; font-weight: 600; letter-spacing: 0.03em;
+    #cevir .secenekler { display: flex; gap: 10px; margin-top: 6px; flex-wrap: wrap;
+      justify-content: center; }
+    #cevir .secenekler button {
+      font: inherit; font-size: 12px; cursor: pointer; border-radius: 4px;
+      padding: 10px 18px; font-weight: 600; letter-spacing: 0.03em;
     }
-    #cevir button.yine:focus-visible { outline: 2px solid #E4E9EB; outline-offset: 2px; }
+    /* Yatay ÖNERİLEN yol, o yüzden dolu; dikey de tam anlamıyla oynanıyor,
+       o yüzden zayıf değil sadece sakin. */
+    #cevir button.yatay { background: #E8A62C; border: none; color: #16191B; }
+    #cevir button.yine {
+      background: transparent; border: 1px solid #3B4750; color: #C7D1D6;
+    }
+    #cevir .secenekler button:focus-visible {
+      outline: 2px solid #E4E9EB; outline-offset: 2px;
+    }
     /* Bir kez kapatıldı: bu oyuncu ya çeviremiyor ya da istemiyor. */
     body.cevir-kapali #cevir { display: none; }
   }
@@ -534,8 +568,17 @@
 </style>
 </head>
 <body>
-  <div id="game"></div>
   <div id="secim" hidden></div>
+  <div id="cevir"></div>
+
+  <!-- Oyunun bütün katmanları TEK bir kapta. İki sebep var: kap 90° çevrilince
+       içindeki `position: fixed` katmanlar da onunla dönüyor (transform'lu bir
+       ata, sabit konumlu torunlar için içeren blok oluyor), ve ölçüye bağlı
+       kurallar artık pencereye değil BU KABA bakıyor — çevrilmiş kap yatay
+       şeklinde, pencere hâlâ dikey. Seçim ekranı ve çevirme çağrısı dışarıda:
+       ikisi de dikeyde gayet rahat okunuyor ve dönmemeleri gerekiyor. -->
+  <div id="sahne">
+  <div id="game"></div>
   <div id="ust">
     <b>YILMAZ VİNÇ</b>
     <span id="gorev">T1/5 · yük hazırlanıyor</span>
@@ -569,11 +612,11 @@
   </div>
 
   <div id="dokunmatik" hidden></div>
-  <div id="cevir"></div>
 
   <div id="kondu" hidden></div>
 
   <div id="sonuc" hidden><div id="sonuc-ic"></div></div>
+  </div>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

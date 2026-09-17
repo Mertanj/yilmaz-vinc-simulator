@@ -17,6 +17,14 @@ export interface DokunmatikDugme {
   komut?: Komut;
   /** Bir karelik tetik. `komut` ile birlikte verilmez. */
   tetik?: Tetik;
+  /**
+   * Arayüz eylemi — makineye hiç gitmiyor.
+   *
+   * `tetik` makineye bir komut yolluyor (sıfırla, kanca, ayaklar); `eylem` ise
+   * ekranın kendi işi (ekranı çevir). İkisini ayrı tutmak `Kumanda`'yı
+   * yerleşim kararlarından uzak tutuyor.
+   */
+  eylem?: () => void;
   /** Düğmenin üstündeki işaret. */
   isaret: string;
   /** İşaretin altındaki kısa ad. */
@@ -52,60 +60,27 @@ export function dokunmatikVar(): boolean {
 export function dokunmatikKur(
   host: HTMLElement, duzen: DokunmatikDuzeni, kumanda: Kumanda,
 ): () => void {
-  host.innerHTML = [
-    `<div class="pad sol">${duzen.sol.map(dugme).join('')}</div>`,
-    `<div class="pad sag">${duzen.sag.map(dugme).join('')}</div>`,
-    `<div class="pad yardimci">${duzen.yardimci.map(dugme).join('')}</div>`,
-  ].join('');
+  // Düğmeler tanımlarıyla SIRAYLA eşleşiyor: DOM'dan geri okumak (etikete ya
+  // da veri niteliğine bakmak) aynı bilgiyi iki kez kodlamak olurdu.
+  const kumeler: Array<[string, DokunmatikDugme[]]> = [
+    ['sol', duzen.sol], ['sag', duzen.sag], ['yardimci', duzen.yardimci],
+  ];
+  host.innerHTML = kumeler
+    .map(([ad, ds]) => `<div class="pad ${ad}">${ds.map(dugme).join('')}</div>`)
+    .join('');
   host.hidden = false;
   // Pad açıkken klavye tuş listesi anlamsız: geniş bir tablette ikisi de
   // sığıyor ama biri yalan söylüyor.
   document.body.classList.add('dokunmatik');
 
   const sokucular: Array<() => void> = [];
-  const dugmeler = Array.from(host.querySelectorAll<HTMLButtonElement>('button'));
-  for (const el of dugmeler) {
-    const komut = el.dataset['komut'] as Komut | undefined;
-    const tetik = el.dataset['tetik'] as Tetik | undefined;
-
-    if (tetik) {
-      // Tetikler `click` ile: sıfırlamak ve makine değiştirmek turu bitiren
-      // işler, yanlışlıkla sürtünen bir parmağa feda edilmesinler.
-      const f = (): void => kumanda.tetikle(tetik);
-      el.addEventListener('click', f);
-      sokucular.push(() => el.removeEventListener('click', f));
-      continue;
-    }
-    if (!komut) continue;
-
-    const bas = (e: PointerEvent): void => {
-      e.preventDefault();
-      // İşaretçiyi yakala: parmak düğmeden kayıp çıksa bile `pointerup` yine
-      // buraya geliyor. Yakalamazsak parmak kayınca komut basılı kalır ve
-      // makine kendi kendine gaza yapışır.
-      //
-      // Yakalama BAŞARISIZ olabilir (işaretçi artık etkin değilse tarayıcı
-      // istisna fırlatıyor) ve bu komutu yutmamalı: yakalama bir kolaylık,
-      // düğmenin çalışması ona bağlı değil.
-      try { el.setPointerCapture(e.pointerId); } catch { /* yakalama şart değil */ }
-      el.classList.add('basili');
-      kumanda.komutBas(komut);
-    };
-    const birak = (): void => {
-      el.classList.remove('basili');
-      kumanda.komutBirak(komut);
-    };
-    el.addEventListener('pointerdown', bas);
-    el.addEventListener('pointerup', birak);
-    el.addEventListener('pointercancel', birak);
-    // Sistem dokunuşu (bildirim çekmecesi, arama) yakalamayı elimizden alırsa
-    // `pointerup` hiç gelmiyor; bırakmanın son güvencesi bu.
-    el.addEventListener('lostpointercapture', birak);
-    sokucular.push(() => {
-      el.removeEventListener('pointerdown', bas);
-      el.removeEventListener('pointerup', birak);
-      el.removeEventListener('pointercancel', birak);
-      el.removeEventListener('lostpointercapture', birak);
+  for (const [ad, tanimlar] of kumeler) {
+    const el = host.querySelector(`.pad.${ad}`);
+    if (!el) continue;
+    const dugmeler = Array.from(el.querySelectorAll('button'));
+    dugmeler.forEach((b, i) => {
+      const t = tanimlar[i];
+      if (t) sokucular.push(bagla(b, t, kumanda));
     });
   }
 
@@ -117,11 +92,55 @@ export function dokunmatikKur(
   };
 }
 
+/** Tek düğmeyi bağlar; dönen fonksiyon dinleyicileri söküyor. */
+function bagla(
+  el: HTMLButtonElement, t: DokunmatikDugme, kumanda: Kumanda,
+): () => void {
+  // Tek basışlık işler `click` ile: sıfırlamak, makine değiştirmek ve ekranı
+  // çevirmek turu kesen işler, yanlışlıkla sürtünen bir parmağa feda
+  // edilmesinler.
+  const tekBasis = t.eylem ?? (t.tetik ? () => kumanda.tetikle(t.tetik!) : null);
+  if (tekBasis) {
+    el.addEventListener('click', tekBasis);
+    return () => el.removeEventListener('click', tekBasis);
+  }
+  const komut = t.komut;
+  if (!komut) return () => { /* bağlanacak bir şey yok */ };
+
+  const bas = (e: PointerEvent): void => {
+    e.preventDefault();
+    // İşaretçiyi yakala: parmak düğmeden kayıp çıksa bile `pointerup` yine
+    // buraya geliyor. Yakalamazsak parmak kayınca komut basılı kalır ve
+    // makine kendi kendine gaza yapışır.
+    //
+    // Yakalama BAŞARISIZ olabilir (işaretçi artık etkin değilse tarayıcı
+    // istisna fırlatıyor) ve bu komutu yutmamalı: yakalama bir kolaylık,
+    // düğmenin çalışması ona bağlı değil.
+    try { el.setPointerCapture(e.pointerId); } catch { /* yakalama şart değil */ }
+    el.classList.add('basili');
+    kumanda.komutBas(komut);
+  };
+  const birak = (): void => {
+    el.classList.remove('basili');
+    kumanda.komutBirak(komut);
+  };
+  el.addEventListener('pointerdown', bas);
+  el.addEventListener('pointerup', birak);
+  el.addEventListener('pointercancel', birak);
+  // Sistem dokunuşu (bildirim çekmecesi, arama) yakalamayı elimizden alırsa
+  // `pointerup` hiç gelmiyor; bırakmanın son güvencesi bu.
+  el.addEventListener('lostpointercapture', birak);
+  return () => {
+    el.removeEventListener('pointerdown', bas);
+    el.removeEventListener('pointerup', birak);
+    el.removeEventListener('pointercancel', birak);
+    el.removeEventListener('lostpointercapture', birak);
+  };
+}
+
 function dugme(d: DokunmatikDugme): string {
-  const nitelik = d.komut ? `data-komut="${d.komut}"`
-    : d.tetik ? `data-tetik="${d.tetik}"` : '';
-  const sinif = d.tetik ? ' class="tetik"' : '';
-  return `<button type="button"${sinif} ${nitelik} aria-label="${d.ad}">`
+  const sinif = d.tetik || d.eylem ? ' class="tetik"' : '';
+  return `<button type="button"${sinif} aria-label="${d.ad}">`
     + `<span class="isaret" aria-hidden="true">${d.isaret}</span>`
     + `<span class="ad">${d.ad}</span></button>`;
 }

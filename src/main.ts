@@ -120,8 +120,20 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
 
   // --- ekran üstü kumanda ---
   const padHost = el('dokunmatik');
-  const padiSok = dokunmatik && padHost && arac.dokunmatik
-    ? dokunmatikKur(padHost, arac.dokunmatik, keys)
+  // Çevirme düğmesi araç tanımında DEĞİL: makinenin bir fonksiyonu değil,
+  // ekranın kendi işi. Her makinenin padine buradan ekleniyor.
+  const duzen = arac.dokunmatik && {
+    ...arac.dokunmatik,
+    yardimci: [...arac.dokunmatik.yardimci, {
+      isaret: '⟳', ad: M.dokunma.cevir,
+      eylem: (): void => {
+        yatayZorla(!document.body.classList.contains('yatay-zorla'));
+        olculeriYaz();
+      },
+    }],
+  };
+  const padiSok = dokunmatik && padHost && duzen
+    ? dokunmatikKur(padHost, duzen, keys)
     : () => { /* klavyeyle oynanıyor */ };
 
   /**
@@ -145,21 +157,37 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
     };
   })();
 
-  /** Kumandanın kapladığı alt şeridi kameraya bildir. */
-  const altPayiniOlc = (): void => {
-    const kume = padHost?.querySelector<HTMLElement>('.pad.sol');
-    if (!kume) { camera.altPayi(0); return; }
-    const ust = kume.getBoundingClientRect().top;
-    camera.altPayi(Math.max(0, window.innerHeight - ust + 8));
-  };
-  altPayiniOlc();
+  /**
+   * Kumandanın kapladığı yerleri ölç ve kullanacaklara bildir.
+   *
+   * `offsetWidth/Height` kullanılıyor, `getBoundingClientRect()` değil:
+   * zorlanmış yatayda sahne 90° dönük ve rect ekran uzayında EKSEN HİZALI
+   * kutu veriyor, yani dönük bir kümenin `height`'ı aslında onun genişliği
+   * oluyor. `offset*` dönüşümden etkilenmiyor, kabın kendi uzayında ölçüyor.
+   *
+   * Yardımcı kümenin genişliği CSS'e yazılıyor: ipucu şeridi ona göre
+   * duruyor ve küme sabit genişlikte DEĞİL — etiketler dile göre uzuyor
+   * ("makineler" / "machines") ve her makinenin yardımcı düğme sayısı farklı
+   * olabiliyor. Sabit bir sayı yazmak bir dilde ya da bir araçta sessizce
+   * çakışırdı. Sabitler: 14 = kümenin kenar boşluğu, 8 = aradaki nefes payı.
+   */
+  const sahneKabi = el('sahne');
+  function olculeriYaz(): void {
+    const sol = padHost?.querySelector<HTMLElement>('.pad.sol');
+    camera.altPayi(sol ? sol.offsetHeight + 22 : 0);
+    const yardimci = padHost?.querySelector<HTMLElement>('.pad.yardimci');
+    if (sahneKabi && yardimci) {
+      sahneKabi.style.setProperty('--yardimci-en', `${yardimci.offsetWidth + 22}px`);
+    }
+  }
+  olculeriYaz();
 
   // --- arka plan, ekran boyutuna bağlı ---
   let arkaPlan = gorunum.arkaPlan(stage.app.screen.width, stage.app.screen.height);
   stage.backdrop.addChild(arkaPlan);
   const yenidenBoyutlandi = (): void => {
     // Ekran döndüğünde kumanda yeniden diziliyor: kapladığı şerit de değişiyor.
-    altPayiniOlc();
+    olculeriYaz();
     arkaPlan.destroy({ children: true });
     arkaPlan = gorunum.arkaPlan(stage.app.screen.width, stage.app.screen.height);
     stage.backdrop.addChild(arkaPlan);
@@ -402,11 +430,31 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
  * çağrı kapatılabiliyor ve kapatıldığı hatırlanıyor.
  */
 const YATAY_ANAHTARI = 'yv.yatayCagri';
+const ZORLA_ANAHTARI = 'yv.yatayZorla';
+
+/**
+ * Oyunu kendimiz çeviriyoruz.
+ *
+ * Telefonun döndürme kilidi açıkken tarayıcı yatayı hiç görmüyor;
+ * `screen.orientation.lock()` ise tam ekran istiyor ve iOS'ta hiç yok.
+ * Kalan dürüst yol sahneyi 90° döndürmek — oyuncu telefonu fiziksel olarak
+ * çeviriyor, her tarayıcıda çalışıyor, izin istemiyor.
+ */
+function yatayZorla(acik: boolean): void {
+  document.body.classList.toggle('yatay-zorla', acik);
+  yaz(ZORLA_ANAHTARI, acik ? '1' : '0');
+  // Pixi tuvali `resizeTo` ile kabına uyuyor ama bunu pencerenin `resize`
+  // olayıyla tetikliyor; CSS dönüşü o olayı doğurmuyor ve tuval eski
+  // ölçüsünde kalıyordu. Yerleşim otursun diye bir kare bekleyip haber
+  // veriyoruz — aynı olay kameranın alt payını da yeniden ölçtürüyor.
+  requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+}
 
 function yatayCagrisiniKur(): void {
   const cevir = document.getElementById('cevir');
   if (!cevir) return;
   if (oku(YATAY_ANAHTARI) === 'kapali') document.body.classList.add('cevir-kapali');
+  if (oku(ZORLA_ANAHTARI) === '1') document.body.classList.add('yatay-zorla');
   // Simge Unicode değil çizim: `▯` gibi bir karakter telefonun kendi fontunda
   // yoksa boş kutu olarak çıkıyor — hem de tam "telefonunu çevir" derken.
   cevir.innerHTML = '<svg class="simge" viewBox="0 0 40 64" aria-hidden="true">'
@@ -415,10 +463,17 @@ function yatayCagrisiniKur(): void {
     + '<line x1="15" y1="55" x2="25" y2="55" stroke="currentColor"'
     + ' stroke-width="3" stroke-linecap="round"/></svg>'
     + `<div class="bas">${M.cevir.bas}</div><p>${M.cevir.govde}</p>`
-    + `<button type="button" class="yine">${M.cevir.yineOyna}</button>`;
-  cevir.querySelector('button.yine')?.addEventListener('click', () => {
+    + '<div class="secenekler">'
+    + `<button type="button" class="yatay">${M.cevir.yatayOyna}</button>`
+    + `<button type="button" class="yine">${M.cevir.yineOyna}</button></div>`;
+  const kapat = (): void => {
     document.body.classList.add('cevir-kapali');
     yaz(YATAY_ANAHTARI, 'kapali');
+  };
+  cevir.querySelector('button.yine')?.addEventListener('click', kapat);
+  cevir.querySelector('button.yatay')?.addEventListener('click', () => {
+    yatayZorla(true);
+    kapat();
   });
 }
 
