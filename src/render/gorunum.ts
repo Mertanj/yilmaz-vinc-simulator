@@ -4,6 +4,7 @@ import type { OyunSahnesi } from '../sim/sahne';
 import { SIM } from '../sim/world';
 import { Scene, SCENE } from '../sim/scene';
 import { ForkliftSahnesi } from '../sim/forkliftSahne';
+import { DirsekliSahne } from '../sim/dirsekliSahne';
 import { DEPO_BATI, DEPO_DOGU } from '../game/forkliftTasks';
 import { TRUCK } from '../sim/truck';
 import { FORKLIFT } from '../sim/forklift';
@@ -19,6 +20,12 @@ import {
   drawGround, drawFactory, drawFarSkyline, drawEntranceSign, drawPropBox,
   drawSetupZone, drawKerb, drawSky,
 } from './scenery';
+import { drawAnaBom, drawKirmaBom, drawKolon } from './dirsekliView';
+import {
+  drawBahceDuvari, drawParkCebi, drawSokakSirasi, drawYarimEv,
+} from './avluView';
+import { RIG } from './truckView';
+import { DIRSEKLI } from '../sim/dirsekli';
 
 /**
  * Bir aracın görünümü.
@@ -156,6 +163,92 @@ export class VincGorunumu extends SahneGorunumu {
     this.hookView.rotation = h.a;
     this.cableView.update(crane.tipWorld, { x: h.x, y: h.y });
     this.outriggerView.update(outriggers.geometry(truck.chassis));
+  }
+}
+
+/**
+ * Dirsekli bom sahnesi — dar sokak.
+ *
+ * Kamyon gövdesi vinçle ORTAK (`TruckView`, teleskopik üst yapı kapalı);
+ * ayrışan tek şey kol takımı. Kollar kamyonun çocuğu değil, ayrı aktörler:
+ * fizikte de ayrı kinematik gövdeler ve konumlarını doğrudan Snapshotter'ın
+ * ara değerlerinden alıyorlar. Aynı açıyı görünüm tarafında ikinci kez
+ * hesaplamak teleskopik bomda bir kez ters işaretle yazılmış ve bom yere
+ * doğru çizilmişti.
+ */
+export class DirsekliGorunumu extends SahneGorunumu {
+  private readonly shadow = drawContactShadow(TRUCK.chassisHalfLength * 0.92);
+  private readonly truckView = new TruckView(false);
+  private readonly wheelViews: Container[];
+  private readonly outriggerView = new OutriggerView();
+  private readonly anaBomView = drawAnaBom();
+  private readonly kirmaBomView = drawKirmaBom();
+  private readonly cableView = new CableView();
+  private readonly hookView = drawHookBlock();
+
+  constructor(private readonly s: DirsekliSahne) {
+    super(s);
+    this.isaretBoyu = 0.8;
+    this.wheelViews = s.truck.wheels.map(() => drawWheel(TRUCK.wheelRadius));
+    // Kolon kamyonun çocuğu, çünkü şasiyle birlikte dönüyor ve kasaya
+    // cıvatalı. Kollar değil: onların açısı şasininkinden bağımsız.
+    const kolon = drawKolon();
+    kolon.position.set(DIRSEKLI.pivot.x, RIG.deckTop);
+    this.truckView.addChild(kolon);
+
+    this.aktorler.addChild(this.shadow);
+    this.yukuKur();
+    this.aktorler.addChild(
+      ...this.wheelViews, this.outriggerView, this.truckView,
+      this.anaBomView, this.kirmaBomView, this.cableView, this.hookView,
+    );
+  }
+
+  dekor(): Container[] {
+    return [
+      drawGround(SIM.groundLeft, SIM.groundRight),
+      drawYarimEv(), drawBahceDuvari(), drawParkCebi(),
+    ];
+  }
+
+  override uzak(): Container[] { return [drawSokakSirasi()]; }
+
+  arkaPlan(w: number, h: number): Container { return drawSky(w, h); }
+
+  baslangicOdak(): { x: number; y: number } {
+    const p = this.s.truck.position;
+    return { x: p.x - 2, y: p.y + 2.4 };
+  }
+
+  protected makine(alpha: number): void {
+    const { snaps, truck, bom } = this.s;
+    const c = snaps.interpolate(truck.chassis, alpha);
+    this.truckView.position.set(c.x, c.y);
+    this.truckView.rotation = c.a;
+    this.shadow.position.set(c.x, 0.05);
+
+    truck.wheels.forEach((body, i) => {
+      const view = this.wheelViews[i];
+      if (!view) return;
+      const w = snaps.interpolate(body, alpha);
+      view.position.set(w.x, w.y);
+      view.rotation = w.a;
+    });
+
+    for (const [govde, view] of [
+      [bom.anaBom, this.anaBomView] as const,
+      [bom.kirmaBom, this.kirmaBomView] as const,
+    ]) {
+      const t = snaps.interpolate(govde, alpha);
+      view.position.set(t.x, t.y);
+      view.rotation = t.a;
+    }
+
+    const h = snaps.interpolate(bom.hook, alpha);
+    this.hookView.position.set(h.x, h.y);
+    this.hookView.rotation = h.a;
+    this.cableView.update(bom.tipWorld, { x: h.x, y: h.y });
+    this.outriggerView.update(this.s.outriggers.geometry(truck.chassis));
   }
 }
 

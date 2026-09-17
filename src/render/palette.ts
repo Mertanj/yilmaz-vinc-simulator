@@ -79,4 +79,14 @@ export const C = {
   roof:       0x4E565B,
   shadow:     0x0C1013,
   rust:       0x8A5A3C,
+  /**
+   * Bahçe duvarı — sokak sırasından AYRI bir ton.
+   *
+   * Önce genel `wall` griyle çizildi ve ekranda kayboldu: arka plandaki
+   * apartman cepheleri de gri ve duvar tam onların önüne düşüyor. Oysa
+   * duvar bu bölümün tek engeli; oyuncunun onu bir bakışta görmesi gerek.
+   * İstanbul bahçe duvarlarının sıvası zaten kirli krem.
+   */
+  bahce:      0xC9BBA0,
+  bahceShade: 0xA8977A,
 } as const;

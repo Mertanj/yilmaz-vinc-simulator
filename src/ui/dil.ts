@@ -72,6 +72,8 @@ export interface Metinler {
      */
     ayakYariAc: string; ayakTamAc: string; ayakTopla: string;
     teleskopUzat: string; teleskopKis: string;
+    /** Dirsekli bomun kırma kolu — teleskop değil, katlanma. */
+    kirmaAc: string; kirmaKatla: string;
     kancaYukari: string; kancaAsagi: string; kanca: string;
   };
 
@@ -157,6 +159,8 @@ export interface Metinler {
     uyari: { tabloDisiCozum: string; asiriCozum: string; asiriCozumKilitli: string };
     ipucu: {
       yanasma: (k: KumandaAdi) => string;
+      /** Park cebini geçti — tabla malzemenin berisine düşüyor. */
+      cebiGectin: string;
       yukBagli: (k: KumandaAdi) => string;
       uzak: (k: KumandaAdi) => string;
     };
@@ -205,7 +209,8 @@ export interface Metinler {
   /** Dar dikey ekranda yan çevirme çağrısı. */
   cevir: { bas: string; govde: string; yineOyna: string; yatayOyna: string };
 
-  dekor: { sanayi: string; kurulum: string; sevkiyat: string; malKabul: string };
+  dekor: { sanayi: string; kurulum: string; sevkiyat: string; malKabul: string;
+    park: string; avlu: string };
 
   gorev: Record<string, { ad: string; brif: string }>;
 
@@ -237,6 +242,7 @@ const TR: Metinler = {
     ayaklar: 'ayaklar', bomKaldir: 'bom kaldır', bomIndir: 'bom indir',
     ayakYariAc: 'yarı aç', ayakTamAc: 'tam aç', ayakTopla: 'ayakları topla',
     teleskopUzat: 'uzat', teleskopKis: 'kıs',
+    kirmaAc: 'kırmayı aç', kirmaKatla: 'kırmayı katla',
     kancaYukari: 'halat sar', kancaAsagi: 'halat sal', kanca: 'kanca',
   },
   ust: { puan: (n) => `${n} puan`, bolumTamam: 'bölüm tamamlandı' },
@@ -341,7 +347,8 @@ const TR: Metinler = {
       asiriCozum: '⇧S ile kırmayı katla: yarıçap kısalır, sınır yükselir.',
     },
     ipucu: {
-      yanasma: (k) => `geri geri takoza yanaş, sonra ayakları aç (${k.ayaklar})`,
+      yanasma: (k) => `geri geri park cebine yanaş, sonra ayakları aç (${k.ayaklar})`,
+      cebiGectin: 'park cebini geçtin — biraz ileri al, yoksa vinç malzemeye yetişmez',
       yukBagli: (k) => `yük bağlı · duvarı aş, sonra bırak (${k.kanca})`,
       uzak: (k) => `kancayı yükün üstüne indir (${k.ikisi} ve kanca)`,
     },
@@ -436,8 +443,16 @@ const TR: Metinler = {
   dekor: {
     sanayi: 'SANAYİ SİTESİ · C BLOK', kurulum: 'KURULUM ALANI',
     sevkiyat: 'YILMAZ LOJİSTİK · SEVKİYAT', malKabul: 'MAL KABUL',
+    park: 'PARK CEBİ', avlu: 'AVLU · İNŞAAT',
   },
   gorev: {
+    S1: { ad: 'Briket paleti', brif: 'Briket paleti — duvarı aş, avlu zeminine bırak' },
+    S2: { ad: 'Demir donatı',
+      brif: 'Daha hafif ama damın üstüne — yarıçap 1.9 metre uzadı, ibre yükseldi' },
+    S3: { ad: 'Kum torbası',
+      brif: 'S1 ile aynı yere, 350 kilo daha ağır — sınırı yer değil ağırlık koyuyor' },
+    S4: { ad: 'Kalıp paneli', brif: 'Kalıp panelleri — damın dibine, bomun sonu' },
+    S5: { ad: 'Beton kovası', brif: 'Dolu beton kovası — ağır ve uzak, ibre %97' },
     T1: { ad: 'Sac bobin', brif: '1250 mm galvaniz bobin — 1. kat terasına' },
     T2: { ad: 'CNC torna', brif: 'Ağır CNC tezgâhı — aynı terasa, ama 800 kilo daha ağır' },
     T3: { ad: 'Jeneratör', brif: '125 kVA kabinli jeneratör — 2. kat terasına' },
@@ -473,6 +488,7 @@ const EN: Metinler = {
     ayaklar: 'outriggers', bomKaldir: 'boom up', bomIndir: 'boom down',
     ayakYariAc: 'half deploy', ayakTamAc: 'full deploy', ayakTopla: 'stow legs',
     teleskopUzat: 'extend', teleskopKis: 'retract',
+    kirmaAc: 'open knuckle', kirmaKatla: 'fold knuckle',
     kancaYukari: 'reel in', kancaAsagi: 'pay out', kanca: 'hook',
   },
   ust: { puan: (n) => `${n} pts`, bolumTamam: 'level complete' },
@@ -580,7 +596,8 @@ const EN: Metinler = {
       asiriCozum: 'Fold the knuckle in with ⇧S: the radius drops, the limit rises.',
     },
     ipucu: {
-      yanasma: (k) => `back up to the block, then set the outriggers (${k.ayaklar})`,
+      yanasma: (k) => `back into the parking bay, then set the outriggers (${k.ayaklar})`,
+      cebiGectin: 'you are past the bay — pull forward a little, or the crane cannot reach the load',
       yukBagli: (k) => `load on the hook · clear the wall, then release (${k.kanca})`,
       uzak: (k) => `lower the hook onto the load (${k.ikisi} and hook)`,
     },
@@ -675,8 +692,16 @@ const EN: Metinler = {
   dekor: {
     sanayi: 'INDUSTRIAL ESTATE · BLOCK C', kurulum: 'SET-UP ZONE',
     sevkiyat: 'YILMAZ LOGISTICS · DESPATCH', malKabul: 'GOODS IN',
+    park: 'PARKING BAY', avlu: 'COURTYARD · BUILD',
   },
   gorev: {
+    S1: { ad: 'Block pallet', brif: 'Pallet of blocks — over the wall, onto the courtyard floor' },
+    S2: { ad: 'Rebar bundle',
+      brif: 'Lighter, but onto the roof slab — 1.9 m more radius and the needle climbs' },
+    S3: { ad: 'Sandbags',
+      brif: 'Same spot as S1, 350 kg heavier — the limit is weight at radius, not place' },
+    S4: { ad: 'Formwork panels', brif: 'Formwork — the far end of the slab, end of the boom' },
+    S5: { ad: 'Concrete skip', brif: 'Full concrete skip — heavy and far, needle at 97%' },
     T1: { ad: 'Steel coil', brif: '1250 mm galvanised coil — first-floor terrace' },
     T2: { ad: 'CNC lathe', brif: 'Heavy CNC lathe — same terrace, 800 kg heavier' },
     T3: { ad: 'Generator', brif: '125 kVA canopied generator — second-floor terrace' },

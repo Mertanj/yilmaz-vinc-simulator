@@ -287,7 +287,18 @@ export class DirsekliSahne implements OyunSahnesi {
     const i = M.vinc.ipucu;
     const k = M.dirsekli.ipucu;
     const t = kumandaAdi();
-    if (!this.calismaModunda) return { metin: k.yanasma(t), mod: 'drive' };
+    if (!this.calismaModunda) {
+      // **Cebi geçtiyse söyle.** Fiziksel takoz olmadığı için geri geri
+      // yanaşmanın doğal bir sonu yok: kamyon bahçe duvarına dayanana kadar
+      // gidiyor ve orada tabla malzemenin BERİSİNE düşüyor, yani yükü
+      // alamıyor. Kurtarılabilir bir durum (ayakları topla, ileri al) ama
+      // oyuncunun neyin yanlış olduğunu tahmin etmesi gerekirdi.
+      const x = this.truck.chassis.getPosition().x;
+      if (x < AVLU.parkX - AVLU.parkPayiM) {
+        return { metin: k.cebiGectin, mod: 'drive' };
+      }
+      return { metin: k.yanasma(t), mod: 'drive' };
+    }
     if (this.hasLoad) return { metin: k.yukBagli(t), mod: 'crane' };
     const { reason } = this.bom.attachCheck(this.grabbables);
     const say: Record<typeof reason, string> = {

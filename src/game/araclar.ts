@@ -2,8 +2,9 @@ import type { OyunSahnesi } from '../sim/sahne';
 import { Scene } from '../sim/scene';
 import { ForkliftSahnesi } from '../sim/forkliftSahne';
 import {
-  SahneGorunumu, VincGorunumu, ForkliftGorunumu,
+  SahneGorunumu, VincGorunumu, ForkliftGorunumu, DirsekliGorunumu,
 } from '../render/gorunum';
+import { DirsekliSahne } from '../sim/dirsekliSahne';
 import { M } from '../ui/dil';
 import type { DokunmatikDuzeni, PadKaynagi } from '../ui/dokunmatik';
 import { OutriggerState } from '../sim/loadChart';
@@ -143,6 +144,54 @@ function vincPadi(sahne: Scene): DokunmatikDuzeni {
 }
 
 /**
+ * Dirsekli bomun ekran kumandası — vincinkiyle aynı desende, FAZA GÖRE.
+ *
+ * Eksen sayısı aynı (ana bom, kırma, kanca) ve ayrım da aynı: ayaklar toplu
+ * iken sürülüyor, yere değince vinç oluyor. Tek fark sürüş fazının etiketi —
+ * bu makine çalışma alanına GERİ GERİ yanaşıyor, o yüzden geri düğmesi önce
+ * geliyor ve "yanaş" diye okunuyor.
+ */
+function dirsekliPadi(sahne: DirsekliSahne): DokunmatikDuzeni {
+  const d = M.dokunma;
+  const ayakAdi = {
+    [OutriggerState.Stowed]: d.ayakYariAc,
+    [OutriggerState.Half]: d.ayakTamAc,
+    [OutriggerState.Full]: d.ayakTopla,
+  }[sahne.outriggers.state];
+  const ayak = { tetik: 'ayaklar' as const, isaret: ayakSimgesi(), ad: ayakAdi };
+  const yardimci = [
+    { tetik: 'sifirla' as const, isaret: '⟲', ad: d.sifirla },
+    { tetik: 'cikis' as const, isaret: '⊞', ad: d.makineler },
+  ];
+  if (!sahne.calismaModunda) {
+    return {
+      sol: [
+        { komut: 'geri', isaret: '◀', ad: d.geri },
+        { komut: 'ileri', isaret: '▶', ad: d.ileri },
+        { komut: 'fren', isaret: '■', ad: d.fren },
+      ],
+      sag: [ayak],
+      yardimci,
+    };
+  }
+  return {
+    sol: [
+      { komut: 'bomIndir', isaret: '▼', ad: d.bomIndir },
+      { komut: 'bomKaldir', isaret: '▲', ad: d.bomKaldir },
+      { komut: 'teleskopKis', isaret: '↙', ad: d.kirmaKatla },
+      { komut: 'teleskopUzat', isaret: '↗', ad: d.kirmaAc },
+    ],
+    sag: [
+      { komut: 'kancaAsagi', isaret: '↓', ad: d.kancaAsagi },
+      { komut: 'kancaYukari', isaret: '↑', ad: d.kancaYukari },
+      { tetik: 'kanca', isaret: kancaSimgesi(), ad: d.kanca },
+      ayak,
+    ],
+    yardimci,
+  };
+}
+
+/**
  * İki simge Unicode değil ÇİZİM.
  *
  * Ayak ve kanca için elverişli bir karakter yok; denenenler telefonun
@@ -209,21 +258,28 @@ export function araclar(): readonly AracTanimi[] {
   },
   {
     id: 'dirsekli',
-    ad: M.kod === 'tr' ? 'Dirsekli Bom' : 'Knuckle Boom',
-    sinif: M.kod === 'tr' ? '9 tm · kamyon üstü · dar alan'
-      : '9 tm · truck-mounted · tight sites',
-    ozet: M.kod === 'tr'
-      ? 'Katlanan bomla binaların üstünden aşıp arkaya uzanan makine. '
-        + 'Dar sokağın makinesi.'
-      : 'A folding boom that reaches over buildings and behind them. '
-        + 'The machine for a narrow street.',
-    zorluk: M.kod === 'tr'
-      ? 'Sınırı iki eklem birden koyuyor — henüz yapım aşamasında.'
-      : 'Two joints set the limit together — still being built.',
-    seviye: 3,
+    ad: M.dirsekli.ad,
+    sinif: M.dirsekli.sinif,
+    ozet: M.dirsekli.ozet,
+    zorluk: M.dirsekli.zorluk,
+    // Vinçten bir kademe kolay: yarıçap küçük, salınım kısa halatla
+    // sönüyor ve devrilme diye bir mesele yok — sınırı moment koyuyor.
+    seviye: 2,
     simge: dirsekliSimgesi(),
-    tuslar: '',
-    hazir: false,
+    tuslar: M.dirsekli.tuslar,
+    dokunmatikVar: true,
+    hazir: true,
+    kur: () => {
+      const sahne = new DirsekliSahne();
+      return {
+        sahne,
+        gorunum: new DirsekliGorunumu(sahne),
+        pad: {
+          anahtar: () => `${sahne.calismaModunda}|${sahne.outriggers.state}`,
+          duzen: () => dirsekliPadi(sahne),
+        },
+      };
+    },
   },
   ];
 }

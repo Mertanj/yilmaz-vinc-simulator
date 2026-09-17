@@ -27,10 +27,19 @@ export class TruckView extends Container {
   readonly superstructure = new Container();
   readonly boom = new BoomView();
 
-  constructor() {
+  /**
+   * @param teleskopikUstYapi Teleskopik vincin tablası ve bomu çizilsin mi?
+   *
+   * Dirsekli bom aynı kamyonu kullanıyor — şasi, kabin, kasa, toplu ayaklar
+   * ortak — ama üst yapısı bambaşka: tabla kasanın en arkasında ve bom iki
+   * eklemli. O yüzden gövde burada, kol takımı kendi dosyasında.
+   */
+  constructor(teleskopikUstYapi = true) {
     super();
 
     this.addChild(drawChassis(), drawCab(), drawOutriggersStowed());
+
+    if (!teleskopikUstYapi) return;
 
     this.superstructure.position.set(RIG.boomFoot.x, RIG.deckTop);
     this.superstructure.addChild(drawSuperstructure());

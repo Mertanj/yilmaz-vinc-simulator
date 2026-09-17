@@ -3,6 +3,12 @@ import type { Task } from './tasks';
 /**
  * Bölüm 1 — "Dar Sokak" görev listesi (YV-9 dirsekli bom).
  *
+ * **Kodlar S (Sokak), D değil.** Önce D1–D5 yazılmıştı ve forkliftin depo
+ * görevleri de D1–D5 kullanıyor. `gorevAdi`/`gorevBrifi` sözlüğe KODLA
+ * bakıyor, dolayısıyla dirsekli bomun ilk görevi ekranda "Çimento paleti —
+ * bıçağı paletin cebine sok" diye çıkıyordu: forkliftin metni, vincin
+ * makinesi. Kodlar bölümler arasında tekil olmak zorunda.
+ *
  * **Ağırlıklar ölçülen kapasiteden geriye hesaplandı.** `npm run zarf` erişim
  * tablosu hedeflerin yarıçapını ve kapasitesini veriyor —
  *
@@ -27,27 +33,27 @@ import type { Task } from './tasks';
  */
 export const DIRSEKLI_GOREVLER: readonly Task[] = [
   {
-    kod: 'D1', ad: 'Briket paleti', tonnes: 0.90,
+    kod: 'S1', ad: 'Briket paleti', tonnes: 0.90,
     halfWidth: 0.55, halfHeight: 0.42, kind: 'briket', hedef: 0,
     brif: 'Briket paleti — duvarı aş, avlu zeminine bırak',
   },
   {
-    kod: 'D2', ad: 'Demir donatı', tonnes: 0.80,
+    kod: 'S2', ad: 'Demir donatı', tonnes: 0.80,
     halfWidth: 0.60, halfHeight: 0.22, kind: 'donati', hedef: 1,
     brif: 'Daha hafif ama damın üstüne — yarıçap 1.9 metre uzadı, ibre yükseldi',
   },
   {
-    kod: 'D3', ad: 'Kum torbası', tonnes: 1.25,
+    kod: 'S3', ad: 'Kum torbası', tonnes: 1.25,
     halfWidth: 0.58, halfHeight: 0.50, kind: 'kum', hedef: 0,
-    brif: 'D1 ile aynı yere, 350 kilo daha ağır — sınırı yer değil ağırlık koyuyor',
+    brif: 'S1 ile aynı yere, 350 kilo daha ağır — sınırı yer değil ağırlık koyuyor',
   },
   {
-    kod: 'D4', ad: 'Kalıp paneli', tonnes: 0.85,
+    kod: 'S4', ad: 'Kalıp paneli', tonnes: 0.85,
     halfWidth: 0.60, halfHeight: 0.35, kind: 'kalip', hedef: 2,
     brif: 'Kalıp panelleri — damın dibine, bomun sonu',
   },
   {
-    kod: 'D5', ad: 'Beton kovası', tonnes: 1.05,
+    kod: 'S5', ad: 'Beton kovası', tonnes: 1.05,
     halfWidth: 0.50, halfHeight: 0.62, kind: 'kova', hedef: 1,
     brif: 'Dolu beton kovası — ağır ve uzak, ibre %97',
   },
