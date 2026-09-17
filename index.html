@@ -229,22 +229,37 @@
     user-select: none; -webkit-user-select: none;
   }
   #dokunmatik button .isaret { font-size: 21px; line-height: 1; color: #E8A62C; }
+  /* Çizilmiş simgelerin (ayak, kanca, halat katı) ölçüsü kendilerinde yok:
+     satır içi SVG boyutsuz kalınca büzülüp görünmez oluyordu. */
+  #dokunmatik button .isaret svg { display: block; width: 21px; height: 21px; }
+  /* Etiket SARIYOR, kırpılmıyor: "bağla/bırak" ve İngilizcedeki
+     "attach/release" 68 pikselin dışına taşıyordu. Tek satıra zorlamak her
+     dil için ayrı ayrı kısaltma uydurmak demekti. */
   #dokunmatik button .ad {
-    font-size: 9.5px; letter-spacing: 0.03em; color: #8E9BA2; white-space: nowrap;
+    font-size: 9px; letter-spacing: 0.02em; color: #8E9BA2;
+    line-height: 1.15; max-width: 62px; text-align: center;
+    /* Son çare: tek parça uzun bir kelime (bir dilde eninde sonunda çıkar)
+       düğmeyi taşırmasın. */
+    overflow-wrap: anywhere;
   }
+  #dokunmatik .pad.yardimci .ad { white-space: nowrap; max-width: none; }
   /* Basılı hâl dolu renkle: parmağın altında kalan düğmede kenarlık değişimi
      görünmüyor. */
   #dokunmatik button.basili { background: #E8A62C; border-color: #E8A62C; }
   #dokunmatik button.basili .isaret,
   #dokunmatik button.basili .ad { color: #16191B; }
   #dokunmatik button:focus-visible { outline: 2px solid #E8A62C; outline-offset: 2px; }
-  /* Genişlik içeriğe göre: sabit 52px'te "makineler" kırpılıyordu. */
-  #dokunmatik .tetik {
+  /* Küçük olan YARDIMCI kümenin düğmeleri, "tek basışlık" olanlar değil:
+     vinçte bağla/bırak, halat katı ve ayaklar da tek basışlık ama makinenin
+     asıl kumandaları, sürüş düğmeleriyle aynı boyda olmalılar. Genişlik
+     içeriğe göre: sabit 52px'te "makineler" kırpılıyordu. */
+  #dokunmatik .pad.yardimci button {
     width: auto; min-width: 56px; height: 46px; padding: 0 9px;
     background: rgba(18, 25, 30, 0.7);
   }
-  #dokunmatik .tetik .isaret { font-size: 16px; color: #AEBAC1; }
-  #dokunmatik .tetik .ad { font-size: 8.5px; }
+  #dokunmatik .pad.yardimci .isaret { font-size: 16px; color: #AEBAC1; }
+  #dokunmatik .pad.yardimci .isaret svg { width: 16px; height: 16px; }
+  #dokunmatik .pad.yardimci .ad { font-size: 8.5px; }
 
   /* --- alçak ekran: yatay tutulan telefon ---
      Buradaki dert GENİŞLİK değil YÜKSEKLİK. Yatay bir telefon 844×390 olabiliyor;
@@ -305,7 +320,7 @@
     #uyari p { font-size: 11.5px; }
     #dokunmatik button { width: 58px; height: 56px; }
     #dokunmatik button .isaret { font-size: 18px; }
-    #dokunmatik .tetik { min-width: 50px; height: 38px; padding: 0 7px; }
+    #dokunmatik .pad.yardimci button { min-width: 50px; height: 38px; padding: 0 7px; }
     #dokunmatik .pad.yardimci { top: calc(38px + env(safe-area-inset-top, 0px)); }
   }
 
@@ -323,14 +338,29 @@
     #dokunmatik .pad.sol, #dokunmatik .pad.sag {
       display: grid; grid-template-columns: repeat(2, auto); gap: 8px;
     }
-    /* Fren iki sütunu birden: ayrı bir eylem ve geniş hedef işine yarıyor. */
-    #dokunmatik .pad.sol button:last-child { grid-column: 1 / -1; }
+    /* TEK KALAN son düğme iki sütunu birden alıyor — yani düğme sayısı tek
+       olduğunda. `:last-child` tek başına yazılmıştı ve forkliftin üç
+       düğmesinde doğru çalışıyordu; vincin dört düğmelik sol kümesinde
+       dördüncüyü de yayıp diziyi 2+1+1'e bozuyordu. */
+    #dokunmatik .pad.sol button:nth-child(odd):last-child,
+    #dokunmatik .pad.sag button:nth-child(odd):last-child { grid-column: 1 / -1; }
+
+    /* Yardımcı küme dikeyde sağ kenarda SÜTUN oluyor. Yatay dizilince üst
+       şeridin üstüne biniyordu; panelin yanına almak da olmuyor, çünkü 390
+       pikselde panel (186) ve küme (184) yan yana sığmıyor. Sütun hâlinde
+       hem şeridin altında kalıyor hem de panelle çakışmıyor. */
+    #dokunmatik .pad.yardimci {
+      flex-direction: column; gap: 6px;
+      top: calc(78px + env(safe-area-inset-top, 0px));
+    }
 
     /* Panel dikeyde ekranın yarısını yiyordu: üstte panel, altta kumanda,
        arada makineye kalan bir şerit. Aynı sıkıştırma yatay telefondakiyle
        aynı mantık — dikeyde kıt olan yine yükseklik. */
     #panel {
-      box-sizing: border-box; width: 186px; top: 50px; padding: 10px 11px 8px;
+      /* Üst şerit dar ekranda iki satıra sarıyor (makine adı + görev) ve
+         panel 50 pikselde onun altına giriyordu. */
+      box-sizing: border-box; width: 186px; top: 78px; padding: 10px 11px 8px;
     }
     #panel .baslik { font-size: 10px; margin-bottom: 6px; }
     #panel .bar { height: 10px; }

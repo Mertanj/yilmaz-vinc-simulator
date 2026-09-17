@@ -5,7 +5,7 @@ import {
   SahneGorunumu, VincGorunumu, ForkliftGorunumu,
 } from '../render/gorunum';
 import { M } from '../ui/dil';
-import type { DokunmatikDuzeni } from '../ui/dokunmatik';
+import type { DokunmatikDuzeni, DuzenUretici } from '../ui/dokunmatik';
 
 /**
  * Oynanabilir araçlar.
@@ -40,7 +40,7 @@ export interface AracTanimi {
    * gerekir" notuyla duruyor: kartı kapatmak yerine dürüstçe söylüyoruz,
    * çünkü klavyeli bir tablette pekâlâ oynanıyor.
    */
-  dokunmatik?: DokunmatikDuzeni;
+  dokunmatik?: DuzenUretici;
   hazir: boolean;
   kur?: () => { sahne: OyunSahnesi; gorunum: SahneGorunumu };
 }
@@ -79,6 +79,78 @@ function forkliftPadi(): DokunmatikDuzeni {
   };
 }
 
+/**
+ * Vincin ekran kumandası — FAZA GÖRE.
+ *
+ * Makine zaten iki fazda çalışıyor: ayaklar toplu iken sürülüyor, yere
+ * değince vinç oluyor. Klavyede bu zaten var — boşluk tuşu sürerken el freni,
+ * ayaklar açıkken kanca. Pad de aynı ayrımı kullanıyor, çünkü on bir düğmeyi
+ * aynı anda göstermek telefonu kokpit paneline çevirirdi ve yarısı o an işe
+ * yaramayan düğme olurdu.
+ *
+ * `ayaklar` iki fazda da duruyor: fazı değiştiren düğme o, gizlemek oyuncuyu
+ * kapatırdı.
+ */
+function vincPadi(calismaModunda: boolean): DokunmatikDuzeni {
+  const d = M.dokunma;
+  const yardimci = [
+    { tetik: 'sifirla' as const, isaret: '⟲', ad: d.sifirla },
+    { tetik: 'cikis' as const, isaret: '⊞', ad: d.makineler },
+  ];
+  if (!calismaModunda) {
+    return {
+      sol: [
+        { komut: 'geri', isaret: '◀', ad: d.geri },
+        { komut: 'ileri', isaret: '▶', ad: d.ileri },
+        { komut: 'fren', isaret: '■', ad: d.fren },
+      ],
+      // Tek düğme ama sağ başparmağın altındaki DOĞRU düğme: bu fazda
+      // oyuncunun yapacağı tek iş ayakları açmak.
+      sag: [{ tetik: 'ayaklar', isaret: ayakSimgesi(), ad: d.ayaklar }],
+      yardimci,
+    };
+  }
+  return {
+    sol: [
+      { komut: 'bomIndir', isaret: '▼', ad: d.bomIndir },
+      { komut: 'bomKaldir', isaret: '▲', ad: d.bomKaldir },
+      { komut: 'teleskopKis', isaret: '↙', ad: d.teleskopKis },
+      { komut: 'teleskopUzat', isaret: '↗', ad: d.teleskopUzat },
+    ],
+    sag: [
+      { komut: 'kancaAsagi', isaret: '↓', ad: d.kancaAsagi },
+      { komut: 'kancaYukari', isaret: '↑', ad: d.kancaYukari },
+      { tetik: 'kanca', isaret: kancaSimgesi(), ad: d.kanca },
+      { tetik: 'kat', isaret: katSimgesi(), ad: d.kat },
+      { tetik: 'ayaklar', isaret: ayakSimgesi(), ad: d.ayaklar },
+    ],
+    yardimci,
+  };
+}
+
+/**
+ * Üç simge Unicode değil ÇİZİM.
+ *
+ * Ayak, kanca ve halat katı için elverişli bir karakter yok; denenenler
+ * telefonun fontunda bulunmayınca boş kutu olarak çıkıyor (bir kez "telefonu
+ * çevir" ekranında tam da o oldu). Ok ve üçgenler her fontta var, bunlar yok.
+ */
+function ayakSimgesi(): string {
+  return '<svg viewBox="0 0 24 20" fill="none" stroke="currentColor"'
+    + ' stroke-width="2.2" stroke-linecap="round">'
+    + '<path d="M3 5h18"/><path d="M6 5l-3 12"/><path d="M18 5l3 12"/></svg>';
+}
+function kancaSimgesi(): string {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+    + ' stroke-width="2.2" stroke-linecap="round">'
+    + '<path d="M12 3v9"/><path d="M12 12a4 4 0 1 0 4 4"/></svg>';
+}
+function katSimgesi(): string {
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+    + ' stroke-width="2.2" stroke-linecap="round">'
+    + '<path d="M8 3v18"/><path d="M16 3v18"/></svg>';
+}
+
 export function araclar(): readonly AracTanimi[] {
   return [
   {
@@ -90,7 +162,7 @@ export function araclar(): readonly AracTanimi[] {
     seviye: 2,
     simge: forkliftSimgesi(),
     tuslar: M.forklift.tuslar,
-    dokunmatik: forkliftPadi(),
+    dokunmatik: forkliftPadi,
     hazir: true,
     kur: () => {
       const sahne = new ForkliftSahnesi();
@@ -106,6 +178,7 @@ export function araclar(): readonly AracTanimi[] {
     seviye: 3,
     simge: vincSimgesi(),
     tuslar: M.vinc.tuslar,
+    dokunmatik: vincPadi,
     hazir: true,
     kur: () => {
       const sahne = new Scene();

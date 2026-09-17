@@ -33,6 +33,8 @@ export interface KumandaAdi {
   indir: string;
   /** İkisi birden: "W/S" ya da "kaldır/indir". */
   ikisi: string;
+  ayaklar: string;
+  kanca: string;
 }
 
 /** Yerleştirme onay panelinin satırları — sayılar çağıran tarafta. */
@@ -62,6 +64,10 @@ export interface Metinler {
     ileri: string; geri: string; fren: string;
     kaldir: string; indir: string; yatGeri: string; yatOn: string;
     sifirla: string; makineler: string; cevir: string;
+    /** Vinç: faza göre değişen kümenin düğmeleri. */
+    ayaklar: string; bomKaldir: string; bomIndir: string;
+    teleskopUzat: string; teleskopKis: string;
+    kancaYukari: string; kancaAsagi: string; kanca: string; kat: string;
   };
 
   ust: { puan: (n: number) => string; bolumTamam: string };
@@ -98,8 +104,11 @@ export interface Metinler {
       yakinBas: string; yakinGovde: (yuk: string, sinir: string, r: string) => string;
     };
     ipucu: {
-      surus: string; yukBagli: string; hazir: string; sallaniyor: string;
-      yanCekme: string; ortala: string; yukseklik: string; uzak: string;
+      sallaniyor: string; yanCekme: string; ortala: string;
+      yukseklik: string; uzak: string;
+      surus: (k: KumandaAdi) => string;
+      yukBagli: (k: KumandaAdi) => string;
+      hazir: (k: KumandaAdi) => string;
     };
   };
 
@@ -175,6 +184,10 @@ const TR: Metinler = {
     ileri: 'ileri', geri: 'geri', fren: 'fren',
     kaldir: 'kaldır', indir: 'indir', yatGeri: 'geri yat', yatOn: 'öne yat',
     sifirla: 'sıfırla', makineler: 'makineler', cevir: 'çevir',
+    ayaklar: 'ayaklar', bomKaldir: 'bom kaldır', bomIndir: 'bom indir',
+    teleskopUzat: 'uzat', teleskopKis: 'kıs',
+    kancaYukari: 'halat sar', kancaAsagi: 'halat sal', kanca: 'kanca',
+    kat: 'halat katı',
   },
   ust: { puan: (n) => `${n} puan`, bolumTamam: 'bölüm tamamlandı' },
   panel: {
@@ -231,9 +244,9 @@ const TR: Metinler = {
         + ' Yarıçapı büyütürsen kollar kilitlenir.',
     },
     ipucu: {
-      surus: 'çalışma alanına yanaş, sonra Q ile ayakları aç',
-      yukBagli: 'yük bağlı · boşluk ile bırak',
-      hazir: 'KANCA MENZİLDE · boşluk ile bağla',
+      surus: (k) => `çalışma alanına yanaş, sonra ayakları aç (${k.ayaklar})`,
+      yukBagli: (k) => `yük bağlı · bırak (${k.kanca})`,
+      hazir: (k) => `KANCA MENZİLDE · bağla (${k.kanca})`,
       sallaniyor: 'kanca sallanıyor · dursun, sonra bağla',
       yanCekme: 'halat eğik · yan çekme olur, bomu yükün üstüne getir',
       ortala: 'kancayı yükün TAM ORTASINA getir',
@@ -290,9 +303,9 @@ const TR: Metinler = {
       teslimIniyor: 'palet iniyor · konveyörün önünde bekle',
       teslimBekle: 'yeni palet için yükleme karesinin batısına geç',
       yuklu: 'yük çatalda · gözün önüne gel, kaldır, içeri sür, indir',
-      hazir: (k) => `ÇATAL CEPTE · ${k.kaldir} ile kaldır, palet gelecek`,
-      yuksek: (k) => `çatal çok yüksek · ${k.indir} ile indir, cebin altına gir`,
-      alcak: (k) => `çatal çok alçak · ${k.kaldir} ile paletin cebine getir`,
+      hazir: (k) => `ÇATAL CEPTE · kaldır, palet gelecek (${k.kaldir})`,
+      yuksek: (k) => `çatal çok yüksek · cebin altına in (${k.indir})`,
+      alcak: (k) => `çatal çok alçak · paletin cebine getir (${k.kaldir})`,
       yanas: 'kot doğru · ileri sür, bıçağı cebe sok',
       kot: (k) => `çatalı paletin cebi hizasına getir (${k.ikisi})`,
       uzak: 'paletler koridorun doğu ucunda · sağa sür',
@@ -364,6 +377,10 @@ const EN: Metinler = {
     ileri: 'forward', geri: 'reverse', fren: 'brake',
     kaldir: 'raise', indir: 'lower', yatGeri: 'tilt back', yatOn: 'tilt fwd',
     sifirla: 'restart', makineler: 'machines', cevir: 'rotate',
+    ayaklar: 'outriggers', bomKaldir: 'boom up', bomIndir: 'boom down',
+    teleskopUzat: 'extend', teleskopKis: 'retract',
+    kancaYukari: 'reel in', kancaAsagi: 'pay out', kanca: 'hook',
+    kat: 'parts of line',
   },
   ust: { puan: (n) => `${n} pts`, bolumTamam: 'level complete' },
   panel: {
@@ -420,9 +437,9 @@ const EN: Metinler = {
         + ' Go out any further and the levers lock.',
     },
     ipucu: {
-      surus: 'pull up to the set-up zone, then Q for the outriggers',
-      yukBagli: 'load on the hook · space to release',
-      hazir: 'HOOK IN RANGE · space to attach',
+      surus: (k) => `pull up to the set-up zone, then set the outriggers (${k.ayaklar})`,
+      yukBagli: (k) => `load on the hook · release it (${k.kanca})`,
+      hazir: (k) => `HOOK IN RANGE · attach (${k.kanca})`,
       sallaniyor: 'hook is swinging · let it settle, then attach',
       yanCekme: 'rope is off vertical · that is a side pull, bring the boom over the load',
       ortala: 'centre the hook over the load',
@@ -480,9 +497,9 @@ const EN: Metinler = {
       teslimIniyor: 'pallet coming down · wait clear of the conveyor',
       teslimBekle: 'move west of the loading square for the next pallet',
       yuklu: 'load on the forks · line up with the bay, lift, drive in, lower',
-      hazir: (k) => `BLADES IN THE POCKET · ${k.kaldir} to lift, the pallet comes with you`,
-      yuksek: (k) => `forks too high · ${k.indir} to lower, get under the pocket`,
-      alcak: (k) => `forks too low · ${k.kaldir} to line up with the pocket`,
+      hazir: (k) => `BLADES IN THE POCKET · lift, the pallet rides with you (${k.kaldir})`,
+      yuksek: (k) => `forks too high · get under the pocket (${k.indir})`,
+      alcak: (k) => `forks too low · line up with the pocket (${k.kaldir})`,
       yanas: 'height is right · drive in, slide the blades into the pocket',
       kot: (k) => `line the forks up with the pallet pocket (${k.ikisi})`,
       uzak: 'pallets arrive at the loading square · drive east',
@@ -578,9 +595,17 @@ export function kumandaModunuSec(dokunmatik: boolean): void {
 }
 
 export function kumandaAdi(): KumandaAdi {
-  if (!dokunmatikKumanda) return { kaldir: 'W', indir: 'S', ikisi: 'W/S' };
   const d = M.dokunma;
-  return { kaldir: d.kaldir, indir: d.indir, ikisi: `${d.kaldir}/${d.indir}` };
+  if (!dokunmatikKumanda) {
+    return {
+      kaldir: 'W', indir: 'S', ikisi: 'W/S',
+      ayaklar: 'Q', kanca: M.kod === 'tr' ? 'boşluk' : 'space',
+    };
+  }
+  return {
+    kaldir: d.kaldir, indir: d.indir, ikisi: `${d.kaldir}/${d.indir}`,
+    ayaklar: d.ayaklar, kanca: d.kanca,
+  };
 }
 
 export const DILLER: readonly Dil[] = ['tr', 'en'];

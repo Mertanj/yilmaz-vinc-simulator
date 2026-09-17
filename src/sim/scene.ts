@@ -11,7 +11,7 @@ import { TASKS, MALZEME_X, type Task } from '../game/tasks';
 import { OutriggerState } from './loadChart';
 import type { Gosterge, OyunSahnesi, PanelSatiri, Uyari } from './sahne';
 import { imzaliDerece } from './sahne';
-import { M } from '../ui/dil';
+import { M, kumandaAdi } from '../ui/dil';
 
 /**
  * Sahnenin fizik tarafı — tek kaynak.
@@ -294,11 +294,12 @@ export class Scene implements OyunSahnesi {
 
   ipucu(): { metin: string; mod: 'drive' | 'crane' | 'ready' } {
     const i = M.vinc.ipucu;
-    if (!this.craneMode) return { metin: i.surus, mod: 'drive' };
-    if (this.crane.hasLoad) return { metin: i.yukBagli, mod: 'crane' };
+    const k = kumandaAdi();
+    if (!this.craneMode) return { metin: i.surus(k), mod: 'drive' };
+    if (this.crane.hasLoad) return { metin: i.yukBagli(k), mod: 'crane' };
     const { reason } = this.crane.attachCheck(this.grabbables);
     const say: Record<typeof reason, string> = {
-      hazir: i.hazir,
+      hazir: i.hazir(k),
       sallaniyor: i.sallaniyor,
       'yan-cekme': i.yanCekme,
       ortala: i.ortala,

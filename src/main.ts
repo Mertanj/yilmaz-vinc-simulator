@@ -122,19 +122,24 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
   const padHost = el('dokunmatik');
   // Çevirme düğmesi araç tanımında DEĞİL: makinenin bir fonksiyonu değil,
   // ekranın kendi işi. Her makinenin padine buradan ekleniyor.
-  const duzen = arac.dokunmatik && {
-    ...arac.dokunmatik,
-    yardimci: [...arac.dokunmatik.yardimci, {
-      isaret: '⟳', ad: M.dokunma.cevir,
-      eylem: (): void => {
-        yatayZorla(!document.body.classList.contains('yatay-zorla'));
-        olculeriYaz();
-      },
-    }],
-  };
-  const padiSok = dokunmatik && padHost && duzen
+  const aracinDuzeni = arac.dokunmatik;
+  const duzen = aracinDuzeni && ((calisiyor: boolean) => {
+    const d = aracinDuzeni(calisiyor);
+    return {
+      ...d,
+      yardimci: [...d.yardimci, {
+        isaret: '⟳', ad: M.dokunma.cevir,
+        eylem: (): void => {
+          yatayZorla(!document.body.classList.contains('yatay-zorla'));
+          olculeriYaz();
+        },
+      }],
+    };
+  });
+  const pad = dokunmatik && padHost && duzen
     ? dokunmatikKur(padHost, duzen, keys)
-    : () => { /* klavyeyle oynanıyor */ };
+    : null;
+  const padiSok = (): void => pad?.sok();
 
   /**
    * Detay satırı dokunmatikte düğmeye dönüşüyor.
@@ -173,8 +178,13 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
    */
   const sahneKabi = el('sahne');
   function olculeriYaz(): void {
-    const sol = padHost?.querySelector<HTMLElement>('.pad.sol');
-    camera.altPayi(sol ? sol.offsetHeight + 22 : 0);
+    // İKİ kümenin büyüğü: vinçte çalışma fazında sağ küme beş düğme ve
+    // dikeyde sol kümeden bir sıra daha uzun oluyor. Sadece sola bakmak
+    // makineyi sağdaki düğmelerin arkasında bırakırdı.
+    const yukseklik = ['.pad.sol', '.pad.sag']
+      .map((s) => padHost?.querySelector<HTMLElement>(s)?.offsetHeight ?? 0)
+      .reduce((a, b) => Math.max(a, b), 0);
+    camera.altPayi(yukseklik > 0 ? yukseklik + 22 : 0);
     const yardimci = padHost?.querySelector<HTMLElement>('.pad.yardimci');
     if (sahneKabi && yardimci) {
       sahneKabi.style.setProperty('--yardimci-en', `${yardimci.offsetWidth + 22}px`);
@@ -294,6 +304,10 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
           .join('');
       }
       if (hud.detay) hud.detay.textContent = detayMetni();
+
+    // Faz değişince pad yeniden çiziliyor ve düğme kümesi değişiyor: ölçüler
+    // ancak O ZAMAN yenileniyor.
+    if (pad?.guncelle(scene.calismaModunda)) olculeriYaz();
 
       uyariGoster();
       konduGoster();

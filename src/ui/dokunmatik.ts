@@ -31,6 +31,17 @@ export interface DokunmatikDugme {
   ad: string;
 }
 
+/**
+ * Düzeni ÜRETEN fonksiyon — makinenin fazına göre.
+ *
+ * Vinçte tek bir pad olmuyor: sürerken gaz/fren/ayaklar, ayaklar yerdeyken
+ * bom/teleskop/kanca. Hepsini aynı anda göstermek telefonu kokpit paneline
+ * çevirir ve yarısı o an işe yaramayan düğme olur. Faz makinenin kendi
+ * gerçeği (`calismaModunda`), pad onu takip ediyor. Forklift fazsız: aynı
+ * düzeni döndürüyor ve hiç yeniden çizilmiyor.
+ */
+export type DuzenUretici = (calismaModunda: boolean) => DokunmatikDuzeni;
+
 export interface DokunmatikDuzeni {
   /** Sol başparmak — sürüş. */
   sol: DokunmatikDugme[];
@@ -56,10 +67,54 @@ export function dokunmatikVar(): boolean {
   }
 }
 
-/** Padi kurar; dönen fonksiyon söküyor. */
+export interface Pad {
+  /**
+   * Fazı bildirir. Faz değişmediyse hiçbir şey yapmıyor, o yüzden her kare
+   * çağrılabilir. Yeniden çizdiyse `true` döner — çağıran taraf ancak o zaman
+   * yeniden ölçüm yapsın: `offsetWidth` okumak yerleşimi zorluyor ve bunu her
+   * karede yapmak kare hızını yer.
+   */
+  guncelle(calismaModunda: boolean): boolean;
+  sok(): void;
+}
+
+/** Padi kurar. */
 export function dokunmatikKur(
+  host: HTMLElement, uret: DuzenUretici, kumanda: Kumanda,
+): Pad {
+  let cizili: boolean | null = null;
+  let sokucular: Array<() => void> = [];
+
+  const guncelle = (calismaModunda: boolean): boolean => {
+    if (cizili === calismaModunda) return false;
+    cizili = calismaModunda;
+    for (const s of sokucular) s();
+    sokucular = ciz(host, uret(calismaModunda), kumanda);
+    return true;
+  };
+
+  guncelle(false);
+  host.hidden = false;
+  // Pad açıkken klavye tuş listesi anlamsız: geniş bir tablette ikisi de
+  // sığıyor ama biri yalan söylüyor.
+  document.body.classList.add('dokunmatik');
+
+  return {
+    guncelle,
+    sok: () => {
+      for (const s of sokucular) s();
+      sokucular = [];
+      host.innerHTML = '';
+      host.hidden = true;
+      document.body.classList.remove('dokunmatik');
+    },
+  };
+}
+
+/** Düzeni basar ve bağlar; dönen sökücüler dinleyicileri kaldırıyor. */
+function ciz(
   host: HTMLElement, duzen: DokunmatikDuzeni, kumanda: Kumanda,
-): () => void {
+): Array<() => void> {
   // Düğmeler tanımlarıyla SIRAYLA eşleşiyor: DOM'dan geri okumak (etikete ya
   // da veri niteliğine bakmak) aynı bilgiyi iki kez kodlamak olurdu.
   const kumeler: Array<[string, DokunmatikDugme[]]> = [
@@ -68,11 +123,6 @@ export function dokunmatikKur(
   host.innerHTML = kumeler
     .map(([ad, ds]) => `<div class="pad ${ad}">${ds.map(dugme).join('')}</div>`)
     .join('');
-  host.hidden = false;
-  // Pad açıkken klavye tuş listesi anlamsız: geniş bir tablette ikisi de
-  // sığıyor ama biri yalan söylüyor.
-  document.body.classList.add('dokunmatik');
-
   const sokucular: Array<() => void> = [];
   for (const [ad, tanimlar] of kumeler) {
     const el = host.querySelector(`.pad.${ad}`);
@@ -84,12 +134,7 @@ export function dokunmatikKur(
     });
   }
 
-  return () => {
-    for (const s of sokucular) s();
-    host.innerHTML = '';
-    host.hidden = true;
-    document.body.classList.remove('dokunmatik');
-  };
+  return sokucular;
 }
 
 /** Tek düğmeyi bağlar; dönen fonksiyon dinleyicileri söküyor. */
@@ -135,6 +180,11 @@ function bagla(
     el.removeEventListener('pointerup', birak);
     el.removeEventListener('pointercancel', birak);
     el.removeEventListener('lostpointercapture', birak);
+    // Sökerken KOMUTU DA BIRAK. Faz değişimi padi yeniden çiziyor; o an
+    // basılı tutulan bir düğme (ayaklar açılırken basılı duran gaz gibi)
+    // yok edilince `pointerup` hiç gelmez ve komut sonsuza kadar basılı
+    // kalırdı.
+    kumanda.komutBirak(komut);
   };
 }
 
