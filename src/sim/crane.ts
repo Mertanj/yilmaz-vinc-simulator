@@ -1,8 +1,8 @@
-import {
-  Box, DistanceJoint, RevoluteJoint, Vec2,
-  type Body, type World, type DistanceJoint as DJ,
-} from 'planck';
+import { Vec2, type Body, type World } from 'planck';
 import type { Snapshotter } from './world';
+import {
+  Kanca, type AttachReason, type Grabbable, type KancaAyari,
+} from './kanca';
 import {
   capacityAt, computeLmi, halatKapasitesi, KAT_SECENEKLERI, OutriggerState,
   type KatSayisi, type LmiReading,
@@ -206,6 +206,7 @@ export const CRANE = {
 
 /** Yol konumunda kancanın sönümü — savrulmasın diye. */
 const STOW_DAMPING = 7.0;
+
 /**
  * Çalışma konumunda sönüm — sarkaç oyunun asıl becerisi, onu bastırmıyoruz.
  *
@@ -218,6 +219,24 @@ const STOW_DAMPING = 7.0;
 const WORK_LINEAR_DAMPING = 0.4;
 /** Kanca zaten setFixedRotation ile sabit; bu sadece bütünlük için. */
 const WORK_ANGULAR_DAMPING = 0.05;
+
+/** YV-25'in kanca düzeneği — ölçüler makineye ait, mantık ortak. */
+const KANCA_AYARI: KancaAyari = {
+  kancaTon: CRANE.hookTonnes,
+  kancaAtalet: 90,
+  yariEn: 0.3,
+  yariBoy: 0.34,
+  bogazM: CRANE.hookThroatM,
+  baglanmaMaxHizMps: CRANE.attachMaxSpeedMps,
+  maxYanCekmeM: CRANE.maxSidePullM,
+  merkezToleransM: CRANE.attachCentreToleranceM,
+  ustunAltiM: CRANE.attachBelowTopM,
+  ustunUstuM: CRANE.attachAboveTopM,
+  sapanAcisalSonum: CRANE.slungAngularDamping,
+  yolSonum: STOW_DAMPING,
+  calismaDogrusalSonum: WORK_LINEAR_DAMPING,
+  calismaAcisalSonum: WORK_ANGULAR_DAMPING,
+};
 
 export interface CraneInput {
   /** -1 indir, +1 kaldır. */
@@ -238,28 +257,9 @@ export const NEUTRAL: CraneInput = { luff: 0, telescope: 0, winch: 0 };
  * yüksekliği 0.85. Bağlanma noktası 45 santim yanlış hesaplanıyor ve kanca
  * doğru yerde dururken "yakalamıyordu".
  */
-/** Kancanın neden tutmadığı — HUD bunu cümleye çeviriyor. */
-export type AttachReason =
-  | 'hazir'       // her şey tamam
-  | 'sallaniyor'  // kanca çok hızlı
-  | 'yan-cekme'   // halat düşeyden fazla sapmış
-  | 'ortala'      // yükün üstünde ama merkezde değil
-  | 'yukseklik'   // merkezde ama yükseklik tutmuyor
-  | 'uzak';       // ortada yük yok
-
-export interface Grabbable {
-  body: Body;
-  halfWidth: number;
-  halfHeight: number;
-  /**
-   * Paletin ayak yüksekliği (m) — gövdenin alt yüzü ile zemin arasındaki cep.
-   *
-   * Forklift bunu iki yerde kullanıyor: çatal buraya giriyor, ve yükün
-   * gerçekten KALDIRILDIĞINI anlamanın ölçüsü ayakların yerden kesilmesi.
-   * Vinç yükleri paletsiz, dolayısıyla 0.
-   */
-  ayakM?: number;
-}
+// Kanca düzeneğinin tipleri artık `kanca.ts`'te: dirsekli bom da aynı kancayı
+// kullanıyor. Buradan yeniden dışa veriliyor ki mevcut import'lar bozulmasın.
+export type { Grabbable, AttachReason } from './kanca';
 
 /**
  * Kat değiştirme reddedilince sebebi — metin değil KOD.
@@ -272,9 +272,8 @@ export type KatRet = '' | 'suruyor' | 'yuklu' | 'yuksek';
 export class Crane {
   readonly boomBase: Body;
   readonly boomFly: Body;
-  readonly hook: Body;
 
-  private readonly cable: DJ;
+  private readonly kanca: Kanca;
   /** Aktüatör durumu — kinematik boma her adımda yazılıyor. */
   private angle = (CRANE.stowAngleDeg * Math.PI) / 180;
   private extension = 0;
@@ -282,13 +281,6 @@ export class Crane {
   /** Bom ucunun bom dibi yerel çerçevesindeki bağlantı noktası. */
   private readonly tipLocal: Vec2;
 
-  private attached: Body | null = null;
-  private attachJoint: RevoluteJoint | null = null;
-  /** Yükün bağlanmadan önceki açısal sönümü — bırakınca geri veriliyor. */
-  private releasedAngularDamping = 0.5;
-  /** world.step() içinde joint yaratılamaz; istekler kuyruğa alınıp sonra işlenir. */
-  private pendingAttach = false;
-  private pendingDetach = false;
 
   private ropeLength = 3.0;
   private stowed = true;
@@ -303,7 +295,7 @@ export class Crane {
   private teleRate = 0;
 
   constructor(
-    private readonly world: World,
+    world: World,
     private readonly chassis: Body,
     snaps: Snapshotter,
   ) {
@@ -337,38 +329,18 @@ export class Crane {
     this.tipLocal = new Vec2(flyHalf, 0);
 
     // --- kanca ---
-    const tip = this.boomFly.getWorldPoint(this.tipLocal);
-    this.hook = world.createDynamicBody({ x: tip.x, y: tip.y - this.ropeLength });
-    this.hook.createFixture(new Box(0.3, 0.34), { density: 1, friction: 0.8 });
-
-    // Kanca bloğu HİÇ dönmez: ucunda ağırlık var gibi hep aşağı bakar. Gerçek
-    // kanca bloğu da ağırdır ve halat ekseninde asılı kalır.
-    //
-    // **SIRA ÖNEMLİ.** setFixedRotation içeride resetMassData() çağırıyor, o da
-    // kütleyi fikstür yoğunluğundan yeniden hesaplıyor. Önce setMassData yazıp
-    // sonra bunu çağırdığımızda 450 kiloluk kanca sessizce 0.408 kiloya düştü;
-    // 2.4 tonluk yükün karşısında 5882:1 kütle oranı kaldı ve planck'in
-    // "hafif gövde ağırını taşıyamaz" kuralı devreye girdi — halat 8 metre
-    // kısaldığı halde yük yerinden kıpırdamadı. Kütleyi EN SON yazıyoruz.
-    this.hook.setFixedRotation(true);
-    this.hook.setSleepingAllowed(false);
-    this.hook.setMassData({
-      mass: CRANE.hookTonnes * 1000, center: { x: 0, y: 0 }, I: 90,
-    });
-    this.hook.setLinearDamping(STOW_DAMPING);
-    this.hook.setAngularDamping(STOW_DAMPING);
-
-    // Halat RİJİT. frequencyHz verilirse yay gibi esner; spike'ta 3.45 t altında
-    // yükü emniyet halatı taşımaya başladı ve kuvvet okuması yarıya düştü.
-    this.cable = world.createJoint(new DistanceJoint({
-      length: this.ropeLength,
-      collideConnected: true,
-    }, this.boomFly, this.hook, tip, this.hook.getWorldCenter())) as DJ;
+    // Blok, halat ve bağlanma mantığı `Kanca`'da: dirsekli bom da aynısını
+    // kullanıyor, tek fark halatın hangi gövdenin hangi noktasından sarktığı.
+    this.kanca = new Kanca(
+      world, snaps, KANCA_AYARI, this.boomFly, this.tipLocal, this.ropeLength,
+    );
 
     snaps.track(this.boomBase);
     snaps.track(this.boomFly);
-    snaps.track(this.hook);
   }
+
+  /** Kanca bloğu — görünüm ve sahne bunu okuyor. */
+  get hook(): Body { return this.kanca.hook; }
 
   /**
    * Yol konumu: kanca bom ucuna toplanır ve sönümlenir.
@@ -381,8 +353,7 @@ export class Crane {
   setStowed(stowed: boolean): void {
     if (stowed === this.stowed) return;
     this.stowed = stowed;
-    this.hook.setLinearDamping(stowed ? STOW_DAMPING : WORK_LINEAR_DAMPING);
-    this.hook.setAngularDamping(stowed ? STOW_DAMPING : WORK_ANGULAR_DAMPING);
+    this.kanca.yolKonumu(stowed);
   }
 
   /** Her fizik adımında, world.step()'ten ÖNCE. */
@@ -393,10 +364,7 @@ export class Crane {
       if (this.reevingKalan <= 0) {
         this.reevingKalan = 0;
         this.kat = this.reevingHedef;
-        this.hook.setMassData({
-          mass: (CRANE.hookTonnesByKat[this.kat] ?? CRANE.hookTonnes) * 1000,
-          center: { x: 0, y: 0 }, I: 90,
-        });
+        this.kanca.kutleyiYaz(CRANE.hookTonnesByKat[this.kat] ?? CRANE.hookTonnes);
       }
       this.winchRate = 0; this.luffRate = 0; this.teleRate = 0;
       return;
@@ -405,7 +373,7 @@ export class Crane {
       // Halatı toparla, kancayı bom ucuna yasla.
       this.winchRate = 0;
       this.ropeLength = Math.max(CRANE.minRopeM, this.ropeLength - 2.5 * dt);
-      this.cable.setLength(this.ropeLength);
+      this.kanca.halatiAyarla(this.ropeLength);
       return;
     }
     const scale = lmi.speedScale;
@@ -480,108 +448,33 @@ export class Crane {
           this.ropeLength + this.winchRate * fade * dt, CRANE.minRopeM, CRANE.maxRopeM,
         );
       }
-      this.cable.setLength(this.ropeLength);
+      this.kanca.halatiAyarla(this.ropeLength);
     }
   }
 
   /** world.step()'ten SONRA. Joint yaratma/yok etme burada güvenli. */
+  /**
+   * Mafsal kurma/yıkma **world.step()'in dışında** yapılmalı.
+   *
+   * Bağlanmanın tamamı `Kanca`'da; burada sadece geçiş var. Vincin bu konuda
+   * söyleyecek bir şeyi yok — kanca neyi nasıl tuttuğunu kendisi biliyor.
+   */
   flushJointQueue(candidates: Grabbable[]): void {
-    if (this.pendingDetach && this.attachJoint) {
-      this.attached?.setAngularDamping(this.releasedAngularDamping);
-      this.attached?.setSleepingAllowed(true);
-      this.world.destroyJoint(this.attachJoint);
-      this.attachJoint = null;
-      this.attached = null;
-    }
-    this.pendingDetach = false;
-
-    if (this.pendingAttach && !this.attached) {
-      const { item } = this.attachCheck(candidates);
-      if (item) {
-        const p = item.body.getWorldCenter();
-
-        // **Yük kancanın tam altına hizalanır ve düzleştirilir.**
-        //
-        // Gerçekte yük iki noktadan sapanlanır ve ağırlık merkezinin üstünden
-        // asılır; oyunda tek noktadan tuttuğumuz için dengeyi açıkça kurmak
-        // gerekiyor. Sapan gerilirken yükün kendini toparlaması zaten olan bir
-        // şey, o yüzden bu kaydırma sahada da doğal görünüyor.
-        //
-        // Bağlanma noktası olarak yükün üst ortası DENENDİ ve olmadı: kanca ile
-        // pim arasında 1.5 metreye varan bir kol oluşuyor, kısıt esniyor ve yük
-        // hiç kalkmıyordu (halat kuvveti sadece kancayı okuyordu). Pim kancanın
-        // boğazında kalmalı; dengeyi yükü hizalayarak sağlıyoruz.
-        const g = this.grabPoint;
-        item.body.setTransform({ x: g.x, y: p.y }, 0);
-        item.body.setLinearVelocity({ x: 0, y: 0 });
-        item.body.setAngularVelocity(0);
-        // **Uyandırmak şart.** planck'te ne setTransform ne de sıfır hız ataması
-        // gövdeyi uyandırır; yerde duran yük uyku modunda kalıp joint'e hiç
-        // tepki vermiyordu. Kanca yükseliyor, yük yerde kalıyor, halat boşta —
-        // LMI 0.16 t okuyordu.
-        item.body.setAwake(true);
-        item.body.setSleepingAllowed(false);
-        this.hook.setAwake(true);
-
-        // Sapan takımı: yük bağlıyken dönmeye karşı direnir, bırakınca serbest.
-        this.releasedAngularDamping = item.body.getAngularDamping();
-        item.body.setAngularDamping(CRANE.slungAngularDamping);
-
-        this.attachJoint = this.world.createJoint(
-          new RevoluteJoint({}, this.hook, item.body, g),
-        ) as RevoluteJoint;
-        this.attached = item.body;
-      }
-    }
-    this.pendingAttach = false;
+    this.kanca.mafsalKuyrugunuBosalt(candidates);
   }
 
   /** Kancanın gerçekten yükü tuttuğu nokta — blok merkezi değil, boğaz. */
-  get grabPoint(): { x: number; y: number } {
-    const c = this.hook.getWorldCenter();
-    return { x: c.x, y: c.y - CRANE.hookThroatM };
-  }
+  get grabPoint(): { x: number; y: number } { return this.kanca.tutmaNoktasi; }
 
-  /**
-   * Bağlanma denetimi — sadece evet/hayır değil, GEREKÇE de veriyor.
-   *
-   * Önce yalnız boolean dönüyordu ve oyuncu kancanın neden tutmadığını
-   * anlayamıyordu; üç ayrı koşulun hangisinin tutmadığını söylemek, kancayı
-   * yükün üstüne indirmeyi tahmin oyunu olmaktan çıkarıyor.
-   */
   attachCheck(candidates: Grabbable[]): { item: Grabbable | null; reason: AttachReason } {
-    const v = this.hook.getLinearVelocity();
-    if (Math.hypot(v.x, v.y) > CRANE.attachMaxSpeedMps) {
-      return { item: null, reason: 'sallaniyor' };
-    }
-    // Halat düşeyden ne kadar sapmış? Bom ucu ile kanca arasındaki yatay fark.
-    if (Math.abs(this.tipWorld.x - this.hook.getPosition().x) > CRANE.maxSidePullM) {
-      return { item: null, reason: 'yan-cekme' };
-    }
-
-    const g = this.grabPoint;
-    let nearMiss: AttachReason = 'uzak';
-    for (const item of candidates) {
-      const p = item.body.getWorldCenter();
-      const topY = p.y + item.halfHeight;
-      const sideOk = Math.abs(p.x - g.x) <= CRANE.attachCentreToleranceM;
-      const heightOk =
-        g.y >= topY - CRANE.attachBelowTopM && g.y <= topY + CRANE.attachAboveTopM;
-      if (sideOk && heightOk) return { item, reason: 'hazir' };
-      if (heightOk && Math.abs(p.x - g.x) <= item.halfWidth + 1.0) nearMiss = 'ortala';
-      else if (sideOk) nearMiss = 'yukseklik';
-    }
-    return { item: null, reason: nearMiss };
+    return this.kanca.baglanmaDenetimi(candidates);
   }
 
   canAttach(candidates: Grabbable[]): boolean {
-    return !this.attached && this.attachCheck(candidates).item !== null;
+    return this.kanca.baglanabilir(candidates);
   }
 
-  requestToggleAttach(): void {
-    if (this.attached) this.pendingDetach = true;
-    else this.pendingAttach = true;
-  }
+  requestToggleAttach(): void { this.kanca.baglaBirakIste(); }
 
   // --- okumalar ---
 
@@ -656,7 +549,7 @@ export class Crane {
     // metot DÖNMÜYOR, FIRLATIYOR — dönen değeri kontrol etmek yetmiyor. Bu
     // hataya bir kez düşülüp (LMI okumasında) yanlış ders çıkarılmıştı; burada
     // adımdan önce çağrıldığı için tüm simülasyonu donduruyordu.
-    const f = this.readCableForce(dt);
+    const f = this.kanca.halatKuvveti(dt);
     if (f) this.chassis.applyForce({ x: -f.x, y: -f.y }, this.tipWorld, true);
   }
 
@@ -677,7 +570,7 @@ export class Crane {
     return Math.abs(this.tipWorld.x - centre.x) + CRANE.pivotOffsetM;
   }
 
-  get hasLoad(): boolean { return this.attached !== null; }
+  get hasLoad(): boolean { return this.kanca.yukVar; }
 
   /**
    * Anlık halat kuvvetinden LMI. **world.step()'ten SONRA çağrılmalı.**
@@ -694,7 +587,7 @@ export class Crane {
    * 16 ms'lik gecikme hissedilmiyor.
    */
   sampleLmi(dt: number, outriggers: OutriggerState): void {
-    const f = this.readCableForce(dt);
+    const f = this.kanca.halatKuvveti(dt);
     const ham = f ? Math.hypot(f.x, f.y) / 9810 : 0;
     // **Okuma filtreli.** Gerçek LMI'ler yük hücresini filtreler; filtresiz bir
     // sistem her tümsekte alarm verirdi. Bizde de gerekti: tek karelik çözücü
@@ -708,17 +601,6 @@ export class Crane {
   }
 
   private lmiTonnes = 0;
-
-  /** Halat kuvveti, henüz çözülmemişse null. */
-  private readCableForce(dt: number): { x: number; y: number } | null {
-    try {
-      const f = this.cable.getReactionForce(1 / dt) as { x: number; y: number } | undefined;
-      if (f && Number.isFinite(f.x) && Number.isFinite(f.y)) return f;
-    } catch {
-      // Henüz bir adım atılmadı; kuvvet tanımsız.
-    }
-    return null;
-  }
 
   /** Bu adımda oyuncu kilitli bir kola bastı mı? (yük momenti ya da iki-blok) */
   kilitliDenendi = false;
@@ -740,7 +622,7 @@ export class Crane {
    */
   katDegistir(): { ok: boolean; neden: KatRet } {
     if (this.reevingKalan > 0) return { ok: false, neden: 'suruyor' };
-    if (this.attached) return { ok: false, neden: 'yuklu' };
+    if (this.kanca.yukVar) return { ok: false, neden: 'yuklu' };
     if (this.hook.getPosition().y > CRANE.reevingMaxHookY) {
       return { ok: false, neden: 'yuksek' };
     }
@@ -759,11 +641,7 @@ export class Crane {
   }
 
   /** Salınım açısı (derece) — kancanın bom ucuna göre düşeyden sapması. */
-  get swingDeg(): number {
-    const tip = this.tipWorld;
-    const h = this.hook.getWorldCenter();
-    return (Math.atan2(h.x - tip.x, tip.y - h.y) * 180) / Math.PI;
-  }
+  get swingDeg(): number { return this.kanca.salinimDeg; }
 }
 
 function clamp(v: number, lo: number, hi: number): number {
