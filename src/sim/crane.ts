@@ -243,11 +243,21 @@ export interface CraneInput {
   luff: number;
   /** -1 topla, +1 aç. */
   telescope: number;
+  /**
+   * Dördüncü eksen: -1 topla, +1 uzat.
+   *
+   * **Paylaşılan girdide duruyor ama şu an yalnız dirsekli bom kullanıyor.**
+   * Forkliftin iki, teleskopik vincin üç ekseni var; dirsekli bomda kırmanın
+   * kendi hidrolik uzatması dördüncüyü getiriyor. Ayrı bir girdi tipi açmak
+   * `SceneInput`'u makineye bağlardı ve `Mission` ile `main.ts`'in makineyi
+   * bilmemesi bu projede kasıtlı bir sınır.
+   */
+  uzat: number;
   /** -1 kancayı indir, +1 kaldır. */
   winch: number;
 }
 
-export const NEUTRAL: CraneInput = { luff: 0, telescope: 0, winch: 0 };
+export const NEUTRAL: CraneInput = { luff: 0, telescope: 0, uzat: 0, winch: 0 };
 
 /**
  * Kancalanabilir bir yük.

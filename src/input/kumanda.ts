@@ -25,6 +25,8 @@ const REVERSE = new Set(['ArrowLeft', 'KeyA']);
 export interface CraneAxes {
   luff: number;
   telescope: number;
+  /** Dördüncü eksen — dirsekli bomun hidrolik uzatması. */
+  uzat: number;
   winch: number;
 }
 
@@ -33,7 +35,7 @@ export type Komut =
   | 'ileri' | 'geri' | 'fren'
   | 'kaldir' | 'indir' | 'yatGeri' | 'yatOn'
   | 'kancaYukari' | 'kancaAsagi' | 'bomKaldir' | 'bomIndir'
-  | 'teleskopUzat' | 'teleskopKis';
+  | 'teleskopUzat' | 'teleskopKis' | 'uzamaAc' | 'uzamaKis';
 
 /** Dokunmatik padin bir karelik tetikleri. */
 export type Tetik = 'sifirla' | 'cikis' | 'detay' | 'kanca' | 'ayaklar' | 'kat';
@@ -126,20 +128,29 @@ export class Kumanda {
     const up = this.down.has('KeyW') ? 1 : 0;
     const dn = this.down.has('KeyS') ? 1 : 0;
     const axis = up - dn;
+    // Ok tuşları da Shift ile ikiye ayrılıyor: sade hâli vinç, Shift'li hâli
+    // dirsekli bomun hidrolik uzatması. Aynı desen W/S'te zaten var ve
+    // dördüncü eksene ayrı bir tuş çifti aramaktan iyi: oyuncunun öğreneceği
+    // kural tek — "Shift o kolun ikizini çalıştırır".
+    const okAxis = (this.down.has('ArrowUp') ? 1 : 0) - (this.down.has('ArrowDown') ? 1 : 0);
 
     let luff = shift ? 0 : axis;
     let telescope = shift ? axis : 0;
-    let winch = (this.down.has('ArrowUp') ? 1 : 0) - (this.down.has('ArrowDown') ? 1 : 0);
+    let winch = shift ? 0 : okAxis;
+    let uzat = shift ? okAxis : 0;
 
     if (this.basili.has('kaldir') || this.basili.has('bomKaldir')) luff += 1;
     if (this.basili.has('indir') || this.basili.has('bomIndir')) luff -= 1;
     if (this.basili.has('yatGeri') || this.basili.has('teleskopUzat')) telescope += 1;
     if (this.basili.has('yatOn') || this.basili.has('teleskopKis')) telescope -= 1;
+    if (this.basili.has('uzamaAc')) uzat += 1;
+    if (this.basili.has('uzamaKis')) uzat -= 1;
     if (this.basili.has('kancaYukari')) winch += 1;
     if (this.basili.has('kancaAsagi')) winch -= 1;
 
     return {
-      luff: birlestir(luff), telescope: birlestir(telescope), winch: birlestir(winch),
+      luff: birlestir(luff), telescope: birlestir(telescope),
+      uzat: birlestir(uzat), winch: birlestir(winch),
     };
   }
 

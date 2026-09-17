@@ -200,7 +200,7 @@ function main(): void {
     // oturuyordu. Sonra 21 metre halat salındığı halde kanca kıpırdamıyor,
     // teras kenarına kayıyor ve alma "yan-cekme" ile reddediliyordu. Gerçek
     // operatör de yükü bırakır bırakmaz kancayı kafaya toplar.
-    r.run(20, () => ({ crane: { luff: 0, telescope: 0, winch: 1 } }));
+    r.run(20, () => ({ crane: { uzat: 0, luff: 0, telescope: 0, winch: 1 } }));
     iz('kanca-toplandi');
     // **Önce binanın üstüne çık, sonra in.**
     //
@@ -248,7 +248,7 @@ function main(): void {
     r.runUntil(60,
       (rig) => rig.scene.crane.tipWorld.y > temizY - 0.6
         && Math.abs(rig.scene.crane.tipWorld.x - loadX) < 1.5,
-      (rig) => ({ crane: {
+      (rig) => ({ crane: { uzat: 0,
         ...rig.boomToDamped(loadX, temizY), winch: halatKoru(rig, DONUS_HALATI),
       } }));
     iz('bom-yukseldi');
@@ -256,7 +256,7 @@ function main(): void {
     r.runUntil(60,
       (rig) => Math.abs(rig.scene.crane.tipWorld.x - loadX) < 0.12
         && rig.scene.crane.tipWorld.y < almaUcY() + 1.0,
-      (rig) => ({ crane: {
+      (rig) => ({ crane: { uzat: 0,
         ...rig.boomToDamped(loadX, almaUcY()), winch: halatKoru(rig, DONUS_HALATI),
       } }));
     iz('bom-dondu');
@@ -267,9 +267,9 @@ function main(): void {
     // kanca 90 santim indi — çünkü 1. kat terasındaydı).
     r.runUntil(30,
       (rig) => Math.abs(rig.scene.crane.hook.getPosition().x - rig.scene.crane.tipWorld.x) < 0.4,
-      (rig) => ({ crane: { luff: 0, telescope: 0, winch: halatKoru(rig, DONUS_HALATI) } }));
+      (rig) => ({ crane: { uzat: 0, luff: 0, telescope: 0, winch: halatKoru(rig, DONUS_HALATI) } }));
     iz('kanca-oturdu');
-    r.run(26, (rig) => ({ crane: {
+    r.run(26, (rig) => ({ crane: { uzat: 0,
       ...rig.boomToDamped(loadX, almaUcY()),
       winch: toward(rig.scene.crane.hook.getPosition().y, asili, 0.05),
     } }));
@@ -328,7 +328,7 @@ function main(): void {
         const kazanc = Math.max(0.10, Math.min(1, 1 - kayma / 1.2));
         const b = rig.boomTo(hedef.x, ucY);
         void c;
-        return { crane: {
+        return { crane: { uzat: 0,
           luff: b.luff * kazanc,
           telescope: b.telescope * kazanc,
           winch: Math.max(-1, Math.min(1, (rig.scene.crane.ropeM - calismaHalati) / 1.0)),
@@ -338,7 +338,7 @@ function main(): void {
     r.run(14, () => ({}));
 
     // --- KOYMA: usulca indir, sonra bırak ---
-    r.run(22, (rig) => ({ crane: {
+    r.run(22, (rig) => ({ crane: { uzat: 0,
       luff: 0, telescope: 0,
       winch: toward(rig.scene.load.getPosition().y, hedef.y + task.halfHeight + 0.06, 0.04),
     } }));

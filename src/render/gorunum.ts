@@ -20,7 +20,7 @@ import {
   drawGround, drawFactory, drawFarSkyline, drawEntranceSign, drawPropBox,
   drawSetupZone, drawKerb, drawSky,
 } from './scenery';
-import { drawAnaBom, drawKirmaBom, drawKolon } from './dirsekliView';
+import { drawAnaBom, drawKolon, KirmaBomView } from './dirsekliView';
 import {
   drawBahceDuvari, drawParkCebi, drawSokakSirasi, drawYarimEv,
 } from './avluView';
@@ -182,7 +182,7 @@ export class DirsekliGorunumu extends SahneGorunumu {
   private readonly wheelViews: Container[];
   private readonly outriggerView = new OutriggerView();
   private readonly anaBomView = drawAnaBom();
-  private readonly kirmaBomView = drawKirmaBom();
+  private readonly kirmaBomView = new KirmaBomView();
   private readonly cableView = new CableView();
   private readonly hookView = drawHookBlock();
 
@@ -235,6 +235,10 @@ export class DirsekliGorunumu extends SahneGorunumu {
       view.rotation = w.a;
     });
 
+    // Teleskop çizimi ara değerden DEĞİL, anlık durumdan: uzama fizikte
+    // kinematik, yani zaten kare başına sürülüyor ve interpolasyona konu
+    // olan tek şey gövdenin konumu.
+    this.kirmaBomView.setUzama(bom.uzamaBoyuM);
     for (const [govde, view] of [
       [bom.anaBom, this.anaBomView] as const,
       [bom.kirmaBom, this.kirmaBomView] as const,

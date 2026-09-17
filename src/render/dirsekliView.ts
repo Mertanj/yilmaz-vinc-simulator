@@ -82,19 +82,71 @@ export function drawAnaBom(): Container {
   return c;
 }
 
-/** Kırma kolu — daha kısa ve ince; ucunda halat makarası. */
-export function drawKirmaBom(): Container {
-  const c = new Container();
-  const yari = S.kirmaBoomM / 2;
-  const sil = new Graphics();
-  sil.moveTo(-yari + 0.10, -0.34).lineTo(0.10, -0.06)
-    .lineTo(0.10, 0.16).lineTo(-yari + 0.10, -0.12)
-    .closePath().fill(C.hydraulic);
-  c.addChild(sil, drawKol(S.kirmaBoomM, 0.62, 0.44, C.amber));
-  // Uç makarası — halatın çıktığı yer. Kancanın asıldığı nokta tam burası.
-  const makara = new Graphics();
-  makara.circle(yari, 0, 0.17).fill(C.hydraulic);
-  makara.circle(yari, 0, 0.10).fill(C.chrome);
-  c.addChild(makara);
-  return c;
+/**
+ * Kırma kolu — teleskoplu.
+ *
+ * **Kesit BOYUNA ÖLÇEKLENMİYOR.** Teleskopik bomda bu kural yazılıydı ve
+ * sebebi aynı: kesiti germek uç dökümünü ve pimleri yamultur. Uzatma kolu
+ * kendi sabit boyunda çiziliyor, sadece kayıyor.
+ *
+ * Gövdenin merkezi kolun ORTASINDA (fizik gövdesi de öyle), dolayısıyla kol
+ * uzadıkça dirsek ucu −L/2'ye, uç +L/2'ye gidiyor ve İKİSİ birden kayıyor.
+ */
+export class KirmaBomView extends Container {
+  private readonly taban = new Graphics();
+  private readonly uzatma = new Graphics();
+  private readonly silindir = new Graphics();
+  private readonly makara = new Graphics();
+
+  constructor() {
+    super();
+    // Sıra: uzatma kolu tabanın ALTINDA kalsın ki içinden çıkıyormuş gibi
+    // dursun. Üstte olsaydı toplu hâlde tabanı örterdi.
+    this.addChild(this.silindir, this.uzatma, this.taban, this.makara);
+    this.setUzama(0);
+  }
+
+  setUzama(uzamaM: number): void {
+    const u = Math.max(0, Math.min(S.kirmaUzamaM, uzamaM));
+    const L = S.kirmaTabanM + u;
+    const dirsek = -L / 2;
+    const uc = L / 2;
+
+    // Taban kesiti: dirsekten başlıyor, sabit boyda.
+    this.taban.clear();
+    kesit(this.taban, dirsek, S.kirmaTabanM, 0.62, 0.50, C.amber);
+    this.taban.circle(dirsek, 0, 0.19).fill(C.hydraulic);
+    this.taban.circle(dirsek, 0, 0.09).fill(C.chrome);
+
+    // Uzatma kolu: ucu bomun ucunda bitiyor, geri kalanı tabanın içinde.
+    this.uzatma.clear();
+    kesit(this.uzatma, uc - S.kirmaTabanM, S.kirmaTabanM, 0.46, 0.40, C.amberDark);
+
+    // Uzatma silindiri: dirsekten uzatma kolunun dibine.
+    this.silindir.clear();
+    this.silindir.moveTo(dirsek + 0.12, -0.30).lineTo(dirsek + 0.12 + 0.55 + u, -0.18)
+      .lineTo(dirsek + 0.12 + 0.55 + u, -0.06).lineTo(dirsek + 0.12, -0.18)
+      .closePath().fill(C.chrome);
+
+    // Uç makarası — halatın çıktığı yer; kancanın asıldığı nokta tam burası.
+    this.makara.clear();
+    this.makara.circle(uc, 0, 0.17).fill(C.hydraulic);
+    this.makara.circle(uc, 0, 0.10).fill(C.chrome);
+  }
+}
+
+/** Tek bir kutu kesit: solX'ten başlayıp boyM kadar, uca doğru incelerek. */
+function kesit(
+  g: Graphics, solX: number, boyM: number, dipYuk: number, ucYuk: number, renk: number,
+): void {
+  const sag = solX + boyM;
+  g.moveTo(solX, -dipYuk / 2).lineTo(sag, -ucYuk / 2)
+    .lineTo(sag, ucYuk / 2).lineTo(solX, dipYuk / 2)
+    .closePath().fill(renk);
+  g.moveTo(solX, -dipYuk / 2).lineTo(sag, -ucYuk / 2)
+    .lineTo(sag, -ucYuk / 2 + ucYuk * 0.26).lineTo(solX, -dipYuk / 2 + dipYuk * 0.26)
+    .closePath().fill({ color: C.amberLight, alpha: 0.5 });
+  g.moveTo(solX, dipYuk / 2).lineTo(sag, ucYuk / 2)
+    .lineTo(sag, ucYuk / 2 - ucYuk * 0.22).lineTo(solX, dipYuk / 2 - dipYuk * 0.22)
+    .closePath().fill({ color: C.amberDark, alpha: 0.75 });
 }

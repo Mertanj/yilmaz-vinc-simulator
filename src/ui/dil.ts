@@ -74,6 +74,8 @@ export interface Metinler {
     teleskopUzat: string; teleskopKis: string;
     /** Dirsekli bomun kırma kolu — teleskop değil, katlanma. */
     kirmaAc: string; kirmaKatla: string;
+    /** Kırmanın içindeki hidrolik uzatma. */
+    uzamaAc: string; uzamaKis: string;
     kancaYukari: string; kancaAsagi: string; kanca: string;
   };
 
@@ -146,7 +148,7 @@ export interface Metinler {
     ad: string; sinif: string; ozet: string; zorluk: string; tuslar: string;
     baslik: string;
     satir: {
-      anaBom: string; kirma: string; ucKotu: string;
+      anaBom: string; kirma: string; uzama: string; ucKotu: string;
       /** Vinçte arka pabuç; burada ÖN, çünkü makine kuyruğunun üstünden çalışıyor. */
       onPabuc: string;
       /** Sınırı koyan şey: bu makinede her zaman moment tablosu. */
@@ -243,6 +245,7 @@ const TR: Metinler = {
     ayakYariAc: 'yarı aç', ayakTamAc: 'tam aç', ayakTopla: 'ayakları topla',
     teleskopUzat: 'uzat', teleskopKis: 'kıs',
     kirmaAc: 'kırmayı aç', kirmaKatla: 'kırmayı katla',
+    uzamaAc: 'uzat', uzamaKis: 'topla',
     kancaYukari: 'halat sar', kancaAsagi: 'halat sal', kanca: 'kanca',
   },
   ust: { puan: (n) => `${n} puan`, bolumTamam: 'bölüm tamamlandı' },
@@ -322,18 +325,20 @@ const TR: Metinler = {
   dirsekli: {
     ad: 'YV-9 Dirsekli Vinç',
     sinif: '9 tm · kırma bomlu · dar sokak',
-    ozet: 'Bahçe duvarının ardındaki avluya malzeme indir. Bom kırılıyor: '
-      + 'ucu uzağa değil, AŞAĞI da götürebiliyorsun.',
+    ozet: 'Bahçe duvarının ardında yükselen kaba inşaatın teraslarına malzeme '
+      + 'çıkar. Bom hem kırılıyor hem uzuyor: ucu uzağa değil, YUKARI ve '
+      + 'AŞAĞI da götürebiliyorsun.',
     zorluk: 'Sınırı moment koyuyor: 9 ton·metre. 3 metrede 3 ton, 6 metrede 1.5 ton.',
     tuslar: '<b>sürüş</b> <kbd>←</kbd> geri yanaş <kbd>→</kbd> ileri'
       + ' <kbd>boşluk</kbd> el freni<br>'
       + '<b>kurulum</b> <kbd>Q</kbd> ayak aç/kapa<br>'
       + '<b>bom</b> <kbd>W</kbd><kbd>S</kbd> ana bom <kbd>⇧W</kbd><kbd>⇧S</kbd> kırma<br>'
-      + '<kbd>↑</kbd><kbd>↓</kbd> kanca <kbd>boşluk</kbd> bağla/bırak<br>'
+      + '<kbd>↑</kbd><kbd>↓</kbd> kanca <kbd>⇧↑</kbd><kbd>⇧↓</kbd> teleskop<br>'
+      + '<kbd>boşluk</kbd> bağla/bırak<br>'
       + '<kbd>I</kbd> detay <kbd>R</kbd> sıfırla <kbd>Esc</kbd> makine değiştir',
     baslik: 'KALDIRMA MOMENTİ',
     satir: {
-      anaBom: 'ana bom', kirma: 'kırma', ucKotu: 'uç kotu',
+      anaBom: 'ana bom', kirma: 'kırma', uzama: 'teleskop', ucKotu: 'uç kotu',
       onPabuc: 'ön pabuç', sinirMoment: 'moment',
     },
     alt: {
@@ -489,6 +494,7 @@ const EN: Metinler = {
     ayakYariAc: 'half deploy', ayakTamAc: 'full deploy', ayakTopla: 'stow legs',
     teleskopUzat: 'extend', teleskopKis: 'retract',
     kirmaAc: 'open knuckle', kirmaKatla: 'fold knuckle',
+    uzamaAc: 'extend', uzamaKis: 'retract',
     kancaYukari: 'reel in', kancaAsagi: 'pay out', kanca: 'hook',
   },
   ust: { puan: (n) => `${n} pts`, bolumTamam: 'level complete' },
@@ -569,19 +575,21 @@ const EN: Metinler = {
   dirsekli: {
     ad: 'YV-9 Knuckle Boom Crane',
     sinif: '9 tm · articulated boom · narrow street',
-    ozet: 'Set materials down in the courtyard behind the garden wall. The boom '
-      + 'folds: you can take the tip DOWN to a point, not just out to it.',
+    ozet: 'Lift materials up onto the terraces of a shell building behind a garden '
+      + 'wall. The boom folds AND telescopes: you can take the tip up and down to '
+      + 'a point, not just out to it.',
     zorluk: 'The limit is moment: 9 tonne-metres. 3 t at 3 m, 1.5 t at 6 m.',
     tuslar: '<b>drive</b> <kbd>←</kbd> back up <kbd>→</kbd> forward'
       + ' <kbd>space</kbd> handbrake<br>'
       + '<b>set-up</b> <kbd>Q</kbd> outriggers<br>'
       + '<b>boom</b> <kbd>W</kbd><kbd>S</kbd> main boom'
       + ' <kbd>⇧W</kbd><kbd>⇧S</kbd> knuckle<br>'
-      + '<kbd>↑</kbd><kbd>↓</kbd> hook <kbd>space</kbd> attach/release<br>'
+      + '<kbd>↑</kbd><kbd>↓</kbd> hook <kbd>⇧↑</kbd><kbd>⇧↓</kbd> telescope<br>'
+      + '<kbd>space</kbd> attach/release<br>'
       + '<kbd>I</kbd> detail <kbd>R</kbd> reset <kbd>Esc</kbd> change machine',
     baslik: 'LIFTING MOMENT',
     satir: {
-      anaBom: 'main boom', kirma: 'knuckle', ucKotu: 'tip height',
+      anaBom: 'main boom', kirma: 'knuckle', uzama: 'telescope', ucKotu: 'tip height',
       onPabuc: 'front pad', sinirMoment: 'moment',
     },
     alt: {

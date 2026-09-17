@@ -2,8 +2,10 @@ import { Vec2, type Body, type World } from 'planck';
 import type { Snapshotter } from './world';
 import { Kanca, type Grabbable, type KancaAyari } from './kanca';
 import { LmiZone, type LmiReading } from './loadChart';
+import type { DirsekliDurum } from './dirsekliGeometri';
 import {
-  DIRSEKLI_SPEC as S, dirsekNoktasi, dirsekliKapasitesi, kirmaYonuDeg, ucNoktasi,
+  DIRSEKLI_SPEC as S, dirsekNoktasi, dirsekliKapasitesi, kirmaBoyu, kirmaYonuDeg,
+  ucNoktasi,
 } from './dirsekliGeometri';
 
 /**
@@ -120,11 +122,13 @@ export interface DirsekliInput {
   ana: number;
   /** Kırma: +1 aç (düzleştir), -1 katla. */
   kirma: number;
+  /** Teleskop: +1 uzat, -1 topla. */
+  uzat: number;
   /** Kanca: +1 sar (yukarı). */
   winch: number;
 }
 
-export const DIRSEKLI_NEUTRAL: DirsekliInput = { ana: 0, kirma: 0, winch: 0 };
+export const DIRSEKLI_NEUTRAL: DirsekliInput = { ana: 0, kirma: 0, uzat: 0, winch: 0 };
 
 const clamp = (v: number, lo: number, hi: number): number =>
   (v < lo ? lo : v > hi ? hi : v);
@@ -132,12 +136,25 @@ const clamp = (v: number, lo: number, hi: number): number =>
 export class Dirsekli {
   readonly anaBom: Body;
   readonly kirmaBom: Body;
+  /**
+   * Bom ucu — fikstürü olmayan, kütlesiz kinematik gövde.
+   *
+   * **Sırf halatın asıldığı nokta için var.** Halat önce doğrudan kırma
+   * gövdesinin yerel ucundan (`+L/2, 0`) sarkıyordu ve teleskop gelince bu
+   * çalışmaz oldu: uzayan bir kolda o yerel nokta KAYIYOR, planck'te ise bir
+   * mafsalın yerel bağlanma noktası kurulduktan sonra değiştirilemiyor.
+   * Uç ayrı bir gövde olunca halatın yerel bağlantısı (0,0) sabit kalıyor ve
+   * uzama sadece gövdeyi taşıyor.
+   */
+  readonly ucGovde: Body;
   private readonly kanca: Kanca;
 
   /** Eklem durumu (derece) — kinematik gövdelere her adımda yazılıyor. */
   private anaDeg: number = S.yolAnaDeg;
   private kirmaDeg: number = S.yolKirmaDeg;
   private halatM: number = DIRSEKLI.yolHalatM;
+  /** Kırmanın hidrolik uzaması (m). */
+  private uzamaM = 0;
   private yolda = true;
 
   /** Bu adımda oyuncu kilitli bir kola bastı mı? */
@@ -146,6 +163,22 @@ export class Dirsekli {
   ikiBlokta = false;
 
   private lmiTon = 0;
+  /**
+   * Aşırı yükte KESİNTİSİZ geçen süre (s) — kilidin şartı bu, anlık değer değil.
+   *
+   * **Neden gecikme var.** Yük salınırken halat gerilimi statiğin 1.4 katına
+   * çıkıyor ve anlık bir sıçrama LMI'yi %100'ün üstüne atıyor. Kilit anlık
+   * değere bağlıyken tam o anda yarıçap BÜYÜTEN hareketler kesiliyordu — ve
+   * yükü terasa indirmek için gereken hareket tam olarak o. Ölçümde rig
+   * ikinci görevde yükü korkuluğun üstünde asılı bıraktı: statik %76'lık bir
+   * yük, dinamik %106 okuyup makineyi kendi kilidiyle durdurdu.
+   *
+   * Gerçek yük moment göstergeleri de anlık tepede kesmez; sinyal
+   * sönümlenmiş ve kesinti gecikmeli olur, yoksa her salınımda vinç durur.
+   * Gösterge YİNE anlık değeri gösteriyor (oyuncu sıçramayı görmeli), kilit
+   * ise sürekliliğe bakıyor.
+   */
+  private asiriSn = 0;
 
   constructor(world: World, private readonly chassis: Body, snaps: Snapshotter) {
     // Kinematik gövdeler: konumları her adımda eklem açılarından yazılıyor,
@@ -163,14 +196,15 @@ export class Dirsekli {
     this.kirmaBom.setKinematic();
     this.kirmaBom.setSleepingAllowed(false);
 
+    this.ucGovde = world.createDynamicBody();
+    this.ucGovde.setKinematic();
+    this.ucGovde.setSleepingAllowed(false);
+
     this.govdeleriYerlestir();
 
-    // Halat kırmanın UCUNDAN sarkıyor. Gövdenin KENDİ yerel çerçevesinde uç
-    // her zaman +x tarafta (gövde açısı aynayı zaten taşıyor), o yüzden
-    // burada `yon` yok.
+    // Halat UÇ GÖVDESİNİN merkezinden sarkıyor; yerel nokta (0,0) ve sabit.
     this.kanca = new Kanca(
-      world, snaps, KANCA_AYARI, this.kirmaBom,
-      new Vec2(S.kirmaBoomM / 2, 0), this.halatM,
+      world, snaps, KANCA_AYARI, this.ucGovde, new Vec2(0, 0), this.halatM,
     );
 
     snaps.track(this.anaBom);
@@ -180,6 +214,12 @@ export class Dirsekli {
   get hook(): Body { return this.kanca.hook; }
   get anaAciDeg(): number { return this.anaDeg; }
   get kirmaAciDeg(): number { return this.kirmaDeg; }
+  get uzamaBoyuM(): number { return this.uzamaM; }
+  /** Kırmanın o andaki toplam boyu (m) — çizim bunu istiyor. */
+  get kirmaBoyuM(): number { return kirmaBoyu(this.durum); }
+  private get durum(): DirsekliDurum {
+    return { anaDeg: this.anaDeg, kirmaDeg: this.kirmaDeg, uzamaM: this.uzamaM };
+  }
   get halatBoyuM(): number { return this.halatM; }
   get hasLoad(): boolean { return this.kanca.yukVar; }
   get grabPoint(): { x: number; y: number } { return this.kanca.tutmaNoktasi; }
@@ -241,6 +281,8 @@ export class Dirsekli {
       this.kirmaDeg += clamp(S.yolKirmaDeg - this.kirmaDeg, -1, 1)
         * S.kirmaHizDegPerSec * dt * 3;
       this.halatM += clamp(DIRSEKLI.yolHalatM - this.halatM, -1, 1) * 2 * dt;
+      // Nakliyede teleskop tamamen toplanır — yoksa bom kuyruktan taşar.
+      this.uzamaM += clamp(-this.uzamaM, -1, 1) * S.uzamaHizMps * dt * 3;
       this.govdeleriYerlestir();
       this.kanca.halatiAyarla(this.halatM);
       return;
@@ -249,6 +291,8 @@ export class Dirsekli {
     const kilit = lmi.blockRadiusIncrease;
     const olcek = lmi.speedScale;
 
+    // Yarıçapı BÜYÜTEN üç hareket kilitli: ana bomu indirmek, kırmayı açmak,
+    // teleskobu uzatmak. Küçültenler her zaman serbest — çıkış yolu onlar.
     // Ana bomu İNDİRMEK yarıçapı büyütüyor.
     let ana = input.ana;
     if (kilit && ana < 0) { ana = 0; this.kilitliDenendi = true; }
@@ -265,6 +309,13 @@ export class Dirsekli {
       S.kirmaMinDeg, S.kirmaMaxDeg,
     );
 
+    // Teleskobu UZATMAK da yarıçapı büyütüyor — aynı kilit.
+    let uzat = input.uzat;
+    if (kilit && uzat > 0) { uzat = 0; this.kilitliDenendi = true; }
+    this.uzamaM = clamp(
+      this.uzamaM + uzat * S.uzamaHizMps * olcek * dt, 0, S.kirmaUzamaM,
+    );
+
     // Halat: kanca bom ucuna dayanınca sarmak kilitli (iki-blok).
     const hedefHalat = this.halatM - input.winch * S.winchSpeedMps * olcek * dt;
     this.ikiBlokta = hedefHalat <= DIRSEKLI.minHalatM;
@@ -279,7 +330,8 @@ export class Dirsekli {
   private govdeleriYerlestir(): void {
     const taban = this.chassis.getWorldPoint(DIRSEKLI.pivot);
     const sasiAci = this.chassis.getAngle();
-    const durum = { anaDeg: this.anaDeg, kirmaDeg: this.kirmaDeg };
+    const durum = this.durum;
+    const L2 = kirmaBoyu(durum);
 
     // Gövde merkezleri kolun ORTASINDA: ayak/dirsek noktasından kolun yarısı
     // kadar kendi doğrultusunda ileride.
@@ -295,8 +347,14 @@ export class Dirsekli {
     const dirsekDunya = this.yereldenDunyaya(dirsekNoktasi(durum), taban, sasiAci);
     const kirmaAci = this.dunyaAcisi(kirmaYonuDeg(durum), sasiAci);
     this.kirmaBom.setTransform({
-      x: dirsekDunya.x + (S.kirmaBoomM / 2) * Math.cos(kirmaAci),
-      y: dirsekDunya.y + (S.kirmaBoomM / 2) * Math.sin(kirmaAci),
+      x: dirsekDunya.x + (L2 / 2) * Math.cos(kirmaAci),
+      y: dirsekDunya.y + (L2 / 2) * Math.sin(kirmaAci),
+    }, kirmaAci);
+
+    // Uç gövdesi tam bomun ucunda: halat buradan sarkıyor.
+    this.ucGovde.setTransform({
+      x: dirsekDunya.x + L2 * Math.cos(kirmaAci),
+      y: dirsekDunya.y + L2 * Math.sin(kirmaAci),
     }, kirmaAci);
   }
 
@@ -378,7 +436,13 @@ export class Dirsekli {
     const f = this.kanca.halatKuvveti(dt);
     const ham = f ? Math.hypot(f.x, f.y) / 9810 : 0;
     this.lmiTon += (ham - this.lmiTon) * Math.min(1, dt / 0.25);
+    const kap = dirsekliKapasitesi(this.radiusM);
+    const asiri = kap > 0 ? this.lmiTon > kap : true;
+    this.asiriSn = asiri ? this.asiriSn + dt : 0;
   }
+
+  /** Kilidin eşiği (s). Salınım tepesi bundan kısa, gerçek aşırı yük değil. */
+  private static readonly KILIT_GECIKMESI = 0.6;
 
   get lmi(): LmiReading {
     const r = this.radiusM;
@@ -391,7 +455,7 @@ export class Dirsekli {
       capacityTonnes: kap, chartTonnes: kap, ropeTonnes: kap, limitedBy: 'tablo',
       loadTonnes: yuk, radiusM: r,
       speedScale: zone === LmiZone.Red ? 0.3 : zone === LmiZone.Amber ? 0.6 : 1,
-      blockRadiusIncrease: zone === LmiZone.Red,
+      blockRadiusIncrease: this.asiriSn >= Dirsekli.KILIT_GECIKMESI,
     };
   }
 
@@ -417,7 +481,5 @@ export class Dirsekli {
   }
 
   /** Ucun dünyadaki yeri, geometri modülünün beklediği yerel biçimde. */
-  get ucYerel(): { x: number; y: number } {
-    return ucNoktasi({ anaDeg: this.anaDeg, kirmaDeg: this.kirmaDeg });
-  }
+  get ucYerel(): { x: number; y: number } { return ucNoktasi(this.durum); }
 }

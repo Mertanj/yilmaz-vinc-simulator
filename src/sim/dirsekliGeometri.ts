@@ -34,34 +34,36 @@ export const DIRSEKLI_SPEC = {
   pivotHeightM: 2.6,
 
   /**
-   * Kolların boyu (m) — ana bom KIRMADAN UZUN, ve bu ölçümle seçildi.
+   * Ana bom (birinci kol) boyu (m) — sabit.
    *
-   * Önce 4.2 / 4.4 idi (neredeyse eşit) ve zarfın SINIRLARI iyi görünüyordu:
-   * en uzak 8.95 m, en yüksek 10.76 m. Sınırlar yanılttı. Zarfın İÇİNİN
-   * haritası çizilince ortaya bir DELİK çıktı: R 4.5'te uç ya 2 metrenin
-   * altında ya 9.5 metrenin üstünde olabiliyor, arası hiç erişilmiyordu.
-   * Bölümün bütün işi (duvarın ardına, 2–7 metre kotuna yük indirmek) tam o
-   * delikte kalıyordu ve rig yükü duvarın üstünden hiç geçiremedi.
+   * Kırmadan uzun ve bu ölçümle seçildi. Önce 4.2 / 4.4 idi (neredeyse eşit)
+   * ve zarfın SINIRLARI iyi görünüyordu: en uzak 8.95 m, en yüksek 10.76 m.
+   * Sınırlar yanılttı; zarfın İÇİNİN haritası çizilince ortaya bir DELİK
+   * çıktı — R 4.5'te uç ya 2 metrenin altında ya 9.5'in üstünde olabiliyor,
+   * arası hiç erişilmiyordu. Ölçülen (çalışma bandı R 3–8.5 m, kot 2–7 m):
    *
-   * Sebep: kırma yalnızca AŞAĞI katlanıyor, dolayısıyla ana bomun dünya açısı
-   * `hedefin yükselişi + kolların açtığı açı` olmak zorunda. Uzun bir kırma
-   * o ikinci terimi büyütüyor ve üst sınırı (78°) aşıyor. Gerçek kırma bomlu
-   * vinçlerde bu sorunu KIRMANIN TELESKOBU çözüyor; bizde dördüncü bir eksen
-   * kumandaya sığmıyor, o yüzden aynı işi kol oranı yapıyor.
-   *
-   * Ölçülen (çalışma bandı R 3–8.5 m, kot 2–7 m — avlu işinin geçtiği yer):
-   *
-   *   4.2 / 4.4  ana ≤ 78   erişilen %66   en uzak 8.95 m
-   *   4.2 / 4.4  ana ≤ 85   erişilen %74   en uzak 8.95 m
-   *   5.2 / 3.4  ana ≤ 78   erişilen %86   en uzak 8.95 m
-   *   5.2 / 3.4  ana ≤ 85   erişilen %91   en uzak 8.95 m   ← seçilen
-   *   5.8 / 2.8  ana ≤ 85   erişilen %93   en uzak 8.95 m
-   *
-   * 5.8 / 2.8 bir puan daha veriyor ama 2.8 metrelik bir kırma artık
-   * kırılmıyor; makinenin karakterini satın alınan puana değmez.
+   *   4.2 / 4.4  ana ≤ 78   erişilen %66      5.2 / 3.4  ana ≤ 78   %86
+   *   4.2 / 4.4  ana ≤ 85   erişilen %74      5.2 / 3.4  ana ≤ 85   %91
    */
   anaBoomM: 5.2,
-  kirmaBoomM: 3.4,
+
+  /**
+   * Kırma kolu: TOPLU boy ve hidrolik uzama (m).
+   *
+   * **Üçüncü eksen.** Gerçek kırma bomlu vinçlerin hepsinde kırmanın içinde
+   * hidrolik uzatma kolları vardır; makinenin "aynı yarıçapta ucu yukarı da
+   * aşağı da götürebilme" kabiliyetini asıl veren şey odur. Bizde önce yoktu
+   * ve zarf haritası bunun bedelini gösterdi: iki sabit kollu bir zincirin
+   * erişebildiği yer bir ALAN değil, ince bir kabuk. Kol oranını değiştirmek
+   * kabuğu kalınlaştırdı ama delik kapanmadı; kapatan şey teleskop.
+   *
+   * Matematiği tek satırda: ucun gittiği yer `ana = hedefin yükselişi +
+   * kolların açtığı açı` kuralına bağlı ve o ikinci terim kırmanın BOYUYLA
+   * büyüyor. Boy değişebiliyorsa aynı noktaya farklı ana bom açılarıyla
+   * gidilebiliyor, yani zarf doluyor.
+   */
+  kirmaTabanM: 3.4,
+  kirmaUzamaM: 2.8,
 
   /**
    * Ana bom açısı: yataydan yukarı, derece.
@@ -100,13 +102,15 @@ export const DIRSEKLI_SPEC = {
   /** Eklem hızları (derece/s). Kırma daha çevik: kısa ve hafif. */
   anaHizDegPerSec: 5.0,
   kirmaHizDegPerSec: 7.0,
+  /** Teleskop hızı (m/s). Eklemlerden yavaş: uzatma kolları ağır çalışır. */
+  uzamaHizMps: 0.55,
 
   /** Moment sınırı (ton·metre) — makinenin ilan değeri. */
   momentTm: 9.0,
   /** Kancanın kendi sınırı (t): kısa yarıçapta moment değil bu bağlıyor. */
   maxKancaTon: 3.2,
   /** Tablonun bittiği yarıçap (m). Ötesinde çalışma yok. */
-  maxYaricapM: 9.2,
+  maxYaricapM: 11.9,
   /** Tablonun başladığı yarıçap (m) — daha yakını zaten makinenin üstü. */
   minYaricapM: 1.6,
 
@@ -122,6 +126,14 @@ export interface DirsekliDurum {
   anaDeg: number;
   /** Kırma açısı (derece, ana bomun doğrultusundan sapma). */
   kirmaDeg: number;
+  /** Kırmanın hidrolik uzaması (m), 0..kirmaUzamaM. */
+  uzamaM: number;
+}
+
+/** Kırmanın o andaki toplam boyu (m). */
+export function kirmaBoyu(d: DirsekliDurum): number {
+  const s = DIRSEKLI_SPEC;
+  return s.kirmaTabanM + Math.max(0, Math.min(s.kirmaUzamaM, d.uzamaM));
 }
 
 /** Kırmanın dünya doğrultusu (derece, yataydan). */
@@ -140,12 +152,12 @@ export function dirsekNoktasi(d: DirsekliDurum): { x: number; y: number } {
 
 /** Bomun ucu (kancanın asıldığı yer), tabla merkezine göre. */
 export function ucNoktasi(d: DirsekliDurum): { x: number; y: number } {
-  const s = DIRSEKLI_SPEC;
   const dirsek = dirsekNoktasi(d);
   const yon = rad(kirmaYonuDeg(d));
+  const L2 = kirmaBoyu(d);
   return {
-    x: dirsek.x + s.kirmaBoomM * Math.cos(yon),
-    y: dirsek.y + s.kirmaBoomM * Math.sin(yon),
+    x: dirsek.x + L2 * Math.cos(yon),
+    y: dirsek.y + L2 * Math.sin(yon),
   };
 }
 
@@ -168,29 +180,50 @@ export function dirsekliKapasitesi(yaricapM: number): number {
 }
 
 /**
- * Ters kinematik: ucu verilen noktaya götüren eklem açıları.
+ * Ters kinematik: ucu verilen noktaya götüren eklem konumu.
  *
  * **Neden gerekli.** Tek eksenli kovalama bu makinede kendi kuyruğunu
  * yakalıyor: ana bomu indirmek ucu uzaklaştırırken ALÇALTIYOR, kırmayı açmak
  * ise uzaklaştırırken YÜKSELTİYOR. İki eksen birbirinin hatasını besliyor.
  * Teleskopik vinçte aynı tuzağa düşülmüş ve çözüm de aynı olmuştu: hedef uç
- * konumundan açıları ANALİTİK çöz, sonra iki ekseni de hedefine sür.
+ * konumundan açıları ANALİTİK çöz, sonra her ekseni hedefine sür.
  *
- * İki kollu zincirin klasik çözümü (kosinüs teoremi). İki matematiksel çözüm
- * var — dirsek yukarı ve dirsek aşağı — ama bu makinede kırma yalnızca AŞAĞI
- * katlanıyor (`kirmaMinDeg` 0), dolayısıyla tek geçerli kök kalıyor: ana bom
- * hedefe giden doğrunun ÜSTÜNDE.
+ * **Üçüncü eksen çözümü ÇOĞULLAŞTIRIYOR.** İki kollu bir zincirde bir nokta
+ * için en fazla iki çözüm var; teleskop girince sonsuz tane oluyor (aynı
+ * noktaya kırmayı uzatıp ana bomu dikleştirerek de, kırmayı toplayıp ana
+ * bomu yatırarak da gidilebiliyor). Seçimi bir kurala bağlamak şart, yoksa
+ * çözüm karedən kareye zıplar.
+ *
+ * **Kural: EN AZ UZAMA.** Sahadaki kuralın ta kendisi — uzatma kolları
+ * yarıçapı büyütür, yarıçap kapasiteyi düşürür, o yüzden operatör işi en
+ * toplu konfigürasyonla yapar. Ayrıca kırma kısaldıkça `gamma` küçülüyor ve
+ * ana bomun üst sınırına çarpma ihtimali azalıyor, yani aynı kural zarfın
+ * deliğinden de kaçınıyor.
  *
  * Erişilemeyen nokta için `null` döner — uydurulmuş bir açı sessizce yanlış
  * yere sürerdi.
  */
 export function dirsekliCozum(hedef: { x: number; y: number }): DirsekliDurum | null {
   const s = DIRSEKLI_SPEC;
+  // Uzamayı 5 cm adımlarla tarıyoruz. Analitik bir kapalı form var ama eklem
+  // sınırlarıyla birlikte üç ayrı kök aralığına ayrılıyor; tarama hem kısa
+  // hem de sınırları kendiliğinden kapsıyor (57 deneme, karede bir kez).
+  for (let u = 0; u <= s.kirmaUzamaM + 1e-9; u += 0.05) {
+    const c = ikSabitBoy(hedef, s.kirmaTabanM + u);
+    if (c) return { ...c, uzamaM: u };
+  }
+  return null;
+}
+
+/** Verilen SABİT kırma boyu için iki kollu çözüm; sınır dışıysa null. */
+function ikSabitBoy(
+  hedef: { x: number; y: number }, L2: number,
+): { anaDeg: number; kirmaDeg: number } | null {
+  const s = DIRSEKLI_SPEC;
   const dx = hedef.x - s.pivotOffsetM;
   const dy = hedef.y - s.pivotHeightM;
   const d = Math.hypot(dx, dy);
   const L1 = s.anaBoomM;
-  const L2 = s.kirmaBoomM;
   if (d > L1 + L2 || d < Math.abs(L1 - L2)) return null;
 
   // Dirsekteki iç açı: kosinüs teoremi. `kirmaDeg` düzlükten SAPMA olduğu
@@ -199,7 +232,8 @@ export function dirsekliCozum(hedef: { x: number; y: number }): DirsekliDurum | 
   const beta = Math.acos(Math.max(-1, Math.min(1, cosBeta)));
   const kirmaDeg = 180 - (beta * 180) / Math.PI;
 
-  // Ana bomun, hedefe giden doğrudan sapması.
+  // Ana bomun, hedefe giden doğrudan sapması. Kırma yalnızca AŞAĞI
+  // katlandığı için tek geçerli kök kalıyor: ana bom doğrunun ÜSTÜNDE.
   const cosGamma = (L1 * L1 + d * d - L2 * L2) / (2 * L1 * d);
   const gamma = Math.acos(Math.max(-1, Math.min(1, cosGamma)));
   const anaDeg = ((Math.atan2(dy, dx) + gamma) * 180) / Math.PI;

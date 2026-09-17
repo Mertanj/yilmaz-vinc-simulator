@@ -42,41 +42,58 @@ export function drawBahceDuvari(): Container {
 }
 
 /**
- * Yarım kalmış ev — tek kat, damı düz.
+ * Kaba inşaat — kademeli dört kat, damları teras.
  *
- * Damdan yukarı çıkan kolon filizleri bilerek: yükün BIRAKILACAĞI yer o dam
- * ve oyuncunun orayı bir zemin olarak okuması gerekiyor. Filizler hem "inşaat
- * sürüyor" diyor hem de damın kotunu gözle ölçülebilir kılıyor.
+ * Damdan yukarı çıkan kolon filizleri bilerek: yükün BIRAKILACAĞI yer o
+ * teraslar ve oyuncunun orayı bir zemin olarak okuması gerekiyor. Filizler
+ * hem "inşaat sürüyor" diyor hem de kotu gözle ölçülebilir kılıyor.
  */
 export function drawYarimEv(): Container {
   const c = new Container();
   const g = new Graphics();
-  const { evSol: sol, evSag: sag, evDosemeY: h } = AVLU;
-  const en = sag - sol;
+  const sol = AVLU.evSolKenar;
 
-  // Gövde: brüt beton.
-  g.rect(sol, 0, en, h).fill(C.concrete);
-  g.rect(sol, 0, en * 0.28, h).fill({ color: C.concreteD, alpha: 0.75 });
-  // Kalıp izleri — yatay bantlar.
-  for (let y = 0.45; y < h; y += 0.55) {
-    g.rect(sol, y, en, 0.03).fill({ color: C.concreteD, alpha: 0.55 });
-  }
-  // Kapı boşluğu ve pencere — henüz doğramasız.
-  g.rect(sol + 0.35, 0, 0.75, 1.75).fill(C.frameDark);
-  g.rect(sag - 1.05, 0.9, 0.7, 0.75).fill(C.frameDark);
-  // Döşeme: üstte biraz taşan plak. Yük buraya konuyor.
-  g.rect(sol - 0.12, h, en + 0.24, 0.16).fill(C.concreteD);
-  g.rect(sol - 0.12, h + 0.11, en + 0.24, 0.05).fill({ color: C.shadow, alpha: 0.25 });
-  // Kolon filizleri ve donatı.
-  for (const x of [sol + 0.25, sol + en / 2, sag - 0.25]) {
-    g.rect(x - 0.13, h + 0.16, 0.26, 0.42).fill(C.concrete);
-    for (const dx of [-0.07, 0, 0.07]) {
-      g.rect(x + dx - 0.015, h + 0.16, 0.03, 0.74).fill(C.rust);
+  for (let k = 0; k < AVLU.katSayisi; k++) {
+    const sag = AVLU.evSagKenar - AVLU.kademe * k;
+    const alt = k === 0 ? 0 : AVLU.katYuksekligi * k;
+    const ust = AVLU.katYuksekligi * (k + 1);
+    const en = sag - sol;
+
+    // Gövde: brüt beton.
+    g.rect(sol, alt, en, ust - alt).fill(C.concrete);
+    g.rect(sol, alt, en * 0.24, ust - alt).fill({ color: C.concreteD, alpha: 0.7 });
+    // Kalıp izleri.
+    for (let y = alt + 0.5; y < ust; y += 0.6) {
+      g.rect(sol, y, en, 0.03).fill({ color: C.concreteD, alpha: 0.5 });
+    }
+    // Kolonlar ve kat arası kiriş.
+    g.rect(sol, ust - 0.18, en, 0.18).fill(C.concreteD);
+    // Doğramasız boşluklar — her katta iki tane.
+    const bosluk = Math.min(0.85, en / 3.2);
+    for (let i = 0; i < 2; i++) {
+      const bx = sol + 0.4 + i * (en - 0.8 - bosluk) ;
+      if (bx + bosluk < sag - 0.25) {
+        g.rect(bx, alt + 0.75, bosluk, 1.35).fill(C.frameDark);
+      }
+    }
+    // Damın öne taşan plağı + korkuluk.
+    g.rect(sol - 0.12, ust, en + 0.24, 0.16).fill(C.concreteD);
+    if (k < AVLU.katSayisi - 1) {
+      g.rect(sag - 0.14, ust + 0.16, 0.14, AVLU.korkulukY - 0.16).fill(C.concrete);
+      g.rect(sag - 0.14, ust + AVLU.korkulukY - 0.1, 0.16, 0.1).fill(C.concreteD);
+    }
+    // Kolon filizleri ve donatı — en üst katta daha uzun.
+    const filizBoy = k === AVLU.katSayisi - 1 ? 0.95 : 0.45;
+    for (const x of [sol + 0.3, (sol + sag) / 2, sag - 0.35]) {
+      g.rect(x - 0.13, ust + 0.16, 0.26, filizBoy * 0.5).fill(C.concrete);
+      for (const dx of [-0.07, 0, 0.07]) {
+        g.rect(x + dx - 0.015, ust + 0.16, 0.03, filizBoy).fill(C.rust);
+      }
     }
   }
   c.addChild(g);
-  const t = worldText(M.dekor.avlu, 0.36, { fill: C.concreteD });
-  t.position.set(sol + en / 2, h + 1.5);
+  const t = worldText(M.dekor.avlu, 0.4, { fill: C.concreteD });
+  t.position.set((sol + AVLU.evSagKenar) / 2, AVLU.katYuksekligi * AVLU.katSayisi + 1.8);
   t.alpha = 0.6;
   c.addChild(t);
   return c;
