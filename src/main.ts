@@ -1,12 +1,15 @@
 import { createStage, type Stage } from './render/stage';
 import { FixedLoop } from './core/loop';
 import { Camera } from './core/camera';
-import { Keyboard } from './input/keyboard';
+import { Kumanda } from './input/kumanda';
 import { Mission } from './game/mission';
 import { aracSec } from './ui/secim';
 import { enIyiKaydet } from './game/enIyi';
 import type { AracTanimi } from './game/araclar';
-import { M, baslangicDili, dilSec, gorevAdi, gorevBrifi } from './ui/dil';
+import {
+  M, baslangicDili, dilSec, gorevAdi, gorevBrifi, kumandaModunuSec,
+} from './ui/dil';
+import { dokunmatikKur, dokunmatikVar } from './ui/dokunmatik';
 import { oku, yaz } from './ui/kayit';
 
 /**
@@ -44,8 +47,23 @@ async function boot(): Promise<void> {
   // ve görev adları hep aynı sözlükten besleniyor.
   dilSec(baslangicDili());
 
+  // Yan çevirme çağrısı: görünürlüğüne CSS karar veriyor (dar + dikey +
+  // dokunmatik), metni buradan bir kez yazılıyor.
+  const cevir = document.getElementById('cevir');
+  if (cevir) {
+    // Simge Unicode değil çizim: `▯` gibi bir karakter telefonun kendi
+    // fontunda yoksa boş kutu olarak çıkıyor — hem de tam "telefonunu çevir"
+    // derken.
+    cevir.innerHTML = '<svg class="simge" viewBox="0 0 40 64" aria-hidden="true">'
+      + '<rect x="2.5" y="2.5" width="35" height="59" rx="6" fill="none"'
+      + ' stroke="currentColor" stroke-width="3"/>'
+      + '<line x1="15" y1="55" x2="25" y2="55" stroke="currentColor"'
+      + ' stroke-width="3" stroke-linecap="round"/></svg>'
+      + `<div class="bas">${M.cevir.bas}</div><p>${M.cevir.govde}</p>`;
+  }
+
   const stage = await createStage(host);
-  const keys = new Keyboard();
+  const keys = new Kumanda();
 
   for (;;) {
     const arac = await aracSec(secimHost);
@@ -69,7 +87,7 @@ function temizle(stage: Stage): void {
 }
 
 /** Bir makineyle bir bölüm. Oyuncu seçime dönmek isteyince çözülür. */
-function oyna(stage: Stage, keys: Keyboard, arac: AracTanimi): Promise<void> {
+function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
   const { sahne: scene, gorunum } = arac.kur!();
   const mission = new Mission(scene);
 
@@ -97,6 +115,11 @@ function oyna(stage: Stage, keys: Keyboard, arac: AracTanimi): Promise<void> {
 
   let detay = oku(DETAY_ANAHTARI) === '1';
 
+  // Telefonda klavye yok: hem makinenin kumandası hem de detay satırlarını
+  // açan anahtar dokunmatik olmak zorunda, yoksa erişilemez kalıyorlar.
+  const dokunmatik = dokunmatikVar() && arac.dokunmatik !== undefined;
+  kumandaModunuSec(dokunmatik);
+
   const el = (id: string): HTMLElement | null => document.getElementById(id);
   const hud = {
     gorev: el('gorev'), gorevBrif: el('gorev-brif'), sure: el('sure'), puan: el('puan'),
@@ -107,6 +130,33 @@ function oyna(stage: Stage, keys: Keyboard, arac: AracTanimi): Promise<void> {
     hint: el('hint'), uyari: el('uyari'),
     sonuc: el('sonuc'), sonucIc: el('sonuc-ic'), kondu: el('kondu'),
   };
+
+  // --- ekran üstü kumanda ---
+  const padHost = el('dokunmatik');
+  const padiSok = dokunmatik && padHost && arac.dokunmatik
+    ? dokunmatikKur(padHost, arac.dokunmatik, keys)
+    : () => { /* klavyeyle oynanıyor */ };
+
+  /**
+   * Detay satırı dokunmatikte düğmeye dönüşüyor.
+   *
+   * Panelin tamamı `pointer-events: none` — oyunun üstünde duran bir gösterge,
+   * tıklanacak bir arayüz değil. Bu tek satır istisna oluyor, çünkü telefonda
+   * `I` tuşu yok ve detay satırları başka türlü hiç açılamıyor.
+   */
+  const detayDugmesiniSok = ((): (() => void) => {
+    const d = hud.detay;
+    if (!dokunmatik || !d) return () => { /* klavyede I var */ };
+    const bas = (): void => keys.tetikle('detay');
+    d.classList.add('dokunulur');
+    d.setAttribute('role', 'button');
+    d.addEventListener('click', bas);
+    return () => {
+      d.removeEventListener('click', bas);
+      d.classList.remove('dokunulur');
+      d.removeAttribute('role');
+    };
+  })();
 
   // --- arka plan, ekran boyutuna bağlı ---
   let arkaPlan = gorunum.arkaPlan(stage.app.screen.width, stage.app.screen.height);
@@ -145,6 +195,8 @@ function oyna(stage: Stage, keys: Keyboard, arac: AracTanimi): Promise<void> {
       if (keys.consumeCikis()) {
         loop.stop();
         stage.app.renderer.off('resize', yenidenBoyutlandi);
+        padiSok();
+        detayDugmesiniSok();
         cik();
       }
     };
@@ -166,6 +218,10 @@ function oyna(stage: Stage, keys: Keyboard, arac: AracTanimi): Promise<void> {
 
     const loop = new FixedLoop(step, render);
     loop.start();
+
+    function detayMetni(): string {
+      return dokunmatik ? M.panel.detayDokunma(detay) : M.panel.detayIpucu(detay);
+    }
 
     function updateHud(): void {
       const g = scene.gosterge();
@@ -211,7 +267,7 @@ function oyna(stage: Stage, keys: Keyboard, arac: AracTanimi): Promise<void> {
             + `<dd${x.vurgu ? ` data-vurgu="${x.vurgu}"` : ''}>${x.deger}</dd>`)
           .join('');
       }
-      if (hud.detay) hud.detay.textContent = M.panel.detayIpucu(detay);
+      if (hud.detay) hud.detay.textContent = detayMetni();
 
       uyariGoster();
       konduGoster();
@@ -291,7 +347,11 @@ function oyna(stage: Stage, keys: Keyboard, arac: AracTanimi): Promise<void> {
     function sonucGoster(): void {
       const r = mission.result;
       if (!r) {
-        if (sonucYazildi && hud.sonuc) { hud.sonuc.hidden = true; sonucYazildi = false; }
+        if (sonucYazildi && hud.sonuc) {
+          hud.sonuc.hidden = true;
+          sonucYazildi = false;
+          document.body.classList.remove('bitti');
+        }
         return;
       }
       if (sonucYazildi || !hud.sonuc || !hud.sonucIc) return;
@@ -319,9 +379,13 @@ function oyna(stage: Stage, keys: Keyboard, arac: AracTanimi): Promise<void> {
         `<tr><td>${n.sapma}</td><td>${(ortSapma * 100).toFixed(0)} cm</td></tr>`,
         '</table>',
         `<p class="puan">${n.basari(r.puan.toFixed(0))}</p>`,
-        `<p class="note">${n.yeniden} · ${n.makineDegistir}</p>`,
+        `<p class="note">${dokunmatik
+          ? n.dokunmaNot : `${n.yeniden} · ${n.makineDegistir}`}</p>`,
       ].join('');
       hud.sonuc.hidden = false;
+      // Sonuç paneli açıkken sürüş/çatal düğmeleri gizleniyor; köşedeki
+      // yardımcılar kalıyor, yoksa telefonda turu bitirmenin yolu olmuyor.
+      document.body.classList.add('bitti');
     }
   });
 }

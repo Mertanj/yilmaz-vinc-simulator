@@ -1,6 +1,15 @@
 /**
- * Klavye girdisi. Çıktı -1..+1 aralığında analog komutlar; aynı arayüz ileride
- * dokunmatik kontrollerle de beslenecek, böylece girdi işleme tek kaynaklı kalır.
+ * Makinenin kumandası: basılı tutulan komutlar ve bir karelik tetikler.
+ *
+ * Dosya eskiden `keyboard.ts` idi ve sadece klavyeyi dinliyordu; baştaki not da
+ * *"aynı arayüz ileride dokunmatik kontrollerle de beslenecek"* diyordu. Artık
+ * besleniyor, dolayısıyla adı da klavye değil kumanda.
+ *
+ * İki kaynak var ama ikisi AYNI DİLİ konuşmuyor, bilerek: klavye TUŞ söylüyor
+ * (`KeyW`, `ShiftLeft`), dokunmatik pad NİYET söylüyor (`kaldir`, `yatGeri`).
+ * Ekrandaki düğmenin Shift+W'nin direk eğimi demek olduğunu bilmesi gerekmez —
+ * o klavyenin kendi kestirmesi. İkisi de okuma anında aynı eksende birleşiyor,
+ * ve ikisi aynı anda çalışıyor: klavyeli tablette iki kumanda da açık.
  */
 export interface DriveInput {
   /** +1 ileri gaz, -1 geri. */
@@ -19,8 +28,22 @@ export interface CraneAxes {
   winch: number;
 }
 
-export class Keyboard {
+/** Dokunmatik padin basılı tutulabilen komutları. */
+export type Komut =
+  | 'ileri' | 'geri' | 'fren'
+  | 'kaldir' | 'indir' | 'yatGeri' | 'yatOn'
+  | 'kancaYukari' | 'kancaAsagi' | 'bomKaldir' | 'bomIndir'
+  | 'teleskopUzat' | 'teleskopKis';
+
+/** Dokunmatik padin bir karelik tetikleri. */
+export type Tetik = 'sifirla' | 'cikis' | 'detay' | 'kanca' | 'ayaklar' | 'kat';
+
+const birlestir = (n: number): number => Math.max(-1, Math.min(1, n));
+
+export class Kumanda {
   private readonly down = new Set<string>();
+  /** Dokunmatik padde şu an basılı tutulan komutlar. */
+  private readonly basili = new Set<Komut>();
   /** R'ye basıldığı karede bir kez true olur. */
   resetRequested = false;
   /** Q'ya basıldığı karede bir kez true olur. */
@@ -50,38 +73,80 @@ export class Keyboard {
     });
     target.addEventListener('keyup', (e) => this.down.delete((e as KeyboardEvent).code));
     // Sekme arkaplana geçerse basılı tuşlar takılı kalmasın.
-    window.addEventListener('blur', () => this.down.clear());
+    window.addEventListener('blur', () => { this.down.clear(); this.basili.clear(); });
   }
+
+  // --- dokunmatik pad ---
+
+  /** Parmak düğmenin üstüne indi. */
+  komutBas(k: Komut): void { this.basili.add(k); }
+
+  /**
+   * Parmak kalktı, kaydı ya da sistem dokunuşu iptal etti.
+   *
+   * Üçünün de aynı yere bağlanması ŞART: `pointerup` tek başına dinlenirse,
+   * parmak düğmeden kayarak çıktığında komut basılı kalır ve makine kendi
+   * kendine gaza yapışır.
+   */
+  komutBirak(k: Komut): void { this.basili.delete(k); }
+
+  /** Bir karelik dokunmatik tetik — klavyedeki tek basışın karşılığı. */
+  tetikle(t: Tetik): void {
+    if (t === 'sifirla') this.resetRequested = true;
+    if (t === 'cikis') this.cikisIstendi = true;
+    if (t === 'detay') this.detayToggled = true;
+    if (t === 'kanca') this.hookToggled = true;
+    if (t === 'ayaklar') this.outriggerToggled = true;
+    if (t === 'kat') this.katToggled = true;
+  }
+
+  // --- okuma: iki kaynak burada birleşiyor ---
 
   readDrive(): DriveInput {
     let throttle = 0;
     for (const k of FORWARD) if (this.down.has(k)) throttle += 1;
     for (const k of REVERSE) if (this.down.has(k)) throttle -= 1;
-    return { throttle: Math.max(-1, Math.min(1, throttle)), handbrake: this.down.has('Space') };
-  }
-
-  consumeReset(): boolean {
-    const r = this.resetRequested;
-    this.resetRequested = false;
-    return r;
+    if (this.basili.has('ileri')) throttle += 1;
+    if (this.basili.has('geri')) throttle -= 1;
+    return {
+      throttle: birlestir(throttle),
+      handbrake: this.down.has('Space') || this.basili.has('fren'),
+    };
   }
 
   /**
    * Vinç kumandası — A şeması: her fonksiyon kendi tuşunda.
    * W/S bom kaldır-indir, Shift+W/S teleskop, yukarı/aşağı ok vinç.
    * Shift bomu teleskopa çeviriyor: gerçek kumandada iki ayrı kol olurdu,
-   * klavyede aynı elin altında kalması daha rahat.
+   * klavyede aynı elin altında kalması daha rahat. Forkliftte aynı iki eksen
+   * çatalı kaldırıyor (`luff`) ve direği yatırıyor (`telescope`).
    */
   readCrane(): CraneAxes {
     const shift = this.down.has('ShiftLeft') || this.down.has('ShiftRight');
     const up = this.down.has('KeyW') ? 1 : 0;
     const dn = this.down.has('KeyS') ? 1 : 0;
     const axis = up - dn;
+
+    let luff = shift ? 0 : axis;
+    let telescope = shift ? axis : 0;
+    let winch = (this.down.has('ArrowUp') ? 1 : 0) - (this.down.has('ArrowDown') ? 1 : 0);
+
+    if (this.basili.has('kaldir') || this.basili.has('bomKaldir')) luff += 1;
+    if (this.basili.has('indir') || this.basili.has('bomIndir')) luff -= 1;
+    if (this.basili.has('yatGeri') || this.basili.has('teleskopUzat')) telescope += 1;
+    if (this.basili.has('yatOn') || this.basili.has('teleskopKis')) telescope -= 1;
+    if (this.basili.has('kancaYukari')) winch += 1;
+    if (this.basili.has('kancaAsagi')) winch -= 1;
+
     return {
-      luff: shift ? 0 : axis,
-      telescope: shift ? axis : 0,
-      winch: (this.down.has('ArrowUp') ? 1 : 0) - (this.down.has('ArrowDown') ? 1 : 0),
+      luff: birlestir(luff), telescope: birlestir(telescope), winch: birlestir(winch),
     };
+  }
+
+  consumeReset(): boolean {
+    const r = this.resetRequested;
+    this.resetRequested = false;
+    return r;
   }
 
   /** Space, faza göre: sürerken el freni, ayaklar yerdeyken kanca bağla/bırak. */
@@ -120,13 +185,14 @@ export class Keyboard {
   /**
    * Basılı tuşları ve bekleyen komutları temizler.
    *
-   * Klavye araç değişiminde YENİDEN KURULMUYOR — her kurulum window'a bir
+   * Kumanda araç değişiminde YENİDEN KURULMUYOR — her kurulum window'a bir
    * dinleyici daha ekler ve eskiler asılı kalırdı. Onun yerine aynı nesne
    * yeni makineye temiz bir durumla giriyor: seçim ekranında basılı kalmış
    * bir tuş ya da yutulmamış bir Esc, yeni bölümün ilk karesine taşmasın.
    */
   sifirla(): void {
     this.down.clear();
+    this.basili.clear();
     this.resetRequested = false;
     this.outriggerToggled = false;
     this.hookToggled = false;

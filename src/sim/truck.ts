@@ -1,5 +1,5 @@
 import { Box, Circle, WheelJoint, type Body, type World, type WheelJoint as WJ } from 'planck';
-import type { DriveInput } from '../input/keyboard';
+import type { DriveInput } from '../input/kumanda';
 import { TRUCK_GROUP, type Snapshotter } from './world';
 
 /**

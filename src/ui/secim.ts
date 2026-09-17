@@ -2,6 +2,7 @@ import { araclar, type AracTanimi } from '../game/araclar';
 import { enIyiOku } from '../game/enIyi';
 import { DILLER, M, dilSec, sozluk, type Dil } from './dil';
 import { oku, yaz } from './kayit';
+import { dokunmatikVar } from './dokunmatik';
 
 /**
  * Açılış ekranı — oyuncu önce DİLİ, sonra makineyi seçiyor.
@@ -93,6 +94,17 @@ function enIyiSatiri(a: AracTanimi): string {
     + `${k.usta ? ' ★' : ''}</div>`;
 }
 
+/**
+ * Telefonda ekran kumandası olmayan araç.
+ *
+ * Kartı kapatmıyoruz: klavyeli bir tablette ya da masaüstü modunda pekâlâ
+ * oynanıyor. Ama oyuncu makineye girip kumandasız kaldığını orada keşfetmesin.
+ */
+function klavyeNotu(a: AracTanimi): string {
+  if (!a.hazir || a.dokunmatik || !dokunmatikVar()) return '';
+  return `<div class="klavye">⌨ ${M.secim.klavyeGerek}</div>`;
+}
+
 function kart(a: AracTanimi, sonKullanilan: boolean): string {
   const noktalar = [1, 2, 3]
     .map((n) => `<i${n <= a.seviye ? ' class="dolu"' : ''}></i>`).join('');
@@ -103,6 +115,7 @@ function kart(a: AracTanimi, sonKullanilan: boolean): string {
       <div class="simge">${a.simge}</div>
       <h2>${a.ad}</h2>
       <div class="sinif">${a.sinif}</div>
+      ${klavyeNotu(a)}
       <p>${a.ozet}</p>
       <div class="zorluk"><span>${M.secim.zorluk}</span>
         <div class="noktalar">${noktalar}</div></div>

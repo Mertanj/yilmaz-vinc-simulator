@@ -5,6 +5,7 @@ import {
   SahneGorunumu, VincGorunumu, ForkliftGorunumu,
 } from '../render/gorunum';
 import { M } from '../ui/dil';
+import type { DokunmatikDuzeni } from '../ui/dokunmatik';
 
 /**
  * Oynanabilir araçlar.
@@ -31,6 +32,15 @@ export interface AracTanimi {
   simge: string;
   /** HUD'un tuş listesi. */
   tuslar: string;
+  /**
+   * Ekran üstü kumandanın düzeni — yoksa o araç telefonda oynanamıyor.
+   *
+   * Vinçte beş eksen ve üç anahtar var; hepsini bir telefon ekranına sığdırmak
+   * kendi turu. Düzeni olmayan araç, dokunmatik cihazda kartında "klavye
+   * gerekir" notuyla duruyor: kartı kapatmak yerine dürüstçe söylüyoruz,
+   * çünkü klavyeli bir tablette pekâlâ oynanıyor.
+   */
+  dokunmatik?: DokunmatikDuzeni;
   hazir: boolean;
   kur?: () => { sahne: OyunSahnesi; gorunum: SahneGorunumu };
 }
@@ -40,6 +50,35 @@ export interface AracTanimi {
  * okunuyor ve dil, oyun açılmadan hemen önce seçiliyor. Modül düzeyinde bir
  * sabit olsaydı sözlük değişmeden önce dondurulurdu.
  */
+/**
+ * Forkliftin ekran kumandası.
+ *
+ * Sol başparmak sürüyor, sağ başparmak çatalı işletiyor — gerçek makinedeki
+ * el dağılımının aynısı: solda direksiyon ve pedal, sağda kollar. Direk eğimi
+ * kaldırmanın yanında ama daha küçük; turda iki kez kullanılıyor, kaldırma ise
+ * sürekli.
+ */
+function forkliftPadi(): DokunmatikDuzeni {
+  const d = M.dokunma;
+  return {
+    sol: [
+      { komut: 'geri', isaret: '◀', ad: d.geri },
+      { komut: 'ileri', isaret: '▶', ad: d.ileri },
+      { komut: 'fren', isaret: '■', ad: d.fren },
+    ],
+    sag: [
+      { komut: 'yatGeri', isaret: '↰', ad: d.yatGeri },
+      { komut: 'yatOn', isaret: '↱', ad: d.yatOn },
+      { komut: 'indir', isaret: '▼', ad: d.indir },
+      { komut: 'kaldir', isaret: '▲', ad: d.kaldir },
+    ],
+    yardimci: [
+      { tetik: 'sifirla', isaret: '⟲', ad: d.sifirla },
+      { tetik: 'cikis', isaret: '⊞', ad: d.makineler },
+    ],
+  };
+}
+
 export function araclar(): readonly AracTanimi[] {
   return [
   {
@@ -51,6 +90,7 @@ export function araclar(): readonly AracTanimi[] {
     seviye: 2,
     simge: forkliftSimgesi(),
     tuslar: M.forklift.tuslar,
+    dokunmatik: forkliftPadi(),
     hazir: true,
     kur: () => {
       const sahne = new ForkliftSahnesi();

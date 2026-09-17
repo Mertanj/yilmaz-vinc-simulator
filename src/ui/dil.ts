@@ -21,6 +21,20 @@ import { oku, yaz } from './kayit';
 
 export type Dil = 'tr' | 'en';
 
+/**
+ * İpuçlarında geçen kumandanın adı.
+ *
+ * İpuçları oyunun öğretmen sesi ve tuşun adını söylüyorlar ("W ile kaldır").
+ * Telefonda W tuşu yok; oradaki karşılık ekrandaki düğmenin üstünde yazan
+ * kelime. İpucu metni ikisini de bilmek zorunda değil, adı dışarıdan alıyor.
+ */
+export interface KumandaAdi {
+  kaldir: string;
+  indir: string;
+  /** İkisi birden: "W/S" ya da "kaldır/indir". */
+  ikisi: string;
+}
+
 /** Yerleştirme onay panelinin satırları — sayılar çağıran tarafta. */
 export interface KonduMetni {
   tik: string; kazanc: string; yerlestirme: string;
@@ -39,12 +53,23 @@ export interface Metinler {
     zorluk: string; yakinda: string; sonOynadigin: string;
     /** Karttaki en iyi derece satırı; hiç oynanmamışsa basılmıyor. */
     enIyi: (puan: string, not_: string) => string;
+    /** Dokunmatik cihazda, ekran kumandası olmayan araçta. */
+    klavyeGerek: string;
+  };
+
+  /** Ekran üstü kumandanın düğme adları. */
+  dokunma: {
+    ileri: string; geri: string; fren: string;
+    kaldir: string; indir: string; yatGeri: string; yatOn: string;
+    sifirla: string; makineler: string;
   };
 
   ust: { puan: (n: number) => string; bolumTamam: string };
 
   panel: {
     detayIpucu: (acik: boolean) => string;
+    /** Dokunmatikte aynı satır düğme oluyor; "I ·" öneki anlamsız kalıyor. */
+    detayDokunma: (acik: boolean) => string;
     sinir: string; egim: string; hiz: string;
     /** Hız birimi — TR'de "km/sa", EN'de "km/h". */
     hizBirimi: string;
@@ -94,8 +119,11 @@ export interface Metinler {
     };
     ipucu: {
       teslimIniyor: string; teslimBekle: string;
-      yuklu: string; hazir: string; yuksek: string; alcak: string; yanas: string;
-      kot: string; uzak: string;
+      yuklu: string; yanas: string; uzak: string;
+      hazir: (k: KumandaAdi) => string;
+      yuksek: (k: KumandaAdi) => string;
+      alcak: (k: KumandaAdi) => string;
+      kot: (k: KumandaAdi) => string;
     };
   };
 
@@ -111,7 +139,12 @@ export interface Metinler {
     rekor: string;
     oncekiEnIyi: (puan: string) => string;
     makineDegistir: string;
+    /** Dokunmatikte R/Esc yok; oyuncuyu köşedeki düğmelere yönlendiriyor. */
+    dokunmaNot: string;
   };
+
+  /** Dar dikey ekranda yan çevirme çağrısı. */
+  cevir: { bas: string; govde: string };
 
   dekor: { sanayi: string; kurulum: string; sevkiyat: string; malKabul: string };
 
@@ -136,10 +169,17 @@ const TR: Metinler = {
       + ' Oyunun içinde <kbd>R</kbd> bölümü sıfırlar, <kbd>Esc</kbd> buraya döner.',
     zorluk: 'zorluk', yakinda: 'yakında', sonOynadigin: 'son oynadığın',
     enIyi: (puan, not_) => `en iyi ${puan} puan · not ${not_}`,
+    klavyeGerek: 'klavye gerekir',
+  },
+  dokunma: {
+    ileri: 'ileri', geri: 'geri', fren: 'fren',
+    kaldir: 'kaldır', indir: 'indir', yatGeri: 'geri yat', yatOn: 'öne yat',
+    sifirla: 'sıfırla', makineler: 'makineler',
   },
   ust: { puan: (n) => `${n} puan`, bolumTamam: 'bölüm tamamlandı' },
   panel: {
     detayIpucu: (acik) => acik ? 'I · detayı kapat' : 'I · detaylı panel',
+    detayDokunma: (acik) => acik ? 'detayı kapat' : 'detaylı panel',
     sinir: 'sınır', egim: 'araç eğimi', hiz: 'hız', hizBirimi: 'km/sa',
   },
   vinc: {
@@ -250,11 +290,11 @@ const TR: Metinler = {
       teslimIniyor: 'palet iniyor · konveyörün önünde bekle',
       teslimBekle: 'yeni palet için yükleme karesinin batısına geç',
       yuklu: 'yük çatalda · gözün önüne gel, kaldır, içeri sür, indir',
-      hazir: 'ÇATAL CEPTE · W ile kaldır, palet gelecek',
-      yuksek: 'çatal çok yüksek · S ile indir, cebin altına gir',
-      alcak: 'çatal çok alçak · W ile paletin cebine getir',
+      hazir: (k) => `ÇATAL CEPTE · ${k.kaldir} ile kaldır, palet gelecek`,
+      yuksek: (k) => `çatal çok yüksek · ${k.indir} ile indir, cebin altına gir`,
+      alcak: (k) => `çatal çok alçak · ${k.kaldir} ile paletin cebine getir`,
       yanas: 'kot doğru · ileri sür, bıçağı cebe sok',
-      kot: 'çatalı paletin cebi hizasına getir (W/S)',
+      kot: (k) => `çatalı paletin cebi hizasına getir (${k.ikisi})`,
       uzak: 'paletler koridorun doğu ucunda · sağa sür',
     },
   },
@@ -277,6 +317,13 @@ const TR: Metinler = {
     rekor: 'YENİ REKOR',
     oncekiEnIyi: (puan) => `önceki en iyi ${puan} puan`,
     makineDegistir: 'Esc ile makine değiştir',
+    dokunmaNot: 'köşedeki ⟲ yeniden başlatır, ⊞ makineleri açar',
+  },
+  cevir: {
+    bas: 'TELEFONU YAN ÇEVİR',
+    govde: 'Bölüm uzun bir koridorda geçiyor. Yatay tutunca makineyi ve '
+      + 'hedefi aynı kadrajda görüyorsun; kumanda da iki başparmağın altına '
+      + 'geliyor.',
   },
   dekor: {
     sanayi: 'SANAYİ SİTESİ · C BLOK', kurulum: 'KURULUM ALANI',
@@ -309,10 +356,17 @@ const EN: Metinler = {
       + ' <kbd>Esc</kbd> brings you back here.',
     zorluk: 'difficulty', yakinda: 'soon', sonOynadigin: 'last played',
     enIyi: (puan, not_) => `best ${puan} pts · grade ${not_}`,
+    klavyeGerek: 'keyboard needed',
+  },
+  dokunma: {
+    ileri: 'forward', geri: 'reverse', fren: 'brake',
+    kaldir: 'raise', indir: 'lower', yatGeri: 'tilt back', yatOn: 'tilt fwd',
+    sifirla: 'restart', makineler: 'machines',
   },
   ust: { puan: (n) => `${n} pts`, bolumTamam: 'level complete' },
   panel: {
     detayIpucu: (acik) => acik ? 'I · hide detail' : 'I · full panel',
+    detayDokunma: (acik) => acik ? 'hide detail' : 'full panel',
     sinir: 'limit', egim: 'machine tilt', hiz: 'speed', hizBirimi: 'km/h',
   },
   vinc: {
@@ -424,11 +478,11 @@ const EN: Metinler = {
       teslimIniyor: 'pallet coming down · wait clear of the conveyor',
       teslimBekle: 'move west of the loading square for the next pallet',
       yuklu: 'load on the forks · line up with the bay, lift, drive in, lower',
-      hazir: 'BLADES IN THE POCKET · W to lift, the pallet comes with you',
-      yuksek: 'forks too high · S to lower, get under the pocket',
-      alcak: 'forks too low · W to line up with the pocket',
+      hazir: (k) => `BLADES IN THE POCKET · ${k.kaldir} to lift, the pallet comes with you`,
+      yuksek: (k) => `forks too high · ${k.indir} to lower, get under the pocket`,
+      alcak: (k) => `forks too low · ${k.kaldir} to line up with the pocket`,
       yanas: 'height is right · drive in, slide the blades into the pocket',
-      kot: 'line the forks up with the pallet pocket (W/S)',
+      kot: (k) => `line the forks up with the pallet pocket (${k.ikisi})`,
       uzak: 'pallets arrive at the loading square · drive east',
     },
   },
@@ -451,6 +505,12 @@ const EN: Metinler = {
     rekor: 'NEW BEST',
     oncekiEnIyi: (puan) => `previous best ${puan} pts`,
     makineDegistir: 'press Esc to switch machines',
+    dokunmaNot: '⟲ in the corner runs it again, ⊞ opens the machines',
+  },
+  cevir: {
+    bas: 'TURN YOUR PHONE',
+    govde: 'The level runs down a long aisle. Landscape keeps the machine and '
+      + 'the target in the same frame, and puts the controls under both thumbs.',
   },
   dekor: {
     sanayi: 'INDUSTRIAL ESTATE · BLOCK C', kurulum: 'SET-UP ZONE',
@@ -499,6 +559,23 @@ export function baslangicDili(): Dil {
   if (kayitli === 'tr' || kayitli === 'en') return kayitli;
   const tarayici = typeof navigator === 'undefined' ? 'tr' : navigator.language;
   return tarayici.toLowerCase().startsWith('tr') ? 'tr' : 'en';
+}
+
+/**
+ * Oyuncu ekran kumandası mı kullanıyor?
+ *
+ * Dil gibi modül düzeyinde: bölüm başlarken bir kez belirleniyor ve oyun
+ * içinde değişmiyor. İpuçlarının tek ihtiyacı bu.
+ */
+let dokunmatikKumanda = false;
+export function kumandaModunuSec(dokunmatik: boolean): void {
+  dokunmatikKumanda = dokunmatik;
+}
+
+export function kumandaAdi(): KumandaAdi {
+  if (!dokunmatikKumanda) return { kaldir: 'W', indir: 'S', ikisi: 'W/S' };
+  const d = M.dokunma;
+  return { kaldir: d.kaldir, indir: d.indir, ikisi: `${d.kaldir}/${d.indir}` };
 }
 
 export const DILLER: readonly Dil[] = ['tr', 'en'];

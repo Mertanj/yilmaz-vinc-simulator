@@ -11,7 +11,7 @@ import type { Task } from '../game/tasks';
 import type { SceneInput } from './scene';
 import type { Gosterge, OyunSahnesi, PanelSatiri, Uyari } from './sahne';
 import { imzaliDerece } from './sahne';
-import { M } from '../ui/dil';
+import { M, kumandaAdi } from '../ui/dil';
 
 /**
  * Rafın çarpışma gövdesi.
@@ -372,9 +372,10 @@ export class ForkliftSahnesi implements OyunSahnesi {
       };
     }
     const durum = this.forklift.durum(this.grabbables);
+    const k = kumandaAdi();
     const say: Record<typeof durum, string> = {
-      yuklu: i.yuklu, hazir: i.hazir, yuksek: i.yuksek,
-      alcak: i.alcak, yanas: i.yanas, kot: i.kot, uzak: i.uzak,
+      yuklu: i.yuklu, hazir: i.hazir(k), yuksek: i.yuksek(k),
+      alcak: i.alcak(k), yanas: i.yanas, kot: i.kot(k), uzak: i.uzak,
     };
     return {
       metin: say[durum],

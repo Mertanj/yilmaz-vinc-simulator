@@ -6,7 +6,7 @@ import {
 import { Truck } from './truck';
 import { Outriggers } from './outriggers';
 import { Crane, NEUTRAL, type CraneInput, type Grabbable } from './crane';
-import type { DriveInput } from '../input/keyboard';
+import type { DriveInput } from '../input/kumanda';
 import { TASKS, MALZEME_X, type Task } from '../game/tasks';
 import { OutriggerState } from './loadChart';
 import type { Gosterge, OyunSahnesi, PanelSatiri, Uyari } from './sahne';

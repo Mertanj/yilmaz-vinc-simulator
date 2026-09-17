@@ -4,7 +4,7 @@ import {
   type PrismaticJoint as PJ, type RevoluteJoint as RJ,
 } from 'planck';
 import { KATEGORI, MASKE, TRUCK_GROUP, type Snapshotter } from './world';
-import type { DriveInput } from '../input/keyboard';
+import type { DriveInput } from '../input/kumanda';
 import type { Grabbable } from './crane';
 
 /**

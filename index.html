@@ -99,6 +99,13 @@
     font-size: 10.5px; letter-spacing: 0.04em; color: #6D777E;
     margin: -4px 0 9px; white-space: nowrap;
   }
+  /* Panelin tamamı `pointer-events: none`; dokunmatikte bu tek satır istisna,
+     çünkü telefonda `I` tuşu yok. */
+  #p-detay.dokunulur {
+    pointer-events: auto; cursor: pointer; color: #9FB0BA;
+    border: 1px solid #2A343C; border-radius: 4px;
+    padding: 5px 8px; margin: 2px 0 9px; display: inline-block;
+  }
   #panel dd[data-vurgu="iyi"] { color: #5FB07C; }
   #panel dd[data-vurgu="uyari"] { color: #E8A62C; }
   #panel dd[data-vurgu="kotu"] { color: #E2645A; }
@@ -143,6 +150,8 @@
     background: rgba(14, 20, 23, 0.8); border: 1px solid #1D262B;
   }
   #tuslar b { color: #E8A62C; font-weight: 600; }
+  /* Ekran kumandası açıkken klavye listesi yalan söylüyor. */
+  body.dokunmatik #tuslar { display: none; }
   kbd {
     background: #1D262B; border: 1px solid #35434A; border-radius: 3px;
     padding: 1px 5px; color: #E4E9EB; font: inherit; font-size: 11px;
@@ -155,6 +164,158 @@
     #panel { width: 200px; top: 58px; padding: 11px 12px 10px; }
     #moment-yuzde { font-size: 25px; }
     #tuslar { display: none; }
+  }
+
+  /* --- ekran üstü kumanda ---
+     Telefonda klavye yok. Sol başparmak sürüyor, sağ başparmak çatalı
+     işletiyor: gerçek makinedeki el dağılımının aynısı. Kap `pointer-events:
+     none`, sadece düğmeler dokunuşu yakalıyor — parmak boşluğa değdiğinde
+     kamera değil oyun görüyor. z-index sonuç panelinin (30) ÜSTÜNDE, yoksa
+     bölüm bitince telefonda turu kapatmanın yolu kalmıyor. */
+  #dokunmatik { position: fixed; inset: 0; z-index: 31; pointer-events: none; }
+  #dokunmatik[hidden] { display: none; }
+  #dokunmatik .pad { position: absolute; display: flex; gap: 10px; pointer-events: auto; }
+  #dokunmatik .pad.sol {
+    left: calc(14px + env(safe-area-inset-left, 0px));
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+  #dokunmatik .pad.sag {
+    right: calc(14px + env(safe-area-inset-right, 0px));
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+  #dokunmatik .pad.yardimci {
+    right: calc(14px + env(safe-area-inset-right, 0px));
+    top: calc(52px + env(safe-area-inset-top, 0px));
+    gap: 8px;
+  }
+  /* Bölüm bitti: sürüş ve çatal düğmeleri sonuç panelinin önünü kapatmasın. */
+  body.bitti #dokunmatik .pad.sol,
+  body.bitti #dokunmatik .pad.sag { display: none; }
+
+  #dokunmatik button {
+    width: 68px; height: 68px; padding: 0; cursor: pointer;
+    display: grid; align-content: center; justify-items: center; gap: 3px;
+    background: rgba(18, 25, 30, 0.86); border: 1px solid #35434A;
+    border-radius: 12px; color: #E4E9EB;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    touch-action: none; -webkit-tap-highlight-color: transparent;
+    user-select: none; -webkit-user-select: none;
+  }
+  #dokunmatik button .isaret { font-size: 21px; line-height: 1; color: #E8A62C; }
+  #dokunmatik button .ad {
+    font-size: 9.5px; letter-spacing: 0.03em; color: #8E9BA2; white-space: nowrap;
+  }
+  /* Basılı hâl dolu renkle: parmağın altında kalan düğmede kenarlık değişimi
+     görünmüyor. */
+  #dokunmatik button.basili { background: #E8A62C; border-color: #E8A62C; }
+  #dokunmatik button.basili .isaret,
+  #dokunmatik button.basili .ad { color: #16191B; }
+  #dokunmatik button:focus-visible { outline: 2px solid #E8A62C; outline-offset: 2px; }
+  /* Genişlik içeriğe göre: sabit 52px'te "makineler" kırpılıyordu. */
+  #dokunmatik .tetik {
+    width: auto; min-width: 56px; height: 46px; padding: 0 9px;
+    background: rgba(18, 25, 30, 0.7);
+  }
+  #dokunmatik .tetik .isaret { font-size: 16px; color: #AEBAC1; }
+  #dokunmatik .tetik .ad { font-size: 8.5px; }
+
+  /* --- alçak ekran: yatay tutulan telefon ---
+     Buradaki dert GENİŞLİK değil YÜKSEKLİK. Yatay bir telefon 844×390 olabiliyor;
+     `max-width: 720px` kuralı hiç tutmuyor, oysa 390 piksellik yükseklikte panel
+     ekranı aşıyor ve ekran kumandasının üstüne biniyor. Panel buradan itibaren
+     kendi kendine küçülüyor: ölçüler, detay açıkken bile pad'in üst kenarının
+     üstünde bitecek şekilde seçildi. */
+  @media (max-height: 460px) {
+    /* Panelin genişliği tek yerde: ipucu şeridi de buradan hizalanıyor. */
+    :root { --panel-en: 188px; }
+    #gorev-brif { display: none; }
+    #ust { padding: calc(6px + env(safe-area-inset-top, 0px)) 12px 6px; font-size: 12px; }
+    #panel {
+      /* `border-box`: ipucu ve uyarı şeridi panelin sağ kenarından hizalanıyor,
+         dolayısıyla `--panel-en` DIŞ genişlik olmalı. İçerik genişliği olarak
+         bırakılınca iç boşluk ve kenarlık 24 piksel ekliyordu ve iki şerit de
+         panelin üstüne biniyordu. */
+      box-sizing: border-box;
+      top: 40px; width: var(--panel-en); padding: 10px 11px 8px;
+      max-height: calc(100% - 134px); overflow: hidden;
+    }
+    #panel .baslik { font-size: 10px; margin-bottom: 6px; }
+    #panel .bar { height: 10px; }
+    #moment-yuzde { font-size: 22px; margin-top: 4px; }
+    #moment-durum { font-size: 10px; margin-bottom: 7px; }
+    #panel dl { font-size: 11px; gap: 2px 8px; padding-top: 7px; margin-bottom: 6px; }
+    /* Gösterge bloğunun alt açıklamaları: dar ekranda zaten kırpılıyorlardı,
+       aynı bilgi satır listesinde duruyor. */
+    #p-alt1, #p-alt2 { display: none; }
+    #p-detay { font-size: 9.5px; }
+    #p-detay.dokunulur { padding: 4px 7px; margin: 0 0 7px; }
+    /* İpucu panelden çıkıyor; panel de bu satırın yüksekliğinden kurtulup
+       detay açıkken bile ekrana sığıyor.
+       İki yer denendi ve ikisi de tutmadı: başparmak kümelerinin ARASINA
+       ortalamak, çünkü sağ küme dört sol küme üç düğme — boşluk simetrik değil
+       ve şerit sağdaki düğmelerin altına giriyordu; düğme sırasının ÜSTÜ ise
+       390 piksellik bir ekranda oyun alanının tam ortası, şerit makinenin
+       üstüne oturuyordu. Doğru yer ÜST: ipucu okunacak bir satır, başparmak
+       hedefi değil, ve orada görev başlığının hemen altına düşüyor. Solda
+       panel, sağda yardımcı düğmeler; arada kalan yer bir satıra fazlasıyla
+       yetiyor. */
+    #hint {
+      position: fixed; transform: none; margin: 0;
+      left: calc(16px + var(--panel-en) + 10px + env(safe-area-inset-left, 0px));
+      right: calc(136px + env(safe-area-inset-right, 0px));
+      top: calc(34px + env(safe-area-inset-top, 0px));
+      padding: 6px 12px; text-align: center; font-size: 10.5px;
+      border: 1px solid #253038; border-radius: 4px;
+      background: rgba(14, 20, 23, 0.86);
+    }
+    /* Uyarı şeridi ekranın ortasına hizalı; alçak ekranda panelin en kritik
+       üç satırının (çatalda / sınır / arka aks) üstüne biniyordu. Tam da
+       oyuncunun uyarıyı okurken bakması gereken sayılar onlar. */
+    #uyari {
+      left: calc(16px + var(--panel-en) + 10px + env(safe-area-inset-left, 0px));
+      right: calc(14px + env(safe-area-inset-right, 0px));
+      transform: none; max-width: none; top: 86px; padding: 9px 14px;
+    }
+    #uyari .bas { font-size: 17px; }
+    #uyari p { font-size: 11.5px; }
+    #dokunmatik button { width: 58px; height: 56px; }
+    #dokunmatik button .isaret { font-size: 18px; }
+    #dokunmatik .tetik { min-width: 50px; height: 38px; padding: 0 7px; }
+    #dokunmatik .pad.yardimci { top: calc(38px + env(safe-area-inset-top, 0px)); }
+  }
+
+  /* --- dar dikey ekran: yan çevir ---
+     Bölüm 60 metrelik bir koridorda geçiyor, oyun da yandan bakıyor. 390
+     piksel genişlikte iki başparmak kümesi yan yana SIĞMIYOR (194 + 262 > 390)
+     ve sığsa bile oyun alanı bir şeride düşüyor, kamera makineyi noktaya kadar
+     küçültüyor. Düğmeleri dikeye dizmek bunu çözmez; ekranı çevirmek çözer.
+     Eşik 560 piksel: onun üstünde iki küme zaten yan yana sığıyor, yani
+     dikey tutulan bir tablette çağrı hiç çıkmıyor. z-index seçim ekranının
+     (40) ALTINDA — makine seçmek dikeyde gayet rahat. */
+  #cevir { display: none; }
+  @media (pointer: coarse) and (orientation: portrait) and (max-width: 560px) {
+    #cevir {
+      position: fixed; inset: 0; z-index: 35;
+      display: grid; align-content: center; justify-items: center; gap: 16px;
+      padding: 32px; text-align: center; background: #0E1417;
+      font-family: "IBM Plex Mono", ui-monospace, monospace; color: #8E9BA2;
+    }
+    #cevir .simge {
+      width: 38px; height: 61px; color: #E8A62C;
+      animation: cevirSallan 2.4s ease-in-out infinite;
+    }
+    #cevir .bas {
+      font-family: "Barlow Condensed", Impact, sans-serif; font-weight: 700;
+      font-size: 26px; letter-spacing: 0.06em; color: #E8A62C;
+    }
+    #cevir p { margin: 0; font-size: 12.5px; line-height: 1.6; max-width: 20rem; }
+  }
+  @keyframes cevirSallan {
+    0%, 55%, 100% { transform: rotate(0deg); }
+    72%, 88% { transform: rotate(-90deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #cevir .simge { animation: none; }
   }
 
   /* --- yerleştirme onay paneli --- */
@@ -312,6 +473,9 @@
   #secim .en-iyi[data-not="B"] { color: #9FC46B; }
   #secim .en-iyi[data-not="C"] { color: #E8A62C; }
   #secim .en-iyi[data-not="D"] { color: #B08A6A; }
+  #secim .klavye {
+    font-size: 11px; color: #E8A62C; margin: -6px 0 10px; letter-spacing: 0.02em;
+  }
   #secim .ipucu {
     margin-top: 10px; padding-top: 10px; border-top: 1px solid #242E35;
     font-size: 11.5px; color: #7C878E; line-height: 1.5;
@@ -365,6 +529,9 @@
     <kbd>↑</kbd><kbd>↓</kbd> kanca <kbd>boşluk</kbd> bağla/bırak<br>
     <kbd>K</kbd> halat katı <kbd>R</kbd> sıfırla
   </div>
+
+  <div id="dokunmatik" hidden></div>
+  <div id="cevir"></div>
 
   <div id="kondu" hidden></div>
 
