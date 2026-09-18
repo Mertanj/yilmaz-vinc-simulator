@@ -164,6 +164,8 @@ export interface Metinler {
       /** Park cebini geçti — tabla malzemenin berisine düşüyor. */
       cebiGectin: string;
       yukBagli: (k: KumandaAdi) => string;
+      /** Hedef, teleskop uzatılmadan erişilemiyor. */
+      uzat: (k: KumandaAdi) => string;
       uzak: (k: KumandaAdi) => string;
     };
   };
@@ -355,6 +357,7 @@ const TR: Metinler = {
       yanasma: (k) => `geri geri park cebine yanaş, sonra ayakları aç (${k.ayaklar})`,
       cebiGectin: 'park cebini geçtin — biraz ileri al, yoksa vinç malzemeye yetişmez',
       yukBagli: (k) => `yük bağlı · duvarı aş, sonra bırak (${k.kanca})`,
+      uzat: () => 'hedef bu boyla erişilmiyor · TELESKOBU UZAT (⇧↑)',
       uzak: (k) => `kancayı yükün üstüne indir (${k.ikisi} ve kanca)`,
     },
   },
@@ -607,6 +610,7 @@ const EN: Metinler = {
       yanasma: (k) => `back into the parking bay, then set the outriggers (${k.ayaklar})`,
       cebiGectin: 'you are past the bay — pull forward a little, or the crane cannot reach the load',
       yukBagli: (k) => `load on the hook · clear the wall, then release (${k.kanca})`,
+      uzat: () => 'the target is out of reach at this length · EXTEND THE BOOM (⇧↑)',
       uzak: (k) => `lower the hook onto the load (${k.ikisi} and hook)`,
     },
   },

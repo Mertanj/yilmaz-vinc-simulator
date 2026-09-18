@@ -35,10 +35,17 @@ export const AVLU = {
    *
    * En üst dam korkuluksuz ve hedef: fabrika binasında çatı erişilemediği
    * için hedef değildi, burada kat sayısı üçe indiği için erişiliyor.
+   *
+   * **Kat yüksekliği 2.6'dan 2.4'e indi ve sebebi ölçüm.** 2.6'da en üst dam
+   * 7.8 metrede ve yarıçapı 9.23; orada ucun çıkabildiği en yüksek kot 9.70
+   * metre, yükün dama değmeden asılı durması için gereken ise 10.3. Fark
+   * yükü tam dam hizasında sallandırıyordu: rig yükü hedefin 64 cm solunda,
+   * sürtünerek bırakıyordu (diğer dördü 1–11 cm). 2.4'te dam 7.2 metrede ve
+   * pay 40 santim.
    */
   evSagKenar: 6.6,
   evSolKenar: 1.8,
-  katYuksekligi: 2.6,
+  katYuksekligi: 2.4,
   katSayisi: 3,
   /**
    * Kademe (m) — TERAS CEBİNİN genişliği bundan çıkıyor ve ölçümle büyüdü.

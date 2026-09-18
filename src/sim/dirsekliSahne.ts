@@ -3,7 +3,7 @@ import { createWorld, createGround, Snapshotter, SIM } from './world';
 import { Truck } from './truck';
 import { Outriggers } from './outriggers';
 import { Dirsekli, DIRSEKLI, DIRSEKLI_NEUTRAL, type DirsekliInput } from './dirsekli';
-import { DIRSEKLI_SPEC as S } from './dirsekliGeometri';
+import { DIRSEKLI_SPEC as S, dirsekliCozum } from './dirsekliGeometri';
 import type { Grabbable } from './kanca';
 import { AVLU, avluHedefleri, createAvlu } from './avlu';
 import { DIRSEKLI_GOREVLER } from '../game/dirsekliGorevler';
@@ -287,6 +287,23 @@ export class DirsekliSahne implements OyunSahnesi {
     return null;
   }
 
+  /**
+   * Güncel hedefin istediği teleskop uzaması (m); hedef yoksa ya da
+   * erişilemiyorsa null.
+   *
+   * Hedefin biraz ÜSTÜ soruluyor, hedefin kendisi değil: yükü bırakmak için
+   * ucun yükün boyu ve halat kadar yukarıda durması gerekiyor.
+   */
+  private gerekenUzama(): number | null {
+    const t = this.loadTask;
+    const h = t ? this.hedefNoktasi(t) : null;
+    if (!t || !h) return null;
+    const c = dirsekliCozum(this.bom.dunyadanYerele({
+      x: h.x, y: h.y + t.halfHeight * 2 + 1.0,
+    }));
+    return c ? c.uzamaM : null;
+  }
+
   ipucu(): { metin: string; mod: 'drive' | 'crane' | 'ready' } {
     const i = M.vinc.ipucu;
     const k = M.dirsekli.ipucu;
@@ -303,7 +320,18 @@ export class DirsekliSahne implements OyunSahnesi {
       }
       return { metin: k.yanasma(t), mod: 'drive' };
     }
-    if (this.hasLoad) return { metin: k.yukBagli(t), mod: 'crane' };
+    if (this.hasLoad) {
+      // **Teleskobu KEŞFETTİRMEK gerekiyor.** Dördüncü eksen tuş listesinde
+      // yazıyor ama oyun içinde hiçbir şey onu istemiyordu; üst teraslara
+      // teleskop olmadan çıkılamıyor ve oyuncunun bunu tahmin etmesi
+      // gerekirdi. Ters kinematik zaten hedefin ne kadar uzama istediğini
+      // biliyor — soruyoruz ve cevabı satıra yazıyoruz.
+      const gereken = this.gerekenUzama();
+      if (gereken !== null && gereken > this.bom.uzamaBoyuM + 0.35) {
+        return { metin: k.uzat(t), mod: 'crane' };
+      }
+      return { metin: k.yukBagli(t), mod: 'crane' };
+    }
     const { reason } = this.bom.attachCheck(this.grabbables);
     const say: Record<typeof reason, string> = {
       hazir: i.hazir(t),

@@ -303,7 +303,11 @@ function main(): void {
     // Yuku kaldir ve duvari asacak kota cik. Gecis kotu: duvar + yuk + halat
     // + pay. Ucu once AYNI yaricapla yukselt, sonra disari goturuyoruz —
     // yatay once gidilirse yuk duvara carpiyor.
-    const tasimaHalat = 1.0;
+    // **Tasima halati hedefe gore kisaliyor.** Yuksek ve uzak bir hedefte ucun
+    // cikabildigi kot sinirli; sabit 1 metrelik halat yuku tam terasin
+    // hizasinda sallandiriyor. Gercek operator de yuku yukari tasirken kancayi
+    // kisa tutar. Alt hedeflerde uzun halat daha sakin bir sarkac veriyor.
+    const tasimaHalat = hedef.y > 4 ? 0.6 : 1.0;
     // Duvar gecisi ve TERAS gecisi ayri iki kot: hedef yukselince asilacak
     // engel duvar degil, terasin korkulugu oluyor.
     const gecisY = AVLU.duvarY + task.halfHeight * 2 + tasimaHalat + 0.8;
@@ -339,7 +343,10 @@ function main(): void {
     // halat gerilimi 8.05 tona cikti (LMI %612) ve rig 139 saniye kirmizida
     // kaldi. Tirmanma yaricapi binanin ONUNDE, avlu zemininin ustunde.
     const tirmanX = AVLU.evSagKenar + 0.7;
-    const asmaKotu = hedef.y + AVLU.korkulukY + task.halfHeight + 0.25;
+    // Asilacak engel hedefe ait: en ust damda korkuluk YOK, oradaki esigi
+    // korkuluk boyu kadar yuksek tutmak yukun hic inmemesine yol aciyordu.
+    const korkuluk = hedef.y >= AVLU.katYuksekligi * AVLU.katSayisi ? 0 : AVLU.korkulukY;
+    const asmaKotu = hedef.y + korkuluk + task.halfHeight + 0.25;
     r.runUntil(60, (rig) => rig.scene.load.getPosition().y > asmaKotu,
       (rig) => ({ crane: { ...rig.ucaSurSonumlu(tirmanX, Math.max(gecisY, terasY)),
         winch: rig.halata(tasimaHalat) } }));
@@ -364,7 +371,7 @@ function main(): void {
 
     // --- KOYMA ---
     r.etiket = `${task.kod}-koyma`;
-    const koymaUcY = hedef.y + task.halfHeight * 2 + AVLU.korkulukY + 0.6;
+    const koymaUcY = hedef.y + task.halfHeight * 2 + korkuluk + 0.6;
     r.runUntil(40, (rig) => rig.ucHatasi(hedef.x, koymaUcY) < 0.20,
       (rig) => ({ crane: { ...rig.ucaSurSonumlu(hedef.x, koymaUcY), winch: rig.halata(tasimaHalat) } }));
     r.dur();
