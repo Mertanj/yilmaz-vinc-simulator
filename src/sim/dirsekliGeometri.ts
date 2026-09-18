@@ -125,8 +125,16 @@ export const DIRSEKLI_SPEC = {
   momentTm: 9.0,
   /** Kancanın kendi sınırı (t): kısa yarıçapta moment değil bu bağlıyor. */
   maxKancaTon: 3.2,
-  /** Tablonun bittiği yarıçap (m). Ötesinde çalışma yok. */
-  maxYaricapM: 11.9,
+  /**
+   * Tablonun bittiği yarıçap (m). Ötesinde çalışma yok.
+   *
+   * **Bomun bittiği yerden ÖNCE bitiyor, ve bu kasıtlı.** 11.9 yazıyordu,
+   * makinenin geometrik menzili ise 11.75 — yani "yarıçap tablo dışı" durumu
+   * hiç oluşamıyordu. Panelde o satır, göstergedeki durum ve uyarı şeridi
+   * ölü koddu. Gerçek yük tablosu da bomun ucundan önce biter; son yarım
+   * metre kâğıt üstünde yoktur. 11.0'da kapasite 0.82 t ve ötesi sıfır.
+   */
+  maxYaricapM: 11.0,
   /** Tablonun başladığı yarıçap (m) — daha yakını zaten makinenin üstü. */
   minYaricapM: 1.6,
 
