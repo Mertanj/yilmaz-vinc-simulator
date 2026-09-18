@@ -22,7 +22,7 @@ import type { Task } from './tasks';
  * 7.8", avlu.ts yorumu "2.8 · 5.6 · 8.4", gerçek ise 2.4 · 4.8 · 7.2.
  * Hedefin ADI kaymıyor, kotu kayıyor.
  *
- * — ve yükler hedeflenen LMI eğrisini (%60 → %74 → %85 → %92 → %96) verecek
+ * — ve yükler hedeflenen LMI eğrisini (%65 → %79 → %85 → %92 → %96) verecek
  * şekilde seçildi; kanca 0.12 t brüte dahil.
  *
  * **Yarı genişlikler 0.6 m'yi geçmiyor** ve bu iki yerden birden geliyor:
@@ -30,11 +30,17 @@ import type { Task } from './tasks';
  * sokaktaki cebi arka pabuçla duvar arasında 2 metre. 1.1'lik kademede cep
  * 96 santimdi ve yük SIĞMIYORDU: 63 dereceye dönüp kama gibi sıkışıyordu.
  *
- * **Sıralama iki kontrollü deney içeriyor.** G1 ile G2 aynı yükü FARKLI
- * yarıçapa taşıyor, G1 ile G3 ise aynı yere FARKLI ağırlık koyuyor. Tablonun
- * "yer" değil "yarıçaptaki yük" ile ilgili olduğunu anlatmanın en ucuz yolu
- * bu; vinç bölümündeki T1/T2 çiftiyle aynı fikir, burada iki eksene birden
- * yayılmış hâli.
+ * **Isınma turu artık bir KALDIRMA, kaydırma değil.** S1 avlu zeminine
+ * gidiyordu: alma noktasından 2.1 metre yana, duvarın ardına. Sahadan gelen
+ * teşhis netti — bölümün geri kalanı yükü 7.2 metre tırmandırırken ilk görev
+ * bir forklift işiydi, üstelik en çok cezalandıran oydu (hedef alçak olduğu
+ * için oyuncu bomu kaldırmadan gidiyor ve yük duvarı sürüyor).
+ *
+ * Şimdi S1 en yakın terasa, hafif yükle: bölümün asıl hareketinin en
+ * yumuşak hâli. Avlu zemini hedef olarak DURUYOR ama sırası değişti —
+ * yarıçapı en kısa olduğu için kapasitesi en yüksek yer orası, dolayısıyla
+ * bölümün EN AĞIR yükünü oraya koyuyoruz. S1 ile S2 arasındaki ders artık
+ * "alçak olan güçlüdür", yani yük tablosunun kendisi.
  *
  * Yükler bahçe inşaatından: briket, donatı, kum, kalıp, beton kovası.
  */
@@ -45,14 +51,15 @@ import type { Task } from './tasks';
  */
 export const DIRSEKLI_GOREVLER: readonly Task[] = [
   {
-    kod: 'S1', ad: 'Briket paleti', tonnes: 1.05,
-    halfWidth: 0.55, halfHeight: 0.42, kind: 'briket', hedef: 0,
-    brif: 'Briket paleti — duvarı aş, avlu zeminine bırak. Isınma turu.',
+    kod: 'S1', ad: 'Briket paleti', tonnes: 0.85,
+    halfWidth: 0.55, halfHeight: 0.42, kind: 'briket', hedef: 1,
+    brif: 'Briket paleti — duvarı aş, 1. kat terasına bırak. Isınma turu.',
   },
   {
-    kod: 'S2', ad: 'Kum torbası', tonnes: 0.98,
-    halfWidth: 0.55, halfHeight: 0.50, kind: 'kum', hedef: 1,
-    brif: 'Aynı ağırlık, bu kez 1. kat terasına — korkuluğu aşıp arkasına inecek',
+    kod: 'S2', ad: 'Kum torbası', tonnes: 1.45,
+    halfWidth: 0.55, halfHeight: 0.50, kind: 'kum', hedef: 0,
+    brif: 'Bölümün en ağır yükü — ama en yakın yere, avlu zeminine. '
+      + 'Alçak olan güçlüdür.',
   },
   {
     kod: 'S3', ad: 'Demir donatı', tonnes: 0.88,
@@ -67,6 +74,6 @@ export const DIRSEKLI_GOREVLER: readonly Task[] = [
   {
     kod: 'S5', ad: 'Beton kovası', tonnes: 1.01,
     halfWidth: 0.50, halfHeight: 0.62, kind: 'kova', hedef: 2,
-    brif: 'Dolu beton kovası — 2. kata, en ağır yük. İbre %96.',
+    brif: 'Dolu beton kovası — 2. kata, en ağır tırmanış. İbre %96.',
   },
 ];

@@ -179,6 +179,21 @@ export class Dirsekli {
    * ise sürekliliğe bakıyor.
    */
   private asiriSn = 0;
+  /**
+   * Halat kuvvetinin SIKIŞMA sayılacak kadar yüksek kaldığı süre (s).
+   *
+   * **Kinematik bom temasla durmuyor.** Kollar `setTransform` ile sürülüyor,
+   * yani sonsuz kütleli: oyuncu ucu bir korkuluğa ya da zemine doğru sürerse
+   * bom durmaz, arada kalan yükü ezer ve rijit halat kuvveti sınırsız büyür.
+   * Sahadan gelen ölçüm: 1.05 tonluk bir palet korkuluğa bastırılınca kanca
+   * 5.17 t okudu (izin verilen 1.84 t) ve makine %281'de takılı kaldı.
+   *
+   * Gerçek makinede karşılığı var ve adı da var: yük moment göstergesi
+   * fonksiyonları KESER. Burada da öyle — sıkışma sürerse bomun yarıçabı
+   * büyüten ve ucu indiren hareketleri duruyor, kurtulma yolları (kırmayı
+   * katla, ana bomu kaldır, halatı sal) açık kalıyor.
+   */
+  private sikismaSn = 0;
 
   constructor(world: World, private readonly chassis: Body, snaps: Snapshotter) {
     // Kinematik gövdeler: konumları her adımda eklem açılarından yazılıyor,
@@ -312,6 +327,16 @@ export class Dirsekli {
     // Teleskobu UZATMAK da yarıçapı büyütüyor — aynı kilit.
     let uzat = input.uzat;
     if (kilit && uzat > 0) { uzat = 0; this.kilitliDenendi = true; }
+
+    // **Sıkışma: hidrolik kesildi.** Yarıçabı büyüten her şey zaten yukarıda
+    // kilitli; burada ucu AŞAĞI indiren hareketler de duruyor, çünkü sıkışan
+    // yükü daha da ezen hareket odur. Kurtulma yolları açık: kırmayı katla
+    // (kirma < 0), ana bomu kaldır (ana > 0), halatı sal.
+    if (this.hidrolikDurdu) {
+      if (ana < 0) { ana = 0; this.kilitliDenendi = true; }
+      if (kirma > 0) { kirma = 0; this.kilitliDenendi = true; }
+      if (uzat !== 0) { uzat = 0; this.kilitliDenendi = true; }
+    }
     this.uzamaM = clamp(
       this.uzamaM + uzat * S.uzamaHizMps * olcek * dt, 0, S.kirmaUzamaM,
     );
@@ -439,7 +464,16 @@ export class Dirsekli {
     const kap = dirsekliKapasitesi(this.radiusM);
     const asiri = kap > 0 ? this.lmiTon > kap : true;
     this.asiriSn = asiri ? this.asiriSn + dt : 0;
+    // Sıkışma eşiği kapasitenin 2.5 katı: salınımın tepesi statiğin 1.4
+    // katına çıkıyor, yani normal oynanış buraya hiç değmiyor. Tablo
+    // dışında kapasite sıfır olduğu için taban 0.5 t.
+    this.sikismaSn = this.lmiTon > 2.5 * Math.max(kap, 0.5)
+      ? this.sikismaSn + dt : 0;
   }
+
+  /** Aşırı yük kesintisi devrede mi? */
+  get hidrolikDurdu(): boolean { return this.sikismaSn >= Dirsekli.SIKISMA_GECIKMESI; }
+  private static readonly SIKISMA_GECIKMESI = 0.35;
 
   /** Kilidin eşiği (s). Salınım tepesi bundan kısa, gerçek aşırı yük değil. */
   private static readonly KILIT_GECIKMESI = 0.6;

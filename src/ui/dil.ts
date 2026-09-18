@@ -159,7 +159,11 @@ export interface Metinler {
       /** Ucun yeri — yarıçap ve kot. Eklem açılarından daha işe yarar. */
       uc: (r: string, kot: string) => string;
     };
-    uyari: { tabloDisiCozum: string; asiriCozum: string; asiriCozumKilitli: string };
+    uyari: {
+      tabloDisiCozum: string; asiriCozum: string; asiriCozumKilitli: string;
+      /** Yük geometriye sıkıştı ve hidrolik kesildi. */
+      sikismaBas: string; sikismaGovde: string; sikismaCozum: string;
+    };
     ipucu: {
       yanasma: (k: KumandaAdi) => string;
       /** Park cebini geçti — tabla malzemenin berisine düşüyor. */
@@ -355,6 +359,12 @@ const TR: Metinler = {
       asiriCozumKilitli: 'Ana bomu indirmek ve kırmayı açmak KİLİTLİ. W ile ana bomu'
         + ' kaldır ya da ⇧S ile kırmayı katla — yarıçap kısalır, sınır yükselir.',
       asiriCozum: '⇧S ile kırmayı katla: yarıçap kısalır, sınır yükselir.',
+      sikismaBas: '⚠ SIKIŞMA — HİDROLİK KESİLDİ',
+      sikismaGovde: 'Bom bir şeyi <b>eziyor</b>: halattaki kuvvet izin verilenin '
+        + 'iki katını aştı. Ana bomu indirmek, kırmayı açmak ve teleskobu uzatmak '
+        + '<b>DURDU</b> — üçü de yükü daha çok ezer.',
+      sikismaCozum: '↓ ile halatı sal, ⇧S ile kırmayı katla ya da W ile ana bomu '
+        + 'kaldır. Üçü de serbest.',
     },
     ipucu: {
       yanasma: (k) => `geri geri park cebine yanaş, sonra ayakları aç (${k.ayaklar})`,
@@ -609,6 +619,12 @@ const EN: Metinler = {
         + ' Raise the main boom with W or fold the knuckle in with ⇧S — the radius'
         + ' drops and the limit rises.',
       asiriCozum: 'Fold the knuckle in with ⇧S: the radius drops, the limit rises.',
+      sikismaBas: '⚠ JAMMED — HYDRAULICS CUT OUT',
+      sikismaGovde: 'The boom is <b>crushing</b> something: the rope force is over '
+        + 'twice what is allowed. Lowering the main boom, opening the knuckle and '
+        + 'extending are <b>STOPPED</b> — all three would crush it further.',
+      sikismaCozum: 'Pay out with ↓, fold the knuckle with ⇧S, or raise the main '
+        + 'boom with W. All three are free.',
     },
     ipucu: {
       yanasma: (k) => `back into the parking bay, then set the outriggers (${k.ayaklar})`,
@@ -713,15 +729,16 @@ const EN: Metinler = {
   },
   gorev: {
     S1: { ad: 'Block pallet',
-      brif: 'Pallet of blocks — over the wall, onto the courtyard floor. Warm-up.' },
+      brif: 'Pallet of blocks — over the wall, onto the first-floor terrace. Warm-up.' },
     S2: { ad: 'Sandbags',
-      brif: 'Same weight, now up onto the first-floor terrace — over the parapet and down behind it' },
+      brif: 'The heaviest load of the level — but to the nearest spot, the courtyard '
+        + 'floor. Low means strong.' },
     S3: { ad: 'Rebar bundle',
       brif: 'Second-floor terrace — you cannot get there without extending the boom' },
     S4: { ad: 'Formwork panels',
       brif: 'The top slab — end of the boom. No parapet, and no margin either.' },
     S5: { ad: 'Concrete skip',
-      brif: 'Full skip — back to the second floor, the heaviest load. Needle at 96%.' },
+      brif: 'Full skip — back to the second floor, the heaviest climb. Needle at 96%.' },
     T1: { ad: 'Steel coil', brif: '1250 mm galvanised coil — first-floor terrace' },
     T2: { ad: 'CNC lathe', brif: 'Heavy CNC lathe — same terrace, 800 kg heavier' },
     T3: { ad: 'Generator', brif: '125 kVA canopied generator — second-floor terrace' },

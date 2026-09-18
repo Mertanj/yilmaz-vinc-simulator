@@ -277,6 +277,17 @@ export class DirsekliSahne implements OyunSahnesi {
     const kilitli = this.bom.kilitliDenendi;
     if (!this.calismaModunda) return null;
 
+    // **Sıkışma en önde.** Diğer uyarılar süregelen bir DURUMU anlatıyor
+    // (yük ağır, yarıçap uzun); bu ise bir OLAYI: makine şu anda bir şeyi
+    // eziyor ve hidrolik kesildi. Çıkış yolunu da söylemesi gerekiyor,
+    // yoksa oyuncu kilitli bir makineyle baş başa kalıyor.
+    if (this.bom.hidrolikDurdu) {
+      return {
+        zone: 'red', carpiyor: kilitli,
+        bas: k.uyari.sikismaBas, govde: k.uyari.sikismaGovde,
+        cozum: k.uyari.sikismaCozum,
+      };
+    }
     if (this.bom.ikiBlokta && (kilitli || this.hasLoad)) {
       return {
         zone: 'red', carpiyor: kilitli,
