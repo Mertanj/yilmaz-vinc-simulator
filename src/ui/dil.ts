@@ -156,7 +156,8 @@ export interface Metinler {
     };
     alt: {
       moment: (tm: string) => string;
-      konum: (ana: string, kirma: string) => string;
+      /** Ucun yeri — yarıçap ve kot. Eklem açılarından daha işe yarar. */
+      uc: (r: string, kot: string) => string;
     };
     uyari: { tabloDisiCozum: string; asiriCozum: string; asiriCozumKilitli: string };
     ipucu: {
@@ -166,6 +167,8 @@ export interface Metinler {
       yukBagli: (k: KumandaAdi) => string;
       /** Hedef, teleskop uzatılmadan erişilemiyor. */
       uzat: (k: KumandaAdi) => string;
+      /** Yük hâlâ duvarın altında ve sokak tarafında. */
+      duvariAs: string;
       uzak: (k: KumandaAdi) => string;
     };
   };
@@ -345,7 +348,7 @@ const TR: Metinler = {
     },
     alt: {
       moment: (tm) => `moment sınırı ${tm} ton·metre`,
-      konum: (ana, kirma) => `ana ${ana}° · kırma ${kirma}°`,
+      uc: (r, kot) => `uç: yarıçap ${r} m · kot ${kot} m`,
     },
     uyari: {
       tabloDisiCozum: '⇧S ile kırmayı katla — uç geri gelir, yarıçap kısalır.',
@@ -358,6 +361,7 @@ const TR: Metinler = {
       cebiGectin: 'park cebini geçtin — biraz ileri al, yoksa vinç malzemeye yetişmez',
       yukBagli: (k) => `yük bağlı · duvarı aş, sonra bırak (${k.kanca})`,
       uzat: () => 'hedef bu boyla erişilmiyor · TELESKOBU UZAT (⇧↑)',
+      duvariAs: 'yük duvarın altında · ÖNCE KALDIR (W), sonra duvarı aş',
       uzak: (k) => `kancayı yükün üstüne indir (${k.ikisi} ve kanca)`,
     },
   },
@@ -454,13 +458,13 @@ const TR: Metinler = {
     park: 'PARK CEBİ', avlu: 'AVLU · İNŞAAT',
   },
   gorev: {
-    S1: { ad: 'Briket paleti', brif: 'Briket paleti — duvarı aş, avlu zeminine bırak' },
-    S2: { ad: 'Demir donatı',
-      brif: 'Daha hafif ama damın üstüne — yarıçap 1.9 metre uzadı, ibre yükseldi' },
-    S3: { ad: 'Kum torbası',
-      brif: 'S1 ile aynı yere, 350 kilo daha ağır — sınırı yer değil ağırlık koyuyor' },
-    S4: { ad: 'Kalıp paneli', brif: 'Kalıp panelleri — damın dibine, bomun sonu' },
-    S5: { ad: 'Beton kovası', brif: 'Dolu beton kovası — ağır ve uzak, ibre %97' },
+    /* Dirsekli bomun gorevleri BURADA DEGIL. `gorevAdi`/`gorevBrifi` sozlukte
+       bulamazsa veri dosyasindaki Turkce'yi kullaniyor, yani tek kaynak
+       `dirsekliGorevler.ts`. Buraya bir kopya konmustu ve bolum yeniden
+       kurulunca kopya eskidi: oyuncuya S2'de "damin dibine" yaziyordu, oysa
+       S2 1. kat terasina gidiyor — ustelik S2 ile S3'un adlari da yer
+       degistirmisti (sozlukte S2 'Demir donati', veride 'Kum torbasi').
+       Ikinci bir Turkce kopya tutmanin tek getirisi bu tur bir kayma. */
     T1: { ad: 'Sac bobin', brif: '1250 mm galvaniz bobin — 1. kat terasına' },
     T2: { ad: 'CNC torna', brif: 'Ağır CNC tezgâhı — aynı terasa, ama 800 kilo daha ağır' },
     T3: { ad: 'Jeneratör', brif: '125 kVA kabinli jeneratör — 2. kat terasına' },
@@ -597,7 +601,7 @@ const EN: Metinler = {
     },
     alt: {
       moment: (tm) => `moment rating ${tm} tonne-metres`,
-      konum: (ana, kirma) => `main ${ana}° · knuckle ${kirma}°`,
+      uc: (r, kot) => `tip: radius ${r} m · height ${kot} m`,
     },
     uyari: {
       tabloDisiCozum: 'Fold the knuckle in with ⇧S — the tip comes back, the radius drops.',
@@ -611,6 +615,7 @@ const EN: Metinler = {
       cebiGectin: 'you are past the bay — pull forward a little, or the crane cannot reach the load',
       yukBagli: (k) => `load on the hook · clear the wall, then release (${k.kanca})`,
       uzat: () => 'the target is out of reach at this length · EXTEND THE BOOM (⇧↑)',
+      duvariAs: 'the load is below the wall · RAISE IT FIRST (W), then clear the wall',
       uzak: (k) => `lower the hook onto the load (${k.ikisi} and hook)`,
     },
   },
@@ -707,13 +712,16 @@ const EN: Metinler = {
     park: 'PARKING BAY', avlu: 'COURTYARD · BUILD',
   },
   gorev: {
-    S1: { ad: 'Block pallet', brif: 'Pallet of blocks — over the wall, onto the courtyard floor' },
-    S2: { ad: 'Rebar bundle',
-      brif: 'Lighter, but onto the roof slab — 1.9 m more radius and the needle climbs' },
-    S3: { ad: 'Sandbags',
-      brif: 'Same spot as S1, 350 kg heavier — the limit is weight at radius, not place' },
-    S4: { ad: 'Formwork panels', brif: 'Formwork — the far end of the slab, end of the boom' },
-    S5: { ad: 'Concrete skip', brif: 'Full concrete skip — heavy and far, needle at 97%' },
+    S1: { ad: 'Block pallet',
+      brif: 'Pallet of blocks — over the wall, onto the courtyard floor. Warm-up.' },
+    S2: { ad: 'Sandbags',
+      brif: 'Same weight, now up onto the first-floor terrace — over the parapet and down behind it' },
+    S3: { ad: 'Rebar bundle',
+      brif: 'Second-floor terrace — you cannot get there without extending the boom' },
+    S4: { ad: 'Formwork panels',
+      brif: 'The top slab — end of the boom. No parapet, and no margin either.' },
+    S5: { ad: 'Concrete skip',
+      brif: 'Full skip — back to the second floor, the heaviest load. Needle at 96%.' },
     T1: { ad: 'Steel coil', brif: '1250 mm galvanised coil — first-floor terrace' },
     T2: { ad: 'CNC lathe', brif: 'Heavy CNC lathe — same terrace, 800 kg heavier' },
     T3: { ad: 'Generator', brif: '125 kVA canopied generator — second-floor terrace' },

@@ -37,6 +37,19 @@ const girdiyiCevir = (c: SceneInput['crane']): DirsekliInput =>
 
 /** Bunun üstündeki normal impuls (N·s) çarpma sayılıyor. */
 const CARPMA_ESIGI_NS = 4500;
+/**
+ * İki çarpma arasındaki en kısa süre (s).
+ *
+ * **Sürtünme bir çarpmadır, on dört değil.** Eşiksiz hâli ölçüldü: yükü
+ * bahçe duvarının üstünden sürterek geçiren bir tur 10–14 çarpma yazıyor ve
+ * puandan 1500–2100 götürüyordu — üstelik aynı panelde "bu görevdeki en
+ * yüksek moment %59" yazarken, yani hiçbir aşırı yük yokken. Oyuncu bunu
+ * geri bildirim değil hata olarak okur.
+ *
+ * Temas çözücü sürekli bir temasta her karede impuls bildiriyor; sayaç da
+ * her karede artıyordu. Gerçekte olan tek olay var: yük duvara değdi.
+ */
+const CARPMA_BEKLEME_SN = 0.7;
 
 export class DirsekliSahne implements OyunSahnesi {
   readonly world = createWorld();
@@ -48,6 +61,8 @@ export class DirsekliSahne implements OyunSahnesi {
   private loadSpec: Task | null = null;
   grabbables: Grabbable[] = [];
   carpma = 0;
+  /** Son çarpmanın üstünden geçen süre (s). */
+  private carpmaBekleme = 0;
 
   constructor() {
     createGround(this.world);
@@ -64,7 +79,10 @@ export class DirsekliSahne implements OyunSahnesi {
       const ilgili = (x: Body): boolean => x === this.load || x === this.bom.hook;
       if (!ilgili(a) && !ilgili(b)) return;
       const j = Math.max(...(impulse.normalImpulses ?? [0]));
-      if (j > CARPMA_ESIGI_NS) this.carpma++;
+      if (j > CARPMA_ESIGI_NS && this.carpmaBekleme <= 0) {
+        this.carpma++;
+        this.carpmaBekleme = CARPMA_BEKLEME_SN;
+      }
     });
   }
 
@@ -93,7 +111,7 @@ export class DirsekliSahne implements OyunSahnesi {
   readonly gorevler = DIRSEKLI_GOREVLER;
   /**
    * Hız eşikleri — ölçülen turdan. Başsız tur görev başına 90–321 saniye
-   * sürüyor (yük 7.8 metre tırmanıyor ve üç eksen birden sürülüyor); ilk
+   * sürüyor (yük 7.2 metre tırmanıyor ve üç eksen birden sürülüyor); ilk
    * kalibrasyon 55/150 idi ve bölüm dikeyleşince her görev sıfır bonus
    * alıyordu. Vinçteki oran korunuyor: rig tam bonus eşiğinin biraz üstünde.
    */
@@ -138,6 +156,7 @@ export class DirsekliSahne implements OyunSahnesi {
   }
 
   step(input: SceneInput, dt: number): void {
+    this.carpmaBekleme = Math.max(0, this.carpmaBekleme - dt);
     if (input.reset) {
       this.truck.reset(AVLU.spawnX);
       this.outriggers.reset(this.truck.chassis);
@@ -182,7 +201,13 @@ export class DirsekliSahne implements OyunSahnesi {
       dolu: Math.min(1, (pct ?? 999) / 150),
       altSatirlar: [
         k.alt.moment(S.momentTm.toFixed(0)),
-        k.alt.konum(this.bom.anaAciDeg.toFixed(0), this.bom.kirmaAciDeg.toFixed(0)),
+        // **Eklem açıları değil, UCUN YERİ.** Önce "ana 78° · kırma 121°"
+        // yazıyordu ve sahadan gelen teşhis şuydu: panel eklemlerin açısını
+        // söylüyor ama ucun nereye gideceğini hiç söylemiyor. Üç eklemli bir
+        // bomda oyuncunun kafasındaki soru açı değil, "uç nerede" — özellikle
+        // teleskop yönü kırma açısına göre işaret değiştirdiği için. Açılar
+        // detay satırlarında duruyor.
+        k.alt.uc(this.bom.radiusM.toFixed(1), this.bom.tipWorld.y.toFixed(1)),
       ],
     };
   }
@@ -326,6 +351,19 @@ export class DirsekliSahne implements OyunSahnesi {
       // teleskop olmadan çıkılamıyor ve oyuncunun bunu tahmin etmesi
       // gerekirdi. Ters kinematik zaten hedefin ne kadar uzama istediğini
       // biliyor — soruyoruz ve cevabı satıra yazıyoruz.
+      // **Duvar uyarısı en önde.** Sahadan gelen en ağır bulgu buydu: ilk
+      // görevde hedef alçak olduğu için oyuncu bomu kaldırmadan yatay
+      // gidiyor, yük bahçe duvarının üstünü sürüyor ve tur 10–14 çarpma
+      // yazıyor. Geometri acımasız: kanca sonuna kadar sarılıyken bile yük
+      // ucun 1.7 metre altında asılı kalıyor, yani 3 metrelik duvarı aşmak
+      // için ucun 4.7 metrede olması gerekiyor — alma pozunda 4.4.
+      // Makine bunu zaten biliyor; söylemesi yetiyor.
+      const l = this.load.getPosition();
+      const gorev = this.loadTask;
+      const yukAlti = l.y - (gorev ? gorev.halfHeight : 0);
+      if (l.x > AVLU.duvarSag && yukAlti < AVLU.duvarY + 0.35) {
+        return { metin: k.duvariAs, mod: 'crane' };
+      }
       const gereken = this.gerekenUzama();
       if (gereken !== null && gereken > this.bom.uzamaBoyuM + 0.35) {
         return { metin: k.uzat(t), mod: 'crane' };

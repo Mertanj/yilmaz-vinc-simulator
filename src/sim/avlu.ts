@@ -10,7 +10,7 @@ import { Box, type Body, type World } from 'planck';
  * şey yükün YUKARI gitmesi. Orada yük beş katlı bir binanın teraslarına
  * çıkıyor; burada yerde bir yerden yerde başka bir yere gidiyordu.
  *
- * Şimdi hedefler 0 · 2.8 · 5.6 · 8.4 metrede, yani yük 8.4 metre tırmanıyor.
+ * Şimdi hedefler 0 · 2.4 · 4.8 · 7.2 metrede, yani yük 7.2 metre tırmanıyor.
  * Bunu mümkün kılan şey teleskop: sabit kollu hâlinde makinenin R 4.5'te
  * erişebildiği en yüksek kot 4.5 metreydi (zarf haritasındaki delik), şimdi
  * 13.2 metre.
@@ -112,7 +112,7 @@ function katSagKenar(kat: number): number {
 /**
  * Hedefler: yükün bırakılacağı noktalar.
  *
- * Dört yer, beş görev. Kotlar 0 · 2.8 · 5.6 · 8.4 m ve yarıçaplar tabla
+ * Dört yer, beş görev. Kotlar 0 · 2.4 · 4.8 · 7.2 m ve yarıçaplar tabla
  * 11.2'ye göre 4.5 · 5.7 · 6.8 · 8.3 m; kapasiteler 2.00 · 1.58 · 1.32 ·
  * 1.08 t. Yük yukarı çıktıkça hem uzaklaşıyor hem hafiflemek zorunda —
  * sahadaki kuralın ta kendisi.

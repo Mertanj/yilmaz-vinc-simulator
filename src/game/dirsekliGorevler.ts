@@ -13,9 +13,14 @@ import type { Task } from './tasks';
  * tablosu hedeflerin yarıçapını ve kapasitesini veriyor —
  *
  *   H0 (avlu zemini)     kot 0.0 m   R 4.53 m   kapasite 1.99 t
- *   H1 (1. kat terası)   kot 2.6 m   R 6.03 m   kapasite 1.49 t
- *   H2 (2. kat terası)   kot 5.2 m   R 7.63 m   kapasite 1.18 t
- *   H3 (en üst dam)      kot 7.8 m   R 9.23 m   kapasite 0.97 t
+ *   H1 (1. kat terası)   kot 2.4 m   R 6.03 m   kapasite 1.49 t
+ *   H2 (2. kat terası)   kot 4.8 m   R 7.63 m   kapasite 1.18 t
+ *   H3 (en üst dam)      kot 7.2 m   R 9.23 m   kapasite 0.97 t
+ *
+ * **Briflerde METRE YAZMIYOR ve bu kasıtlı.** Yazıyordu ve kat yüksekliği
+ * 2.6'dan 2.4'e inince üç ayrı yerde üç ayrı sayı kaldı: brifler "5.2 ve
+ * 7.8", avlu.ts yorumu "2.8 · 5.6 · 8.4", gerçek ise 2.4 · 4.8 · 7.2.
+ * Hedefin ADI kaymıyor, kotu kayıyor.
  *
  * — ve yükler hedeflenen LMI eğrisini (%60 → %74 → %85 → %92 → %96) verecek
  * şekilde seçildi; kanca 0.12 t brüte dahil.
@@ -52,12 +57,12 @@ export const DIRSEKLI_GOREVLER: readonly Task[] = [
   {
     kod: 'S3', ad: 'Demir donatı', tonnes: 0.88,
     halfWidth: 0.55, halfHeight: 0.22, kind: 'donati', hedef: 2,
-    brif: '2. kat terası — 5.2 metre yukarı, teleskobu uzatmadan varamazsın',
+    brif: '2. kat terası — buraya teleskobu uzatmadan varamazsın',
   },
   {
     kod: 'S4', ad: 'Kalıp paneli', tonnes: 0.77,
     halfWidth: 0.55, halfHeight: 0.35, kind: 'kalip', hedef: 3,
-    brif: 'En üst dam — 7.8 metre, bomun sonu. Korkuluk yok, pay da yok.',
+    brif: 'En üst dam — bomun sonu. Korkuluk yok, pay da yok.',
   },
   {
     kod: 'S5', ad: 'Beton kovası', tonnes: 1.01,
