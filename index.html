@@ -27,7 +27,12 @@
        TORUNLARINA uyguluyor, `:root` ise onun atası — orada tanımlanan
        değişken hiç var olmuyor, `calc()` sessizce geçersiz oluyor ve panel
        içeriğine göre büzülüyordu. */
-    --panel-en: 188px;
+    /* Yalnizca yatay telefon blogu kullaniyor (panel genisligi + ipucu ve
+       uyari seritlerinin sol hizasi). Masaustu 268, tablet 200 kendi
+       genisligini yaziyor. 188'den 158'e indi: sahadan "sol menu ekrani
+       kapliyor" geldi ve olcum 844x390'da paneli 188x178 (yuksekligin
+       %46'si) gosterdi. */
+    --panel-en: 158px;
     --yardimci-en: 195px;
   }
   /* --- zorlanmış yatay ---
@@ -276,14 +281,26 @@
          bırakılınca iç boşluk ve kenarlık 24 piksel ekliyordu ve iki şerit de
          panelin üstüne biniyordu. */
       box-sizing: border-box;
-      top: 40px; width: var(--panel-en); padding: 10px 11px 8px;
-      max-height: calc(100% - 134px); overflow: hidden;
+      top: 40px; width: var(--panel-en); padding: 8px 9px 6px;
+      /* Detay acikken panel yuksekligin %66'sina cikiyordu. Tavan artik
+         yarida: ustu kalabiliyorsa kalsin, tasan satirlar kaysin. */
+      max-height: min(calc(100% - 134px), 50%); overflow-y: auto;
+      scrollbar-width: none;
     }
-    #panel .baslik { font-size: 10px; margin-bottom: 6px; }
-    #panel .bar { height: 10px; }
-    #moment-yuzde { font-size: 22px; margin-top: 4px; }
-    #moment-durum { font-size: 10px; margin-bottom: 7px; }
-    #panel dl { font-size: 11px; gap: 2px 8px; padding-top: 7px; margin-bottom: 6px; }
+    #panel::-webkit-scrollbar { display: none; }
+    /* **Telefonda panel kucultuldu ve sebebi sahadan geldi:** "sol menu cok
+       buyuk gorunuyor ve ekrani kapliyor." Olculdu ve haklıydi — 844x390'lik
+       bir cerçevede panel 188x178, yani YUKSEKLIGIN %46'si, detay acikken
+       %66'si. Ustelik tam bomun calistigi kosede duruyor.
+
+       Gosterge blogu (baslik + cubuk + yuzde + durum) BOYUTUNU KORUYOR:
+       oyuncunun anlik karari o blokta ve kucultmek onu okunmaz yapardi.
+       Kazanc satirlardan, bosluklardan ve genislikten cikariliyor. */
+    #panel .baslik { font-size: 9.5px; margin-bottom: 5px; letter-spacing: 0.06em; }
+    #panel .bar { height: 9px; }
+    #moment-yuzde { font-size: 21px; margin-top: 3px; }
+    #moment-durum { font-size: 9.5px; margin-bottom: 5px; }
+    #panel dl { font-size: 10px; gap: 1px 6px; padding-top: 5px; margin-bottom: 4px; }
     /* Gösterge bloğunun alt açıklamaları: dar ekranda zaten "…" ile
        kesiliyorlardı. Burada bir kez yanlış yapıldı — "aynı bilgi satır
        listesinde" diye gizlendiler, oysa halat katı SADECE burada yazıyordu
@@ -292,7 +309,33 @@
        satırının etiketinde, halat katı ise düğmenin kendi üstünde. */
     #p-alt1, #p-alt2 { display: none; }
     #p-detay { font-size: 9.5px; }
-    #p-detay.dokunulur { padding: 4px 7px; margin: 0 0 7px; }
+
+    /* **Panel telefonda SLAB gibi durmasin.** Boyutu kismak tek basina
+       yetmedi: 844x390'da ekranin ust seridi (26px) ve kumanda seridi
+       (115px) dusunce oynanabilir alan 250 piksel kaliyor ve panel onun
+       %62'si. Sayilar kuculdukce bile opak bir dikdortgen sahnenin ustunde
+       duruyor. Saydamlik + bulaniklik ayni bilgiyi tasiyip sahneyi
+       gostermeye devam ediyor; kenarlik da inceliyor.
+
+       Gosterge blogunun KENDISI degismiyor — oyuncunun anlik karari orada. */
+    /* **Bulaniklik PANELIN KENDISINDE olamaz.** Bir kez oyle yazildi ve
+       ipucu seridi kayboldu: `backdrop-filter` elemani `position: fixed`
+       torunlari icin KAPSAYICI BLOK yapiyor, `#hint` de panelin icinde
+       duruyor — `left/right` birden viewport yerine panelin 158 pikseline
+       gore cozuldu ve serit 26 piksellik dikey bir sivri haline geldi.
+       (Ayni tuzaga zorlanmis yatay kipinde `transform` ile bir kez daha
+       dusuldu; notu yukarida.) Sozde-eleman tasiyinca filtre yalniz KENDI
+       torunlarini baglıyor, onun da torunu yok. */
+    #panel { background: transparent; border-color: rgba(37, 48, 56, 0.75); }
+    #panel::before {
+      content: ''; position: absolute; inset: 0; z-index: -1; border-radius: 4px;
+      background: rgba(14, 20, 23, 0.62);
+      backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
+    }
+    /* Detay dugmesi akista kaliyor ama siki: mutlak konumlanip baslik
+       satirina alinca "LIFTING MOMENT" iki satira kiriliyor ve kazanilan
+       yer geri gidiyordu. */
+    #p-detay.dokunulur { padding: 3px 7px; margin: 0 0 4px; font-size: 9px; }
     /* İpucu panelden çıkıyor; panel de bu satırın yüksekliğinden kurtulup
        detay açıkken bile ekrana sığıyor.
        İki yer denendi ve ikisi de tutmadı: başparmak kümelerinin ARASINA
@@ -364,13 +407,14 @@
     #panel {
       /* Üst şerit dar ekranda iki satıra sarıyor (makine adı + görev) ve
          panel 50 pikselde onun altına giriyordu. */
-      box-sizing: border-box; width: 186px; top: 78px; padding: 10px 11px 8px;
+      box-sizing: border-box; width: 152px; top: 78px; padding: 8px 9px 6px;
+      max-height: 42%; overflow-y: auto; scrollbar-width: none;
     }
-    #panel .baslik { font-size: 10px; margin-bottom: 6px; }
-    #panel .bar { height: 10px; }
-    #moment-yuzde { font-size: 22px; margin-top: 4px; }
-    #moment-durum { font-size: 10px; margin-bottom: 7px; }
-    #panel dl { font-size: 11px; gap: 2px 8px; padding-top: 7px; margin-bottom: 6px; }
+    #panel .baslik { font-size: 9.5px; margin-bottom: 5px; letter-spacing: 0.06em; }
+    #panel .bar { height: 9px; }
+    #moment-yuzde { font-size: 21px; margin-top: 3px; }
+    #moment-durum { font-size: 9.5px; margin-bottom: 5px; }
+    #panel dl { font-size: 10px; gap: 1px 6px; padding-top: 5px; margin-bottom: 4px; }
     /* Gösterge bloğunun alt açıklamaları: dar ekranda zaten "…" ile
        kesiliyorlardı. Burada bir kez yanlış yapıldı — "aynı bilgi satır
        listesinde" diye gizlendiler, oysa halat katı SADECE burada yazıyordu
@@ -379,7 +423,33 @@
        satırının etiketinde, halat katı ise düğmenin kendi üstünde. */
     #p-alt1, #p-alt2 { display: none; }
     #p-detay { font-size: 9.5px; }
-    #p-detay.dokunulur { padding: 4px 7px; margin: 0 0 7px; }
+
+    /* **Panel telefonda SLAB gibi durmasin.** Boyutu kismak tek basina
+       yetmedi: 844x390'da ekranin ust seridi (26px) ve kumanda seridi
+       (115px) dusunce oynanabilir alan 250 piksel kaliyor ve panel onun
+       %62'si. Sayilar kuculdukce bile opak bir dikdortgen sahnenin ustunde
+       duruyor. Saydamlik + bulaniklik ayni bilgiyi tasiyip sahneyi
+       gostermeye devam ediyor; kenarlik da inceliyor.
+
+       Gosterge blogunun KENDISI degismiyor — oyuncunun anlik karari orada. */
+    /* **Bulaniklik PANELIN KENDISINDE olamaz.** Bir kez oyle yazildi ve
+       ipucu seridi kayboldu: `backdrop-filter` elemani `position: fixed`
+       torunlari icin KAPSAYICI BLOK yapiyor, `#hint` de panelin icinde
+       duruyor — `left/right` birden viewport yerine panelin 158 pikseline
+       gore cozuldu ve serit 26 piksellik dikey bir sivri haline geldi.
+       (Ayni tuzaga zorlanmis yatay kipinde `transform` ile bir kez daha
+       dusuldu; notu yukarida.) Sozde-eleman tasiyinca filtre yalniz KENDI
+       torunlarini baglıyor, onun da torunu yok. */
+    #panel { background: transparent; border-color: rgba(37, 48, 56, 0.75); }
+    #panel::before {
+      content: ''; position: absolute; inset: 0; z-index: -1; border-radius: 4px;
+      background: rgba(14, 20, 23, 0.62);
+      backdrop-filter: blur(7px); -webkit-backdrop-filter: blur(7px);
+    }
+    /* Detay dugmesi akista kaliyor ama siki: mutlak konumlanip baslik
+       satirina alinca "LIFTING MOMENT" iki satira kiriliyor ve kazanilan
+       yer geri gidiyordu. */
+    #p-detay.dokunulur { padding: 3px 7px; margin: 0 0 4px; font-size: 9px; }
     #hint { font-size: 10.5px; padding-top: 7px; }
     /* Uyarı şeridi dar ekranda kenarlara yapışmasın. */
     #uyari { left: 12px; right: 12px; transform: none; max-width: none; }
