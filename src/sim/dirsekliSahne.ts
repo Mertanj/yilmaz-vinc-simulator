@@ -10,6 +10,7 @@ import { DIRSEKLI_GOREVLER } from '../game/dirsekliGorevler';
 import type { Task } from '../game/tasks';
 import { OutriggerState } from './loadChart';
 import type { SceneInput } from './scene';
+import { Ret } from './ret';
 import { imzaliDerece, type Gosterge, type OyunSahnesi, type PanelSatiri, type Uyari } from './sahne';
 import { M, kumandaAdi } from '../ui/dil';
 
@@ -133,6 +134,9 @@ export class DirsekliSahne implements OyunSahnesi {
   get loadTask(): Task | null { return this.loadSpec; }
 
   /** Ayaklar yerdeyse bom fazındayız: sürüş kilitli. */
+  /** Reddedilen son komutun cevabı — gerekçesi `ret.ts`'te. */
+  private readonly ret = new Ret();
+
   get calismaModunda(): boolean { return this.outriggers.fraction > 0.15; }
   get olcum() { return this.bom.lmi; }
   get hasLoad(): boolean { return this.bom.hasLoad; }
@@ -161,11 +165,28 @@ export class DirsekliSahne implements OyunSahnesi {
       this.truck.reset(AVLU.spawnX);
       this.outriggers.reset(this.truck.chassis);
     }
-    if (input.toggleOutriggers) this.outriggers.toggle();
+    const u = M.vinc.uyari;
+    if (input.toggleOutriggers) {
+      // Yük kancadayken ayak toplanmaz — gerekçesi vinç sahnesinde, aynı yer.
+      if (this.hasLoad) {
+        this.ret.yaz({ bas: u.ayakBas, govde: u.ayakGovde, cozum: u.ayakCozum });
+      } else {
+        this.outriggers.toggle();
+        this.ret.temizle();
+      }
+    }
 
     const bomModu = this.calismaModunda;
     this.bom.setStowed(!bomModu);
-    if (input.toggleHook && bomModu) this.bom.requestToggleAttach();
+    if (input.toggleHook && bomModu) {
+      const cevap = this.bom.requestToggleAttach();
+      if (cevap.neden === 'havada') {
+        this.ret.yaz({ bas: u.birakBas, govde: u.birakGovde, cozum: u.birakCozum });
+      } else if (cevap.ok) {
+        this.ret.temizle();
+      }
+    }
+    this.ret.azalt(dt);
 
     this.snaps.capture();
 
@@ -277,6 +298,12 @@ export class DirsekliSahne implements OyunSahnesi {
     const kilitli = this.bom.kilitliDenendi;
     if (!this.calismaModunda) return null;
 
+    // Ret EN ÖNDE: bir düğmeye basmanın doğrudan cevabı, süregelen bir
+    // durumdan daha acil. Sıkışma bile bunun altında — sıkışma kendi kendine
+    // devam ediyor, ret ise oyuncunun az önceki hareketine verilen cevap.
+    const red = this.ret.aktif;
+    if (red) return { zone: 'amber', carpiyor: false, ...red };
+
     // **Sıkışma en önde.** Diğer uyarılar süregelen bir DURUMU anlatıyor
     // (yük ağır, yarıçap uzun); bu ise bir OLAYI: makine şu anda bir şeyi
     // eziyor ve hidrolik kesildi. Çıkış yolunu da söylemesi gerekiyor,
@@ -353,6 +380,13 @@ export class DirsekliSahne implements OyunSahnesi {
       const x = this.truck.chassis.getPosition().x;
       if (x < AVLU.parkX - AVLU.parkPayiM) {
         return { metin: k.cebiGectin, mod: 'drive' };
+      }
+      // **Cebe girdiğini de söyle.** Cebi geçince uyarı vardı, cebin içinde
+      // olunca yoktu: oyuncuya sadece hatası bildiriliyor, doğru yerde durduğu
+      // hiç onaylanmıyordu. Geri geri yanaşmanın fiziksel bir sonu da olmadığı
+      // için "yeterince geldim mi?" sorusunun cevabı tahmine kalıyordu.
+      if (x <= AVLU.parkX + AVLU.parkPayiM) {
+        return { metin: k.cepte(t), mod: 'ready' };
       }
       return { metin: k.yanasma(t), mod: 'drive' };
     }

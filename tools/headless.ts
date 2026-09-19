@@ -338,12 +338,20 @@ function main(): void {
     r.run(14, () => ({}));
 
     // --- KOYMA: usulca indir, sonra bırak ---
-    r.run(22, (rig) => ({ crane: { uzat: 0,
-      luff: 0, telescope: 0,
-      winch: toward(rig.scene.load.getPosition().y, hedef.y + task.halfHeight + 0.06, 0.04),
+    //
+    // Çıkış şartı YÜKÜN OTURMASI, sabit bir süre değil. Eskiden 22 saniye
+    // iniliyor ve hedef kotun 6 cm ÜSTÜ isteniyordu — yani rig her yükü
+    // havada çözüyordu. Asılı yük artık çözülemiyor (`Kanca.yukOturdu`), ama
+    // asıl mesele şu: aynı hata oyuncunun da başına geliyordu ve rig onu
+    // göremiyordu, çünkü rig de aynı yanlışı yapıyordu. Hedef kot şimdi
+    // resting kotun 4 cm ALTI: halat temastan sonra da salınsın, yük gerçekten
+    // otursun.
+    const oturdu = r.runUntil(26, (rig) => rig.scene.crane.yukOturdu, (rig) => ({ crane: {
+      uzat: 0, luff: 0, telescope: 0,
+      winch: toward(rig.scene.load.getPosition().y, hedef.y + task.halfHeight - 0.04, 0.04),
     } }));
     r.run(4, () => ({}));
-    iz('kondu');
+    iz(oturdu ? 'kondu' : 'OTURMADI');
     r.tap('toggleHook', 3.0);
     durum(r, `${task.kod} KOY`);
     const ok = r.mission.sonTamamlanan;

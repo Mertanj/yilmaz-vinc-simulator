@@ -120,7 +120,7 @@ export class VincGorunumu extends SahneGorunumu {
     return [
       drawGround(SIM.groundLeft, SIM.groundRight),
       drawFactory(SCENE.factoryX),
-      drawSetupZone(SCENE.setupX),
+      drawSetupZone(SCENE.setupX, SCENE.setupYariEn),
       drawKerb(SCENE.kerbX),
       drawEntranceSign(-14),
     ];

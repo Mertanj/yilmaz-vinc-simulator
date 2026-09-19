@@ -31,6 +31,15 @@ export interface Grabbable {
   ayakM?: number;
 }
 
+/**
+ * Bırakma neden olmadı. Boş dize = ret yok.
+ *
+ * Tek değerli bir birleşim ama tip olarak duruyor: ikinci bir gerekçe
+ * çıktığında (mesela "kanca kilitli") çağıran tarafın switch'i derleyici
+ * tarafından kırılsın.
+ */
+export type BirakRet = '' | 'havada';
+
 /** Bağlanma neden olmadı — oyuncuya söylenecek gerekçe. */
 export type AttachReason =
   | 'hazir' | 'uzak' | 'ortala' | 'yukseklik' | 'sallaniyor' | 'yan-cekme';
@@ -163,6 +172,34 @@ export class Kanca {
   }
 
   get yukVar(): boolean { return this.attached !== null; }
+
+  /**
+   * Yük başka bir şeye oturdu mu — yani ağırlığını halat mı taşıyor, zemin mi?
+   *
+   * Sapancı asılı bir yükün sapanını çözmez; yük önce oturur. Oyunda bunun
+   * karşılığı gerekiyordu çünkü kancayı havada açmak SESSİZ bir başarısızlıktı:
+   * yük düşüyor, belki bir çarpma yazıyor, belki hedefin yanına saçılıyor ve
+   * oyuncuya hiçbir şey söylenmiyordu.
+   *
+   * Ölçü olarak halat kuvvetini kullanmak DENENMEDİ ve kullanılmamalı: halat
+   * rijit bir DistanceJoint, yani yük oturduktan sonra vinç halatı salmaya
+   * devam edince kuvvet işaret değiştirip BÜYÜYOR. Büyüklüğe bakan bir eşik tam
+   * da doğru anda "yük havada" derdi. Temas listesi ise doğrudan sorduğumuz
+   * şeyin kendisi: yükün altında kancadan başka bir gövde var mı?
+   *
+   * Düşey hız şartı, yükü duvara sürterken bırakmayı da eleme amacıyla: temas
+   * var ama yük hâlâ düşüyorsa oturmuş sayılmıyor.
+   */
+  get yukOturdu(): boolean {
+    const b = this.attached;
+    if (!b) return false;
+    if (Math.abs(b.getLinearVelocity().y) > 0.4) return false;
+    for (let e = b.getContactList(); e; e = e.next) {
+      if (e.other === this.hook) continue;
+      if (e.contact.isTouching()) return true;
+    }
+    return false;
+  }
 
   /** Salınım açısı (derece) — kancanın bom ucuna göre düşeyden sapması. */
   get salinimDeg(): number {

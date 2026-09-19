@@ -9,8 +9,8 @@ import type { Result } from './mission';
  * yanlış anlatırdı. Puan zaten bölümün kendi içinde normalize: her yerleştirme
  * aynı tavandan pay alıyor.
  *
- * Kayıt bölüm BİTİNCE yazılıyor, yarıda bırakılınca değil. Devrilen tur da
- * sayılıyor — o da bir sonuç, ve zaten rekor kıracak kadar yüksek çıkmıyor.
+ * Kayıt bölüm BİTİNCE yazılıyor, yarıda bırakılınca değil. Devrilen tur ise
+ * kayda HİÇ girmiyor — sebebi aşağıda, `enIyiKaydet` içinde.
  */
 export interface EnIyi {
   puan: number;
@@ -47,6 +47,13 @@ export function enIyiKaydet(
   aracId: string, sonuc: Result,
 ): { rekor: boolean; onceki: EnIyi | null } {
   const onceki = enIyiOku(aracId);
+  // **Başarısız tur rekor değildir.** Sahadan gelen hata buydu: vinç bölümünde
+  // makine devrildi, puan 0, not D — ve sonuç ekranı "YENİ REKOR" yazdı. Kusur
+  // karşılaştırmadaydı: önceki kayıt yoksa her sonuç rekor sayılıyordu, yani
+  // oyuncunun gördüğü İLK tur ne olursa olsun kutlanıyordu. Devrilen turu
+  // kaydetmiyoruz da: kaydedilseydi bir sonraki turun "önceki en iyi" satırı
+  // 0 puan gösterir, yani yine yalan söylerdi.
+  if (sonuc.devrildi || sonuc.score.puan <= 0) return { rekor: false, onceki };
   const yeni: EnIyi = {
     puan: sonuc.score.puan,
     not: sonuc.not,

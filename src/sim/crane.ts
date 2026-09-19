@@ -1,7 +1,7 @@
 import { Vec2, type Body, type World } from 'planck';
 import type { Snapshotter } from './world';
 import {
-  Kanca, type AttachReason, type Grabbable, type KancaAyari,
+  Kanca, type AttachReason, type BirakRet, type Grabbable, type KancaAyari,
 } from './kanca';
 import {
   capacityAt, computeLmi, halatKapasitesi, KAT_SECENEKLERI, OutriggerState,
@@ -269,7 +269,7 @@ export const NEUTRAL: CraneInput = { luff: 0, telescope: 0, uzat: 0, winch: 0 };
  */
 // Kanca düzeneğinin tipleri artık `kanca.ts`'te: dirsekli bom da aynı kancayı
 // kullanıyor. Buradan yeniden dışa veriliyor ki mevcut import'lar bozulmasın.
-export type { Grabbable, AttachReason } from './kanca';
+export type { Grabbable, AttachReason, BirakRet } from './kanca';
 
 /**
  * Kat değiştirme reddedilince sebebi — metin değil KOD.
@@ -484,7 +484,20 @@ export class Crane {
     return this.kanca.baglanabilir(candidates);
   }
 
-  requestToggleAttach(): void { this.kanca.baglaBirakIste(); }
+  /** Yük bir şeyin üstüne oturdu mu — bırakmanın şartı. */
+  get yukOturdu(): boolean { return this.kanca.yukOturdu; }
+
+  /**
+   * Kancayı bağla ya da bırak. Havadaki yük bırakılmaz — sebebi
+   * `Kanca.yukOturdu`'da.
+   */
+  requestToggleAttach(): { ok: boolean; neden: BirakRet } {
+    if (this.kanca.yukVar && !this.kanca.yukOturdu) {
+      return { ok: false, neden: 'havada' };
+    }
+    this.kanca.baglaBirakIste();
+    return { ok: true, neden: '' };
+  }
 
   // --- okumalar ---
 

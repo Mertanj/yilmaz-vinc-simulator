@@ -51,6 +51,23 @@ esit('yuksek puan kaydi guncelliyor', enIyiOku('forklift')?.puan, 9500);
 
 esit('esit puan rekor SAYILMAZ', enIyiKaydet('forklift', sonuc(9500, 'A')).rekor, false);
 
+// Sahadan gelen hata: ilk tur devrildi, puan 0, not D — ve ekran "YENI REKOR"
+// yazdi. Sebep karsilastirmanin kendisiydi: onceki kayit yoksa her sonuc rekor
+// sayiliyordu. Ucu de ayri ayri yaziliyor cunku uc ayri sey soyluyorlar:
+// ilan edilmiyor, kaydedilmiyor, ve sonraki turun "onceki" satirini kirletmiyor.
+const devrik: Result = { ...sonuc(0, 'D'), devrildi: true };
+esit('devrilen ilk tur rekor SAYILMAZ', enIyiKaydet('devrik', devrik).rekor, false);
+esit('devrilen tur kaydedilmiyor', enIyiOku('devrik'), null);
+esit('puansiz tur rekor SAYILMAZ',
+  enIyiKaydet('sifir', sonuc(0, 'D')).rekor, false);
+// Devrilen tur puan toplamis olsa bile ilan edilmiyor: tur basarisiz bitti.
+esit('puanli ama devrilen tur rekor SAYILMAZ',
+  enIyiKaydet('devrik', { ...sonuc(4200, 'D'), devrildi: true }).rekor, false);
+// Kayitli rekoru da bozmuyor.
+enIyiKaydet('devrik2', sonuc(5000, 'C'));
+enIyiKaydet('devrik2', { ...sonuc(9999, 'A'), devrildi: true });
+esit('devrilen tur mevcut rekorun uzerine YAZMIYOR', enIyiOku('devrik2')?.puan, 5000);
+
 esit('araclar birbirinden bagimsiz', enIyiOku('vinc'), null);
 enIyiKaydet('vinc', sonuc(8412, 'B'));
 esit('vinc kendi kaydini tutuyor', enIyiOku('vinc')?.puan, 8412);

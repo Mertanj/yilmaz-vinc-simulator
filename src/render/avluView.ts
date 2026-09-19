@@ -13,25 +13,64 @@ import { M } from '../ui/dil';
  * yakalanmayan, ama oyuncuya "yük havada duruyor" diye görünen bir hata.
  */
 
-/** Bahçe duvarı — sıvalı briket, üstünde harpuşta. */
+/**
+ * Bahçe duvarı — sıvalı briket, üstünde harpuşta.
+ *
+ * **Neden 40 santim ve neden derinlik çizilmiyor.** Sahadan gelen not: *"duvar
+ * ince bir direk gibi duruyor."* Doğru — ama eni level'in kendisi belirliyor,
+ * bizim tercihimiz değil: solda avlu zemini hedefi x 7.3'te ve yük yarı eni
+ * 55 santime kadar çıkıyor (yani 7.85'e dayanıyor), sağda malzeme yığını
+ * 9.4'te ve 8.85'e kadar geliyor. Geriye 8.0–8.4 kalıyor.
+ *
+ * Duvarın SOKAĞA DİK uzandığını göstermek için eğik bir kaçış yüzeyi çizmek
+ * DENENDİ ve vazgeçildi: harpuştanın üstü kalan tek yön ve orası yükün uçuş
+ * koridoru. Kanca sonuna kadar sarılıyken bile yük ucun 1.7 metre altında
+ * asılı olduğu için yük duvarı 3.35 metrenin üstünden geçiyor; oraya çizilen
+ * her şey ya yükün arkasında kaybolur ya da oyuncuya engelin daha yüksek
+ * olduğunu söyler. İkincisi düpedüz yalan olurdu.
+ *
+ * O yüzden okunurluk kesitin KENDİ içinde aranıyor: düzenli briket sıraları,
+ * dökülmüş sıvanın altından çıkan derz, kalın harpuşta ve dipteki subasman.
+ * Hepsi 8.0–8.4 bandının içinde kalıyor — çizim hâlâ fizikle aynı şeyi
+ * söylüyor.
+ */
 export function drawBahceDuvari(): Container {
   const c = new Container();
   const g = new Graphics();
   const { duvarSol: sol, duvarSag: sag, duvarY: h } = AVLU;
   const en = sag - sol;
-  g.rect(sol, 0, en, h).fill(C.bahce);
-  g.rect(sol, 0, en * 0.34, h).fill({ color: C.bahceShade, alpha: 0.85 });
-  // Sıva dökülmeleri — sokak duvarı yeni değil.
-  for (let y = 0.4; y < h - 0.3; y += 0.75) {
-    g.rect(sol + en * 0.12, y, en * 0.5, 0.06)
-      .fill({ color: C.bahceShade, alpha: 0.6 });
+
+  // Subasman: dipte iki santim taşan sıra. Duvarın yere OTURDUĞUNU söylüyor;
+  // direk toprağa saplanır, duvar oturur.
+  g.rect(sol - 0.03, 0, en + 0.06, 0.22).fill(C.bahceShade);
+  g.rect(sol, 0.22, en, h - 0.22).fill(C.bahce);
+  // Sokak tarafı güneş alıyor, avlu tarafı gölgede.
+  g.rect(sol, 0.22, en * 0.38, h - 0.22).fill({ color: C.bahceShade, alpha: 0.75 });
+
+  // **Briket sıraları.** Asıl okunurluk burada: eşit aralıklı yatay derzler
+  // gözün duvarı ölçmesini sağlıyor, tek parça bir dikdörtgen ölçülemiyor.
+  // 19'luk briket + derz = 21 santim, gerçek ölçü.
+  for (let y = 0.22 + 0.21; y < h - 0.05; y += 0.21) {
+    g.rect(sol, y, en, 0.025).fill({ color: C.bahceShade, alpha: 0.9 });
   }
-  // Harpuşta: duvarın iki yanına 8'er santim taşan kapak.
-  g.rect(sol - 0.10, h, en + 0.20, 0.16).fill(C.concreteD);
-  g.rect(sol - 0.10, h, en + 0.20, 0.06).fill({ color: C.concrete, alpha: 0.95 });
+
+  // Dökülmüş sıva: altından briket dokusu çıkıyor. Sokak duvarı yeni değil.
+  for (const [y, boy] of [[0.55, 0.62], [1.48, 0.44], [2.35, 0.5]] as const) {
+    g.rect(sol + en * 0.30, y, en * 0.70, boy).fill({ color: C.bahceShade, alpha: 0.5 });
+    g.rect(sol + en * 0.30, y, 0.03, boy).fill({ color: C.shadow, alpha: 0.18 });
+  }
+
+  // Harpuşta: iki yana 13'er santim taşan, öne eğimli kapak. Taşma duvarın
+  // kalınlığını ölçülebilir kılan ikinci şey.
+  g.rect(sol - 0.13, h, en + 0.26, 0.20).fill(C.concreteD);
+  g.rect(sol - 0.13, h + 0.12, en + 0.26, 0.08).fill({ color: C.concrete, alpha: 0.95 });
+  g.rect(sol - 0.13, h + 0.20, en + 0.26, 0.05).fill({ color: C.concrete, alpha: 0.6 });
+  // Harpuştanın altındaki damlalık gölgesi — kapağı duvardan ayırıyor.
+  g.rect(sol - 0.06, h - 0.06, en + 0.12, 0.06).fill({ color: C.shadow, alpha: 0.3 });
+
   // Sokağa bakan yüzde ikaz bandı: dar sokakta kamyonun kuyruğunu
   // yanaştıracağı engel bu ve bir bakışta görünmesi gerekiyor.
-  for (let y = 0.12; y < 1.0; y += 0.3) {
+  for (let y = 0.28; y < 1.18; y += 0.3) {
     g.rect(sag - 0.05, y, 0.06, 0.15).fill({ color: C.hazardY, alpha: 0.9 });
     g.rect(sag - 0.05, y + 0.15, 0.06, 0.15).fill({ color: C.hazardK, alpha: 0.9 });
   }

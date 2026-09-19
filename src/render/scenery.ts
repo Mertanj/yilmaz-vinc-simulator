@@ -181,10 +181,9 @@ export function drawKerb(x: number): Graphics {
  * çarpıyor. Oyuncuya pencereyi göstermek şart, yoksa bunu tahmin etmesi
  * imkânsız olurdu.
  */
-export function drawSetupZone(centreX: number): Container {
+export function drawSetupZone(centreX: number, halfW: number): Container {
   const c = new Container();
   const g = new Graphics();
-  const halfW = 5.2;
   g.rect(centreX - halfW, -0.28, halfW * 2, 0.28).fill({ color: C.hazardY, alpha: 0.22 });
   // Kenar çizgileri
   for (const x of [centreX - halfW, centreX + halfW]) {

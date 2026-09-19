@@ -1,6 +1,6 @@
 import { Vec2, type Body, type World } from 'planck';
 import type { Snapshotter } from './world';
-import { Kanca, type Grabbable, type KancaAyari } from './kanca';
+import { Kanca, type BirakRet, type Grabbable, type KancaAyari } from './kanca';
 import { LmiZone, type LmiReading } from './loadChart';
 import type { DirsekliDurum } from './dirsekliGeometri';
 import {
@@ -269,7 +269,20 @@ export class Dirsekli {
     return this.kanca.baglanmaDenetimi(adaylar);
   }
   canAttach(adaylar: Grabbable[]): boolean { return this.kanca.baglanabilir(adaylar); }
-  requestToggleAttach(): void { this.kanca.baglaBirakIste(); }
+  /** Yük bir şeyin üstüne oturdu mu — bırakmanın şartı. */
+  get yukOturdu(): boolean { return this.kanca.yukOturdu; }
+
+  /**
+   * Kancayı bağla ya da bırak. Havadaki yük bırakılmaz — sebebi
+   * `Kanca.yukOturdu`'da.
+   */
+  requestToggleAttach(): { ok: boolean; neden: BirakRet } {
+    if (this.kanca.yukVar && !this.kanca.yukOturdu) {
+      return { ok: false, neden: 'havada' };
+    }
+    this.kanca.baglaBirakIste();
+    return { ok: true, neden: '' };
+  }
   flushJointQueue(adaylar: Grabbable[]): void {
     this.kanca.mafsalKuyrugunuBosalt(adaylar);
   }

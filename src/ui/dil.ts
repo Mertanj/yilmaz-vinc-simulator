@@ -126,11 +126,17 @@ export interface Metinler {
       katBas: string;
       katGovde: (neden: 'suruyor' | 'yuklu' | 'yuksek') => string;
       katCozum: string;
+      /** Havadaki yükü bırakmaya kalkınca. */
+      birakBas: string; birakGovde: string; birakCozum: string;
+      /** Yük kancadayken ayakları toplamaya kalkınca. */
+      ayakBas: string; ayakGovde: string; ayakCozum: string;
     };
     ipucu: {
       sallaniyor: string; yanCekme: string; ortala: string;
       yukseklik: string; uzak: string;
       surus: (k: KumandaAdi) => string;
+      /** Kamyon kurulum alanının içinde — olumlu işaret. */
+      alanda: (k: KumandaAdi) => string;
       yukBagli: (k: KumandaAdi) => string;
       hazir: (k: KumandaAdi) => string;
     };
@@ -168,6 +174,8 @@ export interface Metinler {
       yanasma: (k: KumandaAdi) => string;
       /** Park cebini geçti — tabla malzemenin berisine düşüyor. */
       cebiGectin: string;
+      /** Cebin içinde — olumlu işaret, bölümün tek "doğru yerdesin" anı. */
+      cepte: (k: KumandaAdi) => string;
       yukBagli: (k: KumandaAdi) => string;
       /** Hedef, teleskop uzatılmadan erişilemiyor. */
       uzat: (k: KumandaAdi) => string;
@@ -319,9 +327,18 @@ const TR: Metinler = {
             + ' yere yakın olması gerekiyor.'
           : 'Halat zaten geçiriliyor.',
       katCozum: 'Yükü bırak, kancayı yere indir, sonra tekrar dene.',
+      birakBas: 'HAVADAKİ YÜK BIRAKILMAZ',
+      birakGovde: 'Yükün ağırlığı hâlâ halatta. Sapancı asılı bir yükün'
+        + ' sapanını çözmez — düşen yük hem yükü hem altındakini mahveder.',
+      birakCozum: 'Yükü indir, bir şeyin üstüne otursun, sonra bırak.',
+      ayakBas: 'AYAKLAR TOPLANAMADI',
+      ayakGovde: 'Kancada yük var. Ayaklar toplanırsa makine yol konumuna'
+        + ' dönüyor ve asılı yükü savuruyor.',
+      ayakCozum: 'Önce yükü yerine koy, sonra ayakları topla.',
     },
     ipucu: {
       surus: (k) => `çalışma alanına yanaş, sonra ayakları aç (${k.ayaklar})`,
+      alanda: (k) => `KURULUM ALANINDASIN · ayakları aç (${k.ayaklar})`,
       yukBagli: (k) => `yük bağlı · bırak (${k.kanca})`,
       hazir: (k) => `KANCA MENZİLDE · bağla (${k.kanca})`,
       sallaniyor: 'kanca sallanıyor · dursun, sonra bağla',
@@ -369,6 +386,7 @@ const TR: Metinler = {
     ipucu: {
       yanasma: (k) => `geri geri park cebine yanaş, sonra ayakları aç (${k.ayaklar})`,
       cebiGectin: 'park cebini geçtin — biraz ileri al, yoksa vinç malzemeye yetişmez',
+      cepte: (k) => `PARK CEBİNDESİN · ayakları aç (${k.ayaklar})`,
       yukBagli: (k) => `yük bağlı · duvarı aş, sonra bırak (${k.kanca})`,
       uzat: () => 'hedef bu boyla erişilmiyor · TELESKOBU UZAT (⇧↑)',
       duvariAs: 'yük duvarın altında · ÖNCE KALDIR (W), sonra duvarı aş',
@@ -577,9 +595,19 @@ const EN: Metinler = {
             + ' level, where the slinger can reach it.'
           : 'Already re-reeving.',
       katCozum: 'Set the load down, lower the hook to the ground, then try again.',
+      birakBas: 'CANNOT RELEASE A SUSPENDED LOAD',
+      birakGovde: 'The rope is still carrying the weight. A slinger never'
+        + ' unhooks a hanging load — a dropped one wrecks itself and whatever'
+        + ' is under it.',
+      birakCozum: 'Lower the load until it rests on something, then release.',
+      ayakBas: 'CANNOT RETRACT THE OUTRIGGERS',
+      ayakGovde: 'There is a load on the hook. Retracting puts the machine back'
+        + ' into travel position and swings the suspended load with it.',
+      ayakCozum: 'Set the load down first, then retract the outriggers.',
     },
     ipucu: {
       surus: (k) => `pull up to the set-up zone, then set the outriggers (${k.ayaklar})`,
+      alanda: (k) => `YOU ARE IN THE SET-UP ZONE · set the outriggers (${k.ayaklar})`,
       yukBagli: (k) => `load on the hook · release it (${k.kanca})`,
       hazir: (k) => `HOOK IN RANGE · attach (${k.kanca})`,
       sallaniyor: 'hook is swinging · let it settle, then attach',
@@ -629,6 +657,7 @@ const EN: Metinler = {
     ipucu: {
       yanasma: (k) => `back into the parking bay, then set the outriggers (${k.ayaklar})`,
       cebiGectin: 'you are past the bay — pull forward a little, or the crane cannot reach the load',
+      cepte: (k) => `YOU ARE IN THE BAY · set the outriggers (${k.ayaklar})`,
       yukBagli: (k) => `load on the hook · clear the wall, then release (${k.kanca})`,
       uzat: () => 'the target is out of reach at this length · EXTEND THE BOOM (⇧↑)',
       duvariAs: 'the load is below the wall · RAISE IT FIRST (W), then clear the wall',

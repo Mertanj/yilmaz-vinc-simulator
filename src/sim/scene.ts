@@ -5,12 +5,13 @@ import {
 } from './world';
 import { Truck } from './truck';
 import { Outriggers } from './outriggers';
-import { Crane, NEUTRAL, type CraneInput, type Grabbable, type KatRet } from './crane';
+import { Crane, NEUTRAL, type CraneInput, type Grabbable } from './crane';
 import type { DriveInput } from '../input/kumanda';
 import { TASKS, MALZEME_X, type Task } from '../game/tasks';
 import { OutriggerState } from './loadChart';
 import type { Gosterge, OyunSahnesi, PanelSatiri, Uyari } from './sahne';
 import { imzaliDerece } from './sahne';
+import { Ret } from './ret';
 import { M, kumandaAdi } from '../ui/dil';
 
 /**
@@ -23,6 +24,15 @@ import { M, kumandaAdi } from '../ui/dil';
 export const SCENE = {
   factoryX: 62,
   setupX: 52,
+  /**
+   * Kurulum alanının yarı eni (m) — çizim de, ipucu da BURADAN okuyor.
+   *
+   * Sayı çizimde tek başına duruyordu; oyuncuya yeşil "alandasın" işaretini
+   * verince iki yerde yaşamaya başlayacaktı. Bu projede ayrışan iki kopya
+   * (çizim ile fizik) daha önce teras kotunu kaydırdı; aynı hatayı işaretlerde
+   * tekrarlamanın anlamı yok.
+   */
+  setupYariEn: 5.2,
   /**
    * Takoz kamyonu burada durduruyor. 57.2'den öne alındı — kamyon yaklaştıkça
    * bütün yarıçaplar kısalıyor ve üst katlar erişilebilir oluyor.
@@ -292,14 +302,8 @@ export class Scene implements OyunSahnesi {
     // Ret EN ÖNDE: bir düğmeye basmanın doğrudan cevabı, süregelen bir
     // durumdan daha acil. Üç buçuk saniye sonra kendi kendine çekiliyor ve
     // altındaki uyarı neyse o geri geliyor.
-    if (this.katRedKalan > 0 && this.katRedNeden !== '') {
-      return {
-        zone: 'amber', carpiyor: false,
-        bas: u.katBas,
-        govde: u.katGovde(this.katRedNeden),
-        cozum: this.katRedNeden === 'suruyor' ? '' : u.katCozum,
-      };
-    }
+    const red = this.ret.aktif;
+    if (red) return { zone: 'amber', carpiyor: false, ...red };
 
     // İki-blok, yük momentinden ÖNCE gelir: kanca kafaya dayanmışsa mesele
     // ağırlık değil, halatın bitmiş olması. Ama SADECE oyuncuyu fiilen
@@ -342,7 +346,17 @@ export class Scene implements OyunSahnesi {
   ipucu(): { metin: string; mod: 'drive' | 'crane' | 'ready' } {
     const i = M.vinc.ipucu;
     const k = kumandaAdi();
-    if (!this.craneMode) return { metin: i.surus(k), mod: 'drive' };
+    if (!this.craneMode) {
+      // **Doğru yerde olduğunu da söyle.** Bölüm boyunca oyuncuya sadece neyi
+      // yanlış yaptığı söyleniyordu; "yanaş" satırı kamyon tam alanın ortasında
+      // dururken de aynen duruyor ve oyuncu ayaklara ne zaman basacağını
+      // tahmin ediyordu. Pencere çizilen sarı alanın kendisi.
+      const x = this.truck.chassis.getPosition().x;
+      if (Math.abs(x - SCENE.setupX) <= SCENE.setupYariEn) {
+        return { metin: i.alanda(k), mod: 'ready' };
+      }
+      return { metin: i.surus(k), mod: 'drive' };
+    }
     // Halat geçirme 14 saniye sürüyor ve o sırada makine hiçbir şey yapmıyor.
     // Geri sayım gösterge bloğunun alt satırında da var ama o satır dar
     // ekranda gizli; ipucu satırı her boyutta görünüyor.
@@ -365,19 +379,8 @@ export class Scene implements OyunSahnesi {
     return { metin: say[reason], mod: reason === 'hazir' ? 'ready' : 'crane' };
   }
 
-  /** Son kat değiştirme denemesinin sonucu — HUD gerekçeyi gösteriyor. */
-  /**
-   * Kat değiştirme reddedildiğinde uyarı şeridi bu kadar saniye kalıyor.
-   *
-   * Sahadan gelen geri bildirim: *"halat katı düğmesini anlamadım."* Sebebi
-   * büyük ölçüde şuydu: düğmeye basınca çoğu zaman HİÇBİR ŞEY olmuyordu.
-   * Makine haklı olarak reddediyordu (kancada yük varken ya da kanca havadayken
-   * sapancı halatı yeniden geçiremez) ama sebebi hesaplanıp ÇÖPE ATILIYORDU —
-   * `sonKatCevabi` hiçbir yerde okunmuyordu. Ret bir kerelik bir olay, oysa
-   * uyarı şeridi süregelen durumları gösteriyor; o yüzden kendi sayacı var.
-   */
-  private katRedKalan = 0;
-  private katRedNeden: KatRet = '';
+  /** Reddedilen son komutun cevabı — gerekçesi `ret.ts`'te. */
+  private readonly ret = new Ret();
 
   /** Şasi eğimi, derece. Ekranda gördüğümüz işaretle aynı. */
   get tiltDeg(): number {
@@ -389,17 +392,42 @@ export class Scene implements OyunSahnesi {
       this.truck.reset();
       this.outriggers.reset(this.truck.chassis);
     }
-    if (input.toggleOutriggers) this.outriggers.toggle();
+    const u = M.vinc.uyari;
+    if (input.toggleOutriggers) {
+      // **Yük kancadayken ayak toplanmaz.** Toplanırsa `craneMode` düşüyor,
+      // bom yol konumuna katlanıyor ve asılı yükü yanında sürüklüyor. Eskiden
+      // bu SESSİZCE oluyordu: oyuncu ayak düğmesine basıyor, yük savruluyor,
+      // hiçbir şey söylenmiyordu. Gerçek makinede de kilitli.
+      if (this.crane.hasLoad) {
+        this.ret.yaz({ bas: u.ayakBas, govde: u.ayakGovde, cozum: u.ayakCozum });
+      } else {
+        this.outriggers.toggle();
+        this.ret.temizle();
+      }
+    }
 
     const craneMode = this.craneMode;
     this.crane.setStowed(!craneMode);
-    if (input.toggleHook && craneMode) this.crane.requestToggleAttach();
-    if (input.toggleKat && craneMode) {
-      const cevap = this.crane.katDegistir();
-      this.katRedKalan = cevap.ok ? 0 : 3.5;
-      this.katRedNeden = cevap.neden;
+    if (input.toggleHook && craneMode) {
+      const cevap = this.crane.requestToggleAttach();
+      if (cevap.neden === 'havada') {
+        this.ret.yaz({ bas: u.birakBas, govde: u.birakGovde, cozum: u.birakCozum });
+      } else if (cevap.ok) {
+        this.ret.temizle();
+      }
     }
-    this.katRedKalan = Math.max(0, this.katRedKalan - dt);
+    if (input.toggleKat && craneMode) {
+      const neden = this.crane.katDegistir().neden;
+      if (neden === '') this.ret.temizle();
+      else {
+        this.ret.yaz({
+          bas: u.katBas, govde: u.katGovde(neden),
+          // "Zaten geçiriliyor" bir hata değil, bilgi: çözüm satırı yok.
+          cozum: neden === 'suruyor' ? '' : u.katCozum,
+        });
+      }
+    }
+    this.ret.azalt(dt);
 
     this.snaps.capture();
 

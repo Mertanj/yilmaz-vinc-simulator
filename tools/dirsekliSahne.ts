@@ -8,6 +8,7 @@
  */
 import { DirsekliSahne } from '../src/sim/dirsekliSahne';
 import { IDLE, type SceneInput } from '../src/sim/scene';
+import { Ret } from '../src/sim/ret';
 import { SIM } from '../src/sim/world';
 import { AVLU, avluHedefleri } from '../src/sim/avlu';
 import { dirsekliCozum, dirsekliKapasitesi, DIRSEKLI_SPEC as S } from '../src/sim/dirsekliGeometri';
@@ -179,6 +180,47 @@ class Rig {
 const out: string[] = [];
 const say = (s: string): void => { out.push(s); };
 
+/**
+ * İKİ SESSİZ BAŞARISIZLIĞIN ARTIK SESSİZ OLMADIĞINI ÖLÇER.
+ *
+ * İkisi de oynanabilirlik hatasıydı, fizik hatası değil: oyuncu bir düğmeye
+ * basıyordu, makine kötü bir şey yapıyordu ve hiçbir şey söylenmiyordu.
+ *
+ *  1. Havadaki yükü bırakmak — yük düşüyor, belki bir çarpma yazıyor, belki
+ *     hedefin yanına saçılıyor. Oyuncu puanının neden düştüğünü bilmiyor.
+ *  2. Yük kancadayken ayakları toplamak — `calismaModunda` düşüyor, bom yol
+ *     konumuna katlanıyor ve asılı yükü yanında sürüklüyor.
+ *
+ * Denetim rigin içinde duruyor çünkü ikisi de ancak GERÇEK bir turun ortasında,
+ * yük havadayken kurulabilen bir durum; birim testi bunu kuramaz.
+ */
+function kilitleriDenetle(r: Rig): void {
+  // Yükü yerden kes: iki kilit de yalnız yük havadayken devreye giriyor.
+  r.runUntil(12, (rig) => !rig.scene.bom.yukOturdu,
+    () => ({ crane: { uzat: 0, luff: 0, telescope: 0, winch: 1 } }));
+  r.run(0.5, () => ({}));
+  const havada = r.scene.hasLoad && !r.scene.bom.yukOturdu;
+
+  r.tap('toggleHook', 0.2);
+  const birakUyari = r.scene.uyari();
+  const birakOk = r.scene.hasLoad && birakUyari !== null;
+
+  const ayakOnce = r.scene.outriggers.stageIndex;
+  r.tap('toggleOutriggers', 0.2);
+  const ayakUyari = r.scene.uyari();
+  const ayakOk = r.scene.outriggers.stageIndex === ayakOnce && ayakUyari !== null;
+
+  say(`KILIT  yuk havada ${havada ? 'E' : 'H'}`
+    + `  ·  birak reddedildi ${birakOk ? 'E' : 'H'} "${birakUyari?.bas ?? '-'}"`
+    + `  ·  ayak reddedildi ${ayakOk ? 'E' : 'H'} "${ayakUyari?.bas ?? '-'}"`);
+  if (!havada || !birakOk || !ayakOk) {
+    throw new Error(`kilit denetimi kaldi: havada=${havada}`
+      + ` birak=${birakOk} ayak=${ayakOk}`);
+  }
+  // Reddin 3.5 saniyelik seridi sonraki olcumleri kirletmesin.
+  r.run(Ret.SURE, () => ({}));
+}
+
 function main(): void {
   const r = new Rig();
 
@@ -298,6 +340,8 @@ function main(): void {
     say(`${task.kod} AL   durum ${denetim.reason}  bagli ${r.scene.hasLoad ? 'E' : 'H'}`
       + `  merkez farki ${Math.abs(r.scene.bom.grabPoint.x - r.scene.load.getPosition().x).toFixed(2)} m`);
 
+    if (n === 0) kilitleriDenetle(r);
+
     // --- TASIMA ---
     r.etiket = `${task.kod}-tasima`;
     // Yuku kaldir ve duvari asacak kota cik. Gecis kotu: duvar + yuk + halat
@@ -378,15 +422,19 @@ function main(): void {
     iz('koyma-ustunde');
     // Halati usulca sal: yuk hedefe otursun. Hedef halat boyu ucun kotundan
     // hesaplaniyor, sabit degil — yoksa yuksek hedefte yuk havada asili kaliyor.
+    // Cikis sarti YUKUN OTURMASI, hedefe yakinlik degil. Once "hedef kotunun
+    // 12 cm yakini + dusey hiz 0.05'ten kucuk" deniyordu ve rig yuku 11 cm
+    // havada birakip cozuyordu: hiz sifira yakin cunku yuk asili duruyor.
+    // Asili yuk artik cozulemiyor (Kanca.yukOturdu), yani ayni hata oyuncunun
+    // da basina geliyordu — rig onu goremiyordu, cunku ayni yalani olcuyordu.
     let sonIz = 0;
-    r.runUntil(30, (rig) => {
-      if (process.env['IZ'] && rig.t - sonIz > 2) { sonIz = rig.t; iz('   iniyor'); }
-      const l = rig.scene.load.getPosition();
-      return Math.abs(l.y - (hedef.y + task.halfHeight)) < 0.12
-        && Math.abs(rig.scene.load.getLinearVelocity().y) < 0.05;
-    }, (rig) => ({ crane: { uzat: 0, luff: 0, telescope: 0,
-      winch: rig.halata(rig.scene.bom.tipWorld.y
-        - (hedef.y + task.halfHeight + pimOfset + DIRSEKLI.hookThroatM) + 0.04) } }));
+    r.runUntil(30, (rig) => rig.scene.bom.yukOturdu,
+      (rig) => {
+        if (process.env['IZ'] && rig.t - sonIz > 2) { sonIz = rig.t; iz('   iniyor'); }
+        return { crane: { uzat: 0, luff: 0, telescope: 0,
+          winch: rig.halata(rig.scene.bom.tipWorld.y
+            - (hedef.y + task.halfHeight + pimOfset + DIRSEKLI.hookThroatM) + 0.04) } };
+      });
     r.run(1.0, () => ({}));
     // Konum BIRAKMADAN once okunuyor: mafsal cozulunce Mission gorevi kabul
     // edip yeni yuku malzeme alanina doguruyor, `scene.load` de onu gosteriyor.
