@@ -10,7 +10,7 @@ import type { DriveInput } from '../input/kumanda';
 import { TASKS, MALZEME_X, type Task } from '../game/tasks';
 import { OutriggerState } from './loadChart';
 import type { Gosterge, OyunSahnesi, PanelSatiri, Uyari } from './sahne';
-import { imzaliDerece } from './sahne';
+import { imzaliDerece, almaSatiri, tasimaSatiri } from './sahne';
 import { Ret } from './ret';
 import { M, kumandaAdi } from '../ui/dil';
 
@@ -48,6 +48,18 @@ export const SCENE = {
   /** Malzeme alanının merkezi — her görevin yükü buraya geliyor. */
   malzemeX: MALZEME_X,
 } as const;
+
+/**
+ * Oyuncu bu karede bom kumandasına dokundu mu?
+ *
+ * Kilidi söyleyebilmek için gerekiyor: "hiçbir şey olmadı" ile "yanlış fazda
+ * bir şey denedin" ancak girdiye bakarak ayrılıyor.
+ */
+export function bomGirdisiVar(input: SceneInput): boolean {
+  const c = input.crane;
+  return input.toggleHook || input.toggleKat
+    || c.luff !== 0 || c.telescope !== 0 || c.uzat !== 0 || c.winch !== 0;
+}
 
 /** Bir fizik adımının bütün girdisi. Klavye de, test de bunu üretir. */
 export interface SceneInput {
@@ -297,13 +309,13 @@ export class Scene implements OyunSahnesi {
     const r = this.crane.lmi;
     const u = M.vinc.uyari;
     const kilitli = this.crane.kilitliDenendi;
-    if (!this.craneMode) return null;
 
-    // Ret EN ÖNDE: bir düğmeye basmanın doğrudan cevabı, süregelen bir
-    // durumdan daha acil. Üç buçuk saniye sonra kendi kendine çekiliyor ve
-    // altındaki uyarı neyse o geri geliyor.
+    // Ret EN ÖNDE, hatta çalışma modu denetiminden de önde: kilitli kumanda
+    // uyarısının görüneceği tek yer SÜRÜŞ fazı. Üç buçuk saniye sonra kendi
+    // kendine çekiliyor ve altındaki uyarı neyse o geri geliyor.
     const red = this.ret.aktif;
     if (red) return { zone: 'amber', carpiyor: false, ...red };
+    if (!this.craneMode) return null;
 
     // İki-blok, yük momentinden ÖNCE gelir: kanca kafaya dayanmışsa mesele
     // ağırlık değil, halatın bitmiş olması. Ama SADECE oyuncuyu fiilen
@@ -366,8 +378,18 @@ export class Scene implements OyunSahnesi {
         mod: 'crane',
       };
     }
-    if (this.crane.hasLoad) return { metin: i.yukBagli(k), mod: 'crane' };
-    const { reason } = this.crane.attachCheck(this.grabbables);
+    if (this.crane.hasLoad) {
+      // Taşırken de yön ve mesafe — gerekçesi `tasimaSatiri`'nda.
+      const t = this.loadTask;
+      const h = t ? this.hedefNoktasi(t) : null;
+      const yuk = this.load.getPosition();
+      const satir = t && h
+        ? tasimaSatiri({ x: yuk.x, y: yuk.y - t.halfHeight }, h,
+          this.yerlestirmeToleransi())
+        : null;
+      return { metin: satir ?? i.yukBagli(k), mod: 'crane' };
+    }
+    const { reason, sapma } = this.crane.attachCheck(this.grabbables);
     const say: Record<typeof reason, string> = {
       hazir: i.hazir(k),
       sallaniyor: i.sallaniyor,
@@ -376,7 +398,17 @@ export class Scene implements OyunSahnesi {
       yukseklik: i.yukseklik,
       uzak: i.uzak,
     };
-    return { metin: say[reason], mod: reason === 'hazir' ? 'ready' : 'crane' };
+    // **Doygun eksen söyleniyor.** Vektör satırı "kancayı 0.9 m sola getir"
+    // diyor ama yarıçapı iki eksen belirliyor; biri dibe vurunca tek çare
+    // diğeri. Bölümün başında teleskop tam içeride ve oyuncu "sola" deyince
+    // teleskopa basıp hiçbir şeyin olmadığını görüyor.
+    let metin = almaSatiri(reason, sapma, say[reason]);
+    if (sapma && (reason === 'ortala' || reason === 'uzak')) {
+      // Sola = yarıçap küçülsün = teleskop içeri; olmuyorsa bom kalkacak.
+      const yon = sapma.dx > 0 ? 1 : -1;
+      if (!this.crane.teleskopGidebilir(yon)) metin += i.teleskopDoydu(yon < 0, k);
+    }
+    return { metin, mod: reason === 'hazir' ? 'ready' : 'crane' };
   }
 
   /** Reddedilen son komutun cevabı — gerekçesi `ret.ts`'te. */
@@ -407,6 +439,15 @@ export class Scene implements OyunSahnesi {
     }
 
     const craneMode = this.craneMode;
+    // **Kilitli kumanda artık sessiz değil.** Sürüş fazında bom tuşları
+    // hiçbir şey yapmıyordu ve hiçbir şey de söylemiyordu; oyuncunun "yanlış
+    // tuş" ile "oyun donmuş" arasını ayırmasının yolu yoktu.
+    if (!craneMode && bomGirdisiVar(input)) {
+      this.ret.yaz({
+        bas: u.bomKilitliBas, govde: u.bomKilitliGovde,
+        cozum: u.bomKilitliCozum(kumandaAdi()),
+      });
+    }
     this.crane.setStowed(!craneMode);
     if (input.toggleHook && craneMode) {
       const cevap = this.crane.requestToggleAttach();

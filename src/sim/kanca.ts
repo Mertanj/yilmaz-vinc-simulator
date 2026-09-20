@@ -40,6 +40,29 @@ export interface Grabbable {
  */
 export type BirakRet = '' | 'havada';
 
+/**
+ * Bağlanma denetiminin sonucu.
+ *
+ * **`sapma` neden var:** gerekçe bir KATEGORİ ("ortala", "yükseklik") ve oyuncu
+ * kategoriyle nişan alamıyor. Denetim işaretli hatayı zaten hesaplıyordu —
+ * `p.x - g.x` satırın içinde duruyor — ve sonra atıyordu. Oyun testinde ilk
+ * yükü kancaya takmak 18 dakika sürdü; test eden kişi sonunda detay panelinden
+ * bom boyu ile açıyı okuyup kancanın kotunu ELDE hesapladı. Sayı makinede
+ * vardı, ekranda yoktu.
+ */
+export interface BaglanmaDurumu {
+  item: Grabbable | null;
+  reason: AttachReason;
+  /**
+   * En yakın adaya göre işaretli hata (m); aday yoksa ya da mesele konum
+   * değilse (sallanma, yan çekme) null.
+   *
+   * `dx > 0` → yük kancanın SAĞINDA, kancayı sağa götür.
+   * `dy > 0` → kanca boğazı yükün üstünün ÜSTÜNDE, kancayı indir.
+   */
+  sapma: { dx: number; dy: number } | null;
+}
+
 /** Bağlanma neden olmadı — oyuncuya söylenecek gerekçe. */
 export type AttachReason =
   | 'hazir' | 'uzak' | 'ortala' | 'yukseklik' | 'sallaniyor' | 'yan-cekme';
@@ -232,29 +255,39 @@ export class Kanca {
    * anlayamıyordu; üç ayrı koşulun hangisinin tutmadığını söylemek, kancayı
    * yükün üstüne indirmeyi tahmin oyunu olmaktan çıkarıyor.
    */
-  baglanmaDenetimi(adaylar: Grabbable[]): { item: Grabbable | null; reason: AttachReason } {
+  baglanmaDenetimi(adaylar: Grabbable[]): BaglanmaDurumu {
     const a = this.ayar;
     const v = this.hook.getLinearVelocity();
     if (Math.hypot(v.x, v.y) > a.baglanmaMaxHizMps) {
-      return { item: null, reason: 'sallaniyor' };
+      return { item: null, reason: 'sallaniyor', sapma: null };
     }
     // Halat düşeyden ne kadar sapmış? Bom ucu ile kanca arasındaki yatay fark.
     if (Math.abs(this.ucDunya.x - this.hook.getPosition().x) > a.maxYanCekmeM) {
-      return { item: null, reason: 'yan-cekme' };
+      return { item: null, reason: 'yan-cekme', sapma: null };
     }
 
     const g = this.tutmaNoktasi;
     let nearMiss: AttachReason = 'uzak';
+    // **En yakın aday yatay uzaklığa göre seçiliyor.** Oyuncunun nişan aldığı
+    // şey o: kanca hangi yükün üstündeyse onun sayısını görmek istiyor.
+    let sapma: { dx: number; dy: number } | null = null;
+    let enYakin = Infinity;
     for (const item of adaylar) {
       const p = item.body.getWorldCenter();
       const topY = p.y + item.halfHeight;
-      const sideOk = Math.abs(p.x - g.x) <= a.merkezToleransM;
+      const dx = p.x - g.x;
+      const dy = g.y - topY;
+      if (Math.abs(dx) < enYakin) {
+        enYakin = Math.abs(dx);
+        sapma = { dx, dy };
+      }
+      const sideOk = Math.abs(dx) <= a.merkezToleransM;
       const heightOk = g.y >= topY - a.ustunAltiM && g.y <= topY + a.ustunUstuM;
-      if (sideOk && heightOk) return { item, reason: 'hazir' };
-      if (heightOk && Math.abs(p.x - g.x) <= item.halfWidth + 1.0) nearMiss = 'ortala';
+      if (sideOk && heightOk) return { item, reason: 'hazir', sapma: { dx, dy } };
+      if (heightOk && Math.abs(dx) <= item.halfWidth + 1.0) nearMiss = 'ortala';
       else if (sideOk) nearMiss = 'yukseklik';
     }
-    return { item: null, reason: nearMiss };
+    return { item: null, reason: nearMiss, sapma };
   }
 
   baglanabilir(adaylar: Grabbable[]): boolean {

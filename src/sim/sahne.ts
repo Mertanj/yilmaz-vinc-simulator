@@ -4,6 +4,8 @@ import type { Grabbable } from './crane';
 import type { LmiReading } from './loadChart';
 import type { Task } from '../game/tasks';
 import type { SceneInput } from './scene';
+import type { AttachReason } from './kanca';
+import { M } from '../ui/dil';
 
 /**
  * Bir aracın oynanabilir sahnesi.
@@ -145,4 +147,60 @@ export interface Uyari {
   cozum: string;
   /** Oyuncu şu an kilitli bir kola basıyor mu — şerit yanıp sönsün. */
   carpiyor: boolean;
+}
+
+
+/**
+ * Alma safhasının ipucu satırı — kategori yerine YÖN ve MESAFE.
+ *
+ * Oyun testinin en ağır bulgusu buydu: ilk yükü kancaya takmak 18 dakika
+ * sürdü. Sebep fizik değildi — test eden kişi sonunda detay panelinden bom
+ * boyunu ve açıyı okuyup kancanın kotunu ELDE hesapladı ve ikinci almayı
+ * 15 saniyede yaptı. Yani beceri öğrenilebilir; öğrenmesi imkânsız olan şey
+ * HANGİ YÖNE ne kadar gidileceğiydi. `baglanmaDenetimi` bunu zaten
+ * hesaplıyordu ve atıyordu.
+ *
+ * **Sıra kasıtlı: önce yatay, sonra düşey.** `reason` zaten hangi eksenin
+ * toleransı aştığını söylüyor, çünkü toleransları o biliyor; ikinci bir eşik
+ * koymak aynı kararı iki yerde tutmak olurdu. `uzak` (ikisi de dışarıda) yatay
+ * gösteriyor: önce yükün üstüne gelinir, sonra inilir — sapancının yaptığı da
+ * bu.
+ */
+export function almaSatiri(
+  reason: AttachReason,
+  sapma: { dx: number; dy: number } | null,
+  varsayilan: string,
+): string {
+  if (!sapma) return varsayilan;
+  const i = M.vinc.ipucu;
+  if (reason === 'ortala' || reason === 'uzak') {
+    return i.sapmaYatay(Math.abs(sapma.dx).toFixed(1), sapma.dx > 0);
+  }
+  if (reason === 'yukseklik') {
+    return i.sapmaDusey(Math.abs(sapma.dy).toFixed(1), sapma.dy > 0);
+  }
+  return varsayilan;
+}
+
+/**
+ * Taşıma safhasının ipucu satırı — hedefe kalan yön ve mesafe.
+ *
+ * Almanın aynadaki hâli: yük bağlıyken satır bütün uçuş boyunca tek bir sabit
+ * cümleydi ("yük bağlı · bırak"). Oyuncu hedef işaretini gözle kollamak
+ * zorundaydı ve iki kez yükü salınırken bıraktı.
+ *
+ * Aşamalı: önce yatay, hedefin üstüne gelince kalan iniş, tolerans içinde ise
+ * null (çağıran kendi "bırak" satırını gösteriyor).
+ */
+export function tasimaSatiri(
+  yuk: { x: number; y: number },
+  hedef: { x: number; y: number },
+  tol: { x: number; y: number },
+): string | null {
+  const i = M.vinc.ipucu;
+  const dx = hedef.x - yuk.x;
+  if (Math.abs(dx) > tol.x) return i.hedefeYatay(Math.abs(dx).toFixed(1), dx > 0);
+  const dy = yuk.y - hedef.y;
+  if (dy > tol.y) return i.hedefeIndir(dy.toFixed(1));
+  return null;
 }

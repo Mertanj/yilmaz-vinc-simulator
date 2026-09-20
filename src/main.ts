@@ -495,8 +495,16 @@ function yatayCagrisiniKur(): void {
 }
 
 /** m:ss */
+/**
+ * mm:ss. Saniye AŞAĞI yuvarlanıyor, yuvarlanmıyor değil.
+ *
+ * `(sn % 60).toFixed(0)` 1079.7 saniyede "60" üretiyor ve ekranda "17:60"
+ * yazıyordu — dakika taşımıyor, çünkü dakikayı `Math.floor` veriyor. Saat
+ * hiçbir zaman 60'ı göstermemeli.
+ */
 function sureyiYaz(sn: number): string {
-  return `${Math.floor(sn / 60)}:${(sn % 60).toFixed(0).padStart(2, '0')}`;
+  const t = Math.max(0, Math.floor(sn));
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
 }
 
 boot().catch((err: unknown) => {

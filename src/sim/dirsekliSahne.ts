@@ -9,9 +9,10 @@ import { DAR_SOKAK } from './avlu';
 import type { DirsekliBolum } from './dirsekliBolum';
 import type { Task } from '../game/tasks';
 import { OutriggerState } from './loadChart';
-import type { SceneInput } from './scene';
+import { bomGirdisiVar, type SceneInput } from './scene';
 import { Ret } from './ret';
-import { imzaliDerece, type Gosterge, type OyunSahnesi, type PanelSatiri, type Uyari } from './sahne';
+import { imzaliDerece, almaSatiri, tasimaSatiri,
+  type Gosterge, type OyunSahnesi, type PanelSatiri, type Uyari } from './sahne';
 import { M, kumandaAdi } from '../ui/dil';
 
 /**
@@ -174,6 +175,15 @@ export class DirsekliSahne implements OyunSahnesi {
     }
 
     const bomModu = this.calismaModunda;
+    // **Kilitli kumanda artık sessiz değil.** Sürüş fazında bom tuşları
+    // hiçbir şey yapmıyordu ve hiçbir şey de söylemiyordu; oyuncunun "yanlış
+    // tuş" ile "oyun donmuş" arasını ayırmasının yolu yoktu.
+    if (!bomModu && bomGirdisiVar(input)) {
+      this.ret.yaz({
+        bas: u.bomKilitliBas, govde: u.bomKilitliGovde,
+        cozum: u.bomKilitliCozum(kumandaAdi()),
+      });
+    }
     this.bom.setStowed(!bomModu);
     if (input.toggleHook && bomModu) {
       const cevap = this.bom.requestToggleAttach();
@@ -293,13 +303,13 @@ export class DirsekliSahne implements OyunSahnesi {
     const u = M.vinc.uyari;
     const k = M.dirsekli;
     const kilitli = this.bom.kilitliDenendi;
-    if (!this.calismaModunda) return null;
 
-    // Ret EN ÖNDE: bir düğmeye basmanın doğrudan cevabı, süregelen bir
-    // durumdan daha acil. Sıkışma bile bunun altında — sıkışma kendi kendine
-    // devam ediyor, ret ise oyuncunun az önceki hareketine verilen cevap.
+    // Ret EN ÖNDE, çalışma modu denetiminden de önde: kilitli kumanda
+    // uyarısının görüneceği tek yer sürüş fazı. Sıkışma bile bunun altında —
+    // sıkışma kendi kendine devam ediyor, ret ise az önceki harekete cevap.
     const red = this.ret.aktif;
     if (red) return { zone: 'amber', carpiyor: false, ...red };
+    if (!this.calismaModunda) return null;
 
     // **Sıkışma en önde.** Diğer uyarılar süregelen bir DURUMU anlatıyor
     // (yük ağır, yarıçap uzun); bu ise bir OLAYI: makine şu anda bir şeyi
@@ -393,9 +403,15 @@ export class DirsekliSahne implements OyunSahnesi {
       if (gereken !== null && gereken > this.bom.uzamaBoyuM + 0.35) {
         return { metin: k.uzat(t), mod: 'crane' };
       }
-      return { metin: k.yukBagli(t), mod: 'crane' };
+      // Engel de teleskop da tamamsa geriye nişan alma kalıyor: yön ve mesafe.
+      const h = gorev ? this.hedefNoktasi(gorev) : null;
+      const satir = gorev && h
+        ? tasimaSatiri({ x: l.x, y: l.y - gorev.halfHeight }, h,
+          this.yerlestirmeToleransi(gorev))
+        : null;
+      return { metin: satir ?? k.yukBagli(t), mod: 'crane' };
     }
-    const { reason } = this.bom.attachCheck(this.grabbables);
+    const { reason, sapma } = this.bom.attachCheck(this.grabbables);
     const say: Record<typeof reason, string> = {
       hazir: i.hazir(t),
       sallaniyor: i.sallaniyor,
@@ -404,7 +420,10 @@ export class DirsekliSahne implements OyunSahnesi {
       yukseklik: i.yukseklik,
       uzak: k.uzak(t),
     };
-    return { metin: say[reason], mod: reason === 'hazir' ? 'ready' : 'crane' };
+    return {
+      metin: almaSatiri(reason, sapma, say[reason]),
+      mod: reason === 'hazir' ? 'ready' : 'crane',
+    };
   }
 }
 

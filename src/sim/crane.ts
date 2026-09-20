@@ -1,7 +1,7 @@
 import { Vec2, type Body, type World } from 'planck';
 import type { Snapshotter } from './world';
 import {
-  Kanca, type AttachReason, type BirakRet, type Grabbable, type KancaAyari,
+  Kanca, type BaglanmaDurumu, type BirakRet, type Grabbable, type KancaAyari,
 } from './kanca';
 import {
   capacityAt, computeLmi, halatKapasitesi, KAT_SECENEKLERI, OutriggerState,
@@ -269,7 +269,7 @@ export const NEUTRAL: CraneInput = { luff: 0, telescope: 0, uzat: 0, winch: 0 };
  */
 // Kanca düzeneğinin tipleri artık `kanca.ts`'te: dirsekli bom da aynı kancayı
 // kullanıyor. Buradan yeniden dışa veriliyor ki mevcut import'lar bozulmasın.
-export type { Grabbable, AttachReason, BirakRet } from './kanca';
+export type { Grabbable, AttachReason, BaglanmaDurumu, BirakRet } from './kanca';
 
 /**
  * Kat değiştirme reddedilince sebebi — metin değil KOD.
@@ -476,7 +476,7 @@ export class Crane {
   /** Kancanın gerçekten yükü tuttuğu nokta — blok merkezi değil, boğaz. */
   get grabPoint(): { x: number; y: number } { return this.kanca.tutmaNoktasi; }
 
-  attachCheck(candidates: Grabbable[]): { item: Grabbable | null; reason: AttachReason } {
+  attachCheck(candidates: Grabbable[]): BaglanmaDurumu {
     return this.kanca.baglanmaDenetimi(candidates);
   }
 
@@ -502,6 +502,22 @@ export class Crane {
   // --- okumalar ---
 
   get angleDeg(): number { return (this.angle * 180) / Math.PI; }
+
+  /**
+   * Teleskop bu yönde daha fazla gidebilir mi? (`-1` içeri, `+1` dışarı)
+   *
+   * **Neden gerekiyor:** yarıçapı iki eksen belirliyor ve biri dibe vurunca
+   * tek çare diğeri oluyor. Bölümün BAŞINDA teleskop tam içeride (uzama 0) ve
+   * kancayı yaklaştırmanın tek yolu bomu KALDIRMAK; oyuncu ise "yaklaş"
+   * deyince teleskopa basıyor ve hiçbir şey olmuyor. Oyun testinde ilk almanın
+   * 18 dakika sürmesinin sebebi tam olarak buydu — makinenin bozuk olduğunu
+   * düşündürüyor.
+   */
+  teleskopGidebilir(yon: -1 | 1): boolean {
+    return yon < 0
+      ? this.extension > 0.05
+      : this.extension < CRANE.maxExtensionM - 0.05;
+  }
   get extensionM(): number { return this.extension; }
 
   /**

@@ -130,6 +130,15 @@ export interface Metinler {
       birakBas: string; birakGovde: string; birakCozum: string;
       /** Yük kancadayken ayakları toplamaya kalkınca. */
       ayakBas: string; ayakGovde: string; ayakCozum: string;
+      /**
+       * Sürüş fazında bom kumandasına basınca.
+       *
+       * Oyun testi: *"yanlış tuşa basan oyuncunun 'yanlış tuş' ile 'oyun
+       * donmuş' arasını ayırmasının hiçbir yolu yok."* Sürüş sırasında W, S,
+       * yön tuşları ve boşluk tamamen sessizdi.
+       */
+      bomKilitliBas: string; bomKilitliGovde: string;
+      bomKilitliCozum: (k: KumandaAdi) => string;
     };
     ipucu: {
       sallaniyor: string; yanCekme: string; ortala: string;
@@ -137,6 +146,23 @@ export interface Metinler {
       surus: (k: KumandaAdi) => string;
       /** Kamyon kurulum alanının içinde — olumlu işaret. */
       alanda: (k: KumandaAdi) => string;
+      /**
+       * Kancayı yüke götürürken YÖN ve MESAFE.
+       *
+       * Kategori ("ortala") ile nişan alınamıyor: oyun testinde ilk yükü
+       * takmak 18 dakika sürdü. Sayı makinede zaten vardı.
+       */
+      sapmaYatay: (m: string, sag: boolean) => string;
+      sapmaDusey: (m: string, indir: boolean) => string;
+      /**
+       * Teleskop o yönde dibe vurmuş — yarıçapı artık bom açısı veriyor.
+       * Vektör satırının SONUNA ekleniyor, yerine geçmiyor.
+       */
+      teleskopDoydu: (kaldir: boolean, k: KumandaAdi) => string;
+      /** Yük bağlıyken hedefe olan yatay mesafe ve yön. */
+      hedefeYatay: (m: string, sag: boolean) => string;
+      /** Hedefin üstünde — kalan iniş. */
+      hedefeIndir: (m: string) => string;
       yukBagli: (k: KumandaAdi) => string;
       hazir: (k: KumandaAdi) => string;
     };
@@ -335,10 +361,20 @@ const TR: Metinler = {
       ayakGovde: 'Kancada yük var. Ayaklar toplanırsa makine yol konumuna'
         + ' dönüyor ve asılı yükü savuruyor.',
       ayakCozum: 'Önce yükü yerine koy, sonra ayakları topla.',
+      bomKilitliBas: 'BOM KUMANDASI KİLİTLİ',
+      bomKilitliGovde: 'Ayaklar yerde değilken vinç çalışmıyor. Lastiğin üstünde'
+        + ' kaldırma yapmak makineyi kendi üstüne devirir.',
+      bomKilitliCozum: (k) => `Çalışma alanına yanaş, sonra ayakları aç (${k.ayaklar}).`,
     },
     ipucu: {
       surus: (k) => `çalışma alanına yanaş, sonra ayakları aç (${k.ayaklar})`,
       alanda: (k) => `KURULUM ALANINDASIN · ayakları aç (${k.ayaklar})`,
+      sapmaYatay: (m, sag) => `kancayı ${m} m ${sag ? 'sağa' : 'sola'} getir`,
+      sapmaDusey: (m, indir) => `kancayı ${m} m ${indir ? 'indir' : 'kaldır'}`,
+      teleskopDoydu: (kaldir, k) => ` · teleskop bitti, bomu ${
+        kaldir ? `KALDIR (${k.kaldir})` : `İNDİR (${k.indir})`}`,
+      hedefeYatay: (m, sag) => `hedef ${m} m ${sag ? 'sağda' : 'solda'}`,
+      hedefeIndir: (m) => `hedefin üstündesin · ${m} m indir`,
       yukBagli: (k) => `yük bağlı · bırak (${k.kanca})`,
       hazir: (k) => `KANCA MENZİLDE · bağla (${k.kanca})`,
       sallaniyor: 'kanca sallanıyor · dursun, sonra bağla',
@@ -604,10 +640,20 @@ const EN: Metinler = {
       ayakGovde: 'There is a load on the hook. Retracting puts the machine back'
         + ' into travel position and swings the suspended load with it.',
       ayakCozum: 'Set the load down first, then retract the outriggers.',
+      bomKilitliBas: 'BOOM CONTROLS ARE LOCKED',
+      bomKilitliGovde: 'The crane does not work with the outriggers up. Lifting'
+        + ' on the tyres puts the machine over on its side.',
+      bomKilitliCozum: (k) => `Pull up to the set-up zone, then set the outriggers (${k.ayaklar}).`,
     },
     ipucu: {
       surus: (k) => `pull up to the set-up zone, then set the outriggers (${k.ayaklar})`,
       alanda: (k) => `YOU ARE IN THE SET-UP ZONE · set the outriggers (${k.ayaklar})`,
+      sapmaYatay: (m, sag) => `move the hook ${m} m ${sag ? 'right' : 'left'}`,
+      sapmaDusey: (m, indir) => `${indir ? 'lower' : 'raise'} the hook ${m} m`,
+      teleskopDoydu: (kaldir, k) => ` · telescope is at its stop, ${
+        kaldir ? `RAISE the boom (${k.kaldir})` : `LOWER the boom (${k.indir})`}`,
+      hedefeYatay: (m, sag) => `target is ${m} m to the ${sag ? 'right' : 'left'}`,
+      hedefeIndir: (m) => `over the target · lower it ${m} m`,
       yukBagli: (k) => `load on the hook · release it (${k.kanca})`,
       hazir: (k) => `HOOK IN RANGE · attach (${k.kanca})`,
       sallaniyor: 'hook is swinging · let it settle, then attach',
