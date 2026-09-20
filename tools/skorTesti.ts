@@ -8,6 +8,7 @@
  * açılışta düşürmesi. Üçü de sessizce olur, üçü de burada yakalanıyor.
  */
 import { enIyiOku, enIyiKaydet } from '../src/game/enIyi';
+import { farkiYaz, sureyiYaz } from '../src/ui/sure';
 import type { Result } from '../src/game/mission';
 
 const store = new Map<string, string>();
@@ -23,7 +24,8 @@ const sonuc = (puan: number, not: Result['not']): Result => ({
   not, puan: 80, usta: false, devrildi: false,
   score: {
     sure: 208, maxLmi: 96, kirmiziSn: 0.1, maxSalinim: 0, carpma: 0,
-    sapmalar: [0.1, 0.12, 0.12, 0.12, 0.12], puan,
+    sapmalar: [0.1, 0.12, 0.12, 0.12, 0.12],
+    bitisler: [40, 82, 130, 171, 208], puan,
   },
 });
 
@@ -68,6 +70,33 @@ enIyiKaydet('devrik2', sonuc(5000, 'C'));
 enIyiKaydet('devrik2', { ...sonuc(9999, 'A'), devrildi: true });
 esit('devrilen tur mevcut rekorun uzerine YAZMIYOR', enIyiOku('devrik2')?.puan, 5000);
 
+// --- ara sureler (speedrun) ---
+//
+// Rekor tur kendi ara surelerini tasiyor; bir sonraki tur onlara karsi
+// kosuyor. Kayitla birlikte gidip gelmesi ve YALNIZCA rekor kirilinca
+// guncellenmesi sart: eski turun sureleri yeni bir rekorla karismamali.
+// Kendi aracinda: yukaridaki forklift dizisinin sirasini bozmasin.
+const ileSure = (puan: number, b: number[]): Result => {
+  const r = sonuc(puan, 'A');
+  return { ...r, score: { ...r.score, bitisler: b } };
+};
+enIyiKaydet('split', ileSure(9000, [40, 82, 130, 171, 208]));
+esit('rekor ara sureleri saklaniyor', enIyiOku('split')?.bitisler,
+  [40, 82, 130, 171, 208]);
+enIyiKaydet('split', ileSure(9900, [30, 60, 95, 130, 160]));
+esit('yeni rekor ara sureleri de gunceller', enIyiOku('split')?.bitisler,
+  [30, 60, 95, 130, 160]);
+enIyiKaydet('split', ileSure(1000, [99, 99, 99, 99, 99]));
+esit('dusuk puanli tur ara sureleri BOZMUYOR', enIyiOku('split')?.bitisler,
+  [30, 60, 95, 130, 160]);
+// Eski surum kaydinda alan hic yok; okuyan taraf bos diziyle karsilasmali.
+store.set('yv.enIyi.eskisurum2', JSON.stringify({ puan: 5000, not: 'C' }));
+esit('ara suresi olmayan eski kayit bos dizi doner',
+  enIyiOku('eskisurum2')?.bitisler, []);
+// Bozuk icerik de elenmeli: kayit elle kurcalanmis olabilir.
+store.set('yv.enIyi.bozukdizi', JSON.stringify({ puan: 5000, bitisler: [10, 'x', null, 30] }));
+esit('bozuk ara sureler ayiklaniyor', enIyiOku('bozukdizi')?.bitisler, [10, 30]);
+
 esit('araclar birbirinden bagimsiz', enIyiOku('vinc'), null);
 enIyiKaydet('vinc', sonuc(8412, 'B'));
 esit('vinc kendi kaydini tutuyor', enIyiOku('vinc')?.puan, 8412);
@@ -81,4 +110,22 @@ store.set('yv.enIyi.nan', '{"puan":null}');
 esit('puan sayi degilse null doner', enIyiOku('nan'), null);
 store.set('yv.enIyi.eski', '{"puan":5000}');
 esit('eski surum kaydi varsayilanlarla doluyor', enIyiOku('eski'),
-  { puan: 5000, not: 'D', sure: 0, tamamlanan: 0, usta: false });
+  { puan: 5000, not: 'D', sure: 0, tamamlanan: 0, usta: false, bitisler: [] });
+
+// --- sure bicimlendirme ---
+//
+// Ikisi de bir kez yanlis yazildi, o yuzden savla bagli.
+// 1079.7 sn bir kez "17:60" yazmisti.
+esit('saat 60 saniye GOSTERMEZ', sureyiYaz(1079.7), '17:59');
+esit('tam dakika', sureyiYaz(120), '2:00');
+esit('sifir', sureyiYaz(0), '0:00');
+esit('eksi sure sifira kirpiliyor', sureyiYaz(-5), '0:00');
+esit('saniye asagi yuvarlaniyor', sureyiYaz(59.99), '0:59');
+
+// Isaret speedrun geleneginde: EKSI IYI.
+esit('rekordan onde -> eksi ve iyi', farkiYaz(-12), { metin: '−0:12', iyi: true });
+esit('rekordan geride -> arti ve kotu', farkiYaz(8), { metin: '+0:08', iyi: false });
+esit('yarim saniyenin alti esit sayiliyor', farkiYaz(0.3), { metin: '±0:00', iyi: null });
+esit('esitligin isareti yok', farkiYaz(-0.4), { metin: '±0:00', iyi: null });
+esit('bir dakikadan buyuk fark', farkiYaz(-95), { metin: '−1:35', iyi: true });
+esit('NaN esit sayiliyor', farkiYaz(NaN), { metin: '±0:00', iyi: null });

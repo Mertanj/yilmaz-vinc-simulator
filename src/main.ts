@@ -4,7 +4,7 @@ import { Camera } from './core/camera';
 import { Kumanda } from './input/kumanda';
 import { Mission } from './game/mission';
 import { aracSec } from './ui/secim';
-import { enIyiKaydet } from './game/enIyi';
+import { enIyiKaydet, enIyiOku } from './game/enIyi';
 import type { AracTanimi } from './game/araclar';
 import {
   M, baslangicDili, dilSec, gorevAdi, gorevBrifi, kumandaModunuSec,
@@ -12,6 +12,7 @@ import {
 import { dokunmatikKur, dokunmatikVar } from './ui/dokunmatik';
 import type { DokunmatikDuzeni } from './ui/dokunmatik';
 import { oku, yaz } from './ui/kayit';
+import { farkiYaz, sureyiYaz } from './ui/sure';
 import { Ses } from './ses/ses';
 import { kipOku } from './sim/kip';
 
@@ -145,6 +146,14 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
   stage.world.addChild(...gorunum.dekor(), gorunum.aktorler);
 
   bolumSiniflariniTemizle();
+
+  /**
+   * Bu tura başlarken geçerli olan rekor — ara süreler buna karşı koşuyor.
+   *
+   * Tur BAŞINDA okunuyor, sonunda değil: `enIyiKaydet` bölüm bitince yazıyor
+   * ve o andan sonra okumak turu kendisiyle karşılaştırmak olurdu.
+   */
+  const rekor = enIyiOku(arac.id);
 
   // Kipi sahne kurulur kurulmaz uygula: oyuncunun seçimi fiziğin ilk
   // adımından önce yerinde olmalı.
@@ -481,6 +490,25 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
      * ve dört saniyede kendi kapanıyor — akışı kesmeden onay veriyor.
      */
     let konduSira = 0;
+    /**
+     * Yerleştirme panelindeki ara süre satırı: tur toplamı ve rekora fark.
+     *
+     * Rekor yoksa ya da o turda bu sıraya ait bir süre yoksa yalnız toplam
+     * yazıyor — uydurma bir karşılaştırma göstermektense hiç göstermemek
+     * doğru. Rekor turlar hep tam oynanmış turlar (yarıda bırakılan kayda
+     * girmiyor), ama dizi yine de kontrol ediliyor: kayıt elle kurcalanmış
+     * ya da bölümün görev sayısı değişmiş olabilir.
+     */
+    function araSatiri(sira: number, toplam: number): string {
+      const k = M.kondu;
+      const satir = `<p class="ara">${k.toplam(sureyiYaz(toplam))}`;
+      const rekorSure = rekor?.bitisler[sira - 1];
+      if (rekorSure === undefined) return `${satir}</p>`;
+      const f = farkiYaz(toplam - rekorSure);
+      return `${satir} <b data-iyi="${f.iyi === null ? 'esit' : f.iyi ? 'evet' : 'hayir'}">`
+        + `${f.metin}</b></p>`;
+    }
+
     let konduBitis = 0;
     function konduGoster(): void {
       const t = mission.sonTamamlanan;
@@ -505,6 +533,7 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
           `<dt>${k.enYuksekMoment}</dt>`
           + `<dd data-iyi="${lmiIyi ? 'evet' : 'hayir'}">${M.yuzde(t.maxLmi.toFixed(0))}</dd>`,
           '</dl>',
+          araSatiri(t.sira, t.toplamSure),
           `<p class="sonraki">${k.sonraki(t.kalan)}</p>`,
         ].join('');
         hud.kondu.hidden = false;
@@ -512,6 +541,36 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
       if (hud.kondu && !hud.kondu.hidden && performance.now() > konduBitis) {
         hud.kondu.hidden = true;
       }
+    }
+
+    /**
+     * Sonuç ekranındaki ara süre dökümü: görev görev parça süresi ve rekora fark.
+     *
+     * Parça süresi iki kümülatifin farkı — `Score.bitisler` kümülatif saklıyor
+     * (gerekçesi orada). Rekor yoksa tablo yine basılıyor ama fark sütunu yok:
+     * oyuncunun ilk turunda "neye karşı koşuyorum" sorusunun cevabı "henüz
+     * hiçbir şeye" ve bunu söylemek boş bir sütun göstermekten iyi.
+     */
+    function araDokumu(bitisler: readonly number[]): string {
+      if (bitisler.length === 0) return '';
+      const n = M.sonuc;
+      const gorevler = scene.gorevler;
+      const satirlar = bitisler.map((bitis, i) => {
+        const parca = bitis - (bitisler[i - 1] ?? 0);
+        const kod = gorevler[i]?.kod ?? String(i + 1);
+        const rekorSure = rekor?.bitisler[i];
+        const farkHucre = rekorSure === undefined ? '<td></td>' : (() => {
+          const f = farkiYaz(bitis - rekorSure);
+          return `<td data-iyi="${f.iyi === null ? 'esit' : f.iyi ? 'evet' : 'hayir'}">`
+            + `${f.metin}</td>`;
+        })();
+        return `<tr><td>${kod}</td><td>${sureyiYaz(parca)}</td>`
+          + `<td>${sureyiYaz(bitis)}</td>${farkHucre}</tr>`;
+      }).join('');
+      return `<div class="ara-sureler"><h3>${n.araSureler}</h3>`
+        + `<table>${satirlar}</table>`
+        + (rekor ? '' : `<p class="ilk">${n.ilkTur}</p>`)
+        + '</div>';
     }
 
     /** Bölüm bitince ya da devrilince sonuç panelini bir kez yaz. */
@@ -550,6 +609,7 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
         `<tr><td>${n.carpma}</td><td>${s.carpma}</td></tr>`,
         `<tr><td>${n.sapma}</td><td>${(ortSapma * 100).toFixed(0)} cm</td></tr>`,
         '</table>',
+        araDokumu(s.bitisler),
         `<p class="puan">${n.basari(r.puan.toFixed(0))}</p>`,
         `<p class="note">${dokunmatik
           ? n.dokunmaNot : `${n.yeniden} · ${n.makineDegistir}`}</p>`,
@@ -631,10 +691,7 @@ function yatayCagrisiniKur(): void {
  * yazıyordu — dakika taşımıyor, çünkü dakikayı `Math.floor` veriyor. Saat
  * hiçbir zaman 60'ı göstermemeli.
  */
-function sureyiYaz(sn: number): string {
-  const t = Math.max(0, Math.floor(sn));
-  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
-}
+
 
 boot().catch((err: unknown) => {
   console.error(err);

@@ -566,6 +566,37 @@
     font-family: "Barlow Condensed", Impact, sans-serif; font-weight: 700;
     font-size: 34px; line-height: 1.1; color: #E8A62C; margin: 0 0 12px;
   }
+  /* --- ara süreler ---
+     Speedrun tablosu: görev, parça süresi, tur toplamı, rekora fark.
+     Sayılar `tabular-nums` ile hizalı — kolon kolon okunacak bir şey. */
+  #sonuc-ic .ara-sureler { margin-top: 16px; }
+  #sonuc-ic .ara-sureler h3 {
+    font-size: 11px; letter-spacing: 0.12em; color: #6D777E;
+    margin: 0 0 6px; font-weight: 600;
+  }
+  #sonuc-ic .ara-sureler table { font-variant-numeric: tabular-nums; }
+  #sonuc-ic .ara-sureler td { padding: 3px 0; }
+  #sonuc-ic .ara-sureler td:first-child { color: #E8A62C; font-weight: 600; }
+  #sonuc-ic .ara-sureler td:nth-child(2) { text-align: right; color: #C7D1D6; }
+  #sonuc-ic .ara-sureler td:nth-child(3) { text-align: right; color: #8E9BA2; }
+  #sonuc-ic .ara-sureler td:last-child { text-align: right; font-weight: 600; }
+  #sonuc-ic .ara-sureler td[data-iyi="evet"] { color: #5FB07C; }
+  #sonuc-ic .ara-sureler td[data-iyi="hayir"] { color: #E2645A; }
+  #sonuc-ic .ara-sureler td[data-iyi="esit"] { color: #6D777E; }
+  #sonuc-ic .ara-sureler .ilk {
+    margin: 8px 0 0; font-size: 11px; color: #6D777E;
+  }
+
+  /* Yerleştirme panelindeki tur toplamı + fark. */
+  #kondu .ara {
+    margin: 10px 0 0; font-size: 12px; color: #8E9BA2;
+    font-variant-numeric: tabular-nums;
+  }
+  #kondu .ara b { font-weight: 600; margin-left: 6px; }
+  #kondu .ara b[data-iyi="evet"] { color: #5FB07C; }
+  #kondu .ara b[data-iyi="hayir"] { color: #E2645A; }
+  #kondu .ara b[data-iyi="esit"] { color: #8E9BA2; }
+
   #sonuc-ic .puan { font-size: 14px; color: #8E9BA2; margin: 14px 0 4px; }
   #sonuc-ic .note { font-size: 11px; color: #6C7C84; margin: 0; }
   /* Rekor kırılınca söylenir, kırılmayınca hedef gösterilir: ikisi de aynı

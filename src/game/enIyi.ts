@@ -19,6 +19,11 @@ export interface EnIyi {
   sure: number;
   tamamlanan: number;
   usta: boolean;
+  /**
+   * Rekor turun ara süreleri (s, kümülatif) — bir sonraki tur bunlara karşı
+   * koşuyor. Eski kayıtlarda yok; okuyan taraf boş diziyle karşılaşabilir.
+   */
+  bitisler: number[];
 }
 
 const ONEK = 'yv.enIyi.';
@@ -33,6 +38,9 @@ export function enIyiOku(aracId: string): EnIyi | null {
     sure: typeof k.sure === 'number' ? k.sure : 0,
     tamamlanan: typeof k.tamamlanan === 'number' ? k.tamamlanan : 0,
     usta: k.usta === true,
+    // Eski sürüm kayıtlarında yok; dizi olmayan her şey boş sayılıyor.
+    bitisler: Array.isArray(k.bitisler) ? k.bitisler.filter(
+      (x): x is number => typeof x === 'number' && Number.isFinite(x)) : [],
   };
 }
 
@@ -60,6 +68,7 @@ export function enIyiKaydet(
     sure: sonuc.score.sure,
     tamamlanan: sonuc.score.sapmalar.length,
     usta: sonuc.usta,
+    bitisler: [...sonuc.score.bitisler],
   };
   const rekor = onceki === null || yeni.puan > onceki.puan;
   if (rekor) yazJson(ONEK + aracId, yeni);

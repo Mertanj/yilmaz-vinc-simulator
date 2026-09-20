@@ -39,6 +39,8 @@ export interface KumandaAdi {
 
 /** Yerleştirme onay panelinin satırları — sayılar çağıran tarafta. */
 export interface KonduMetni {
+  /** Tur başından bu yerleştirmeye kadar geçen toplam süre. */
+  toplam: (sure: string) => string;
   tik: string; kazanc: string; yerlestirme: string;
   isabet: (cm: number) => string;
   hiz: (sure: string) => string;
@@ -260,6 +262,16 @@ export interface Metinler {
   kondu: KonduMetni;
 
   sonuc: {
+    /**
+     * Ara süreler tablosunun başlığı.
+     *
+     * Sahadan: *"oyunun güzelliği hepsini arka arkaya speed run şeklinde
+     * yapabilmek."* Tur bölünmüyor, o yüzden karşılaştırma turun İÇİNDE
+     * olmalı: her yerleştirmede rekor tura göre nerede olduğun.
+     */
+    araSureler: string;
+    /** Bu turda rekor yoktu — karşılaştıracak bir şey yok. */
+    ilkTur: string;
     devrildi: string; tamamlandi: string; usta: string; puan: (n: number) => string;
     gorev: string; sure: string; maxMoment: string; kirmizi: string;
     salinim: string; carpma: string; sapma: string;
@@ -523,6 +535,7 @@ const TR: Metinler = {
     },
   },
   kondu: {
+    toplam: (sure) => `tur toplamı · ${sure}`,
     tik: '✓ YERİNE KONDU', kazanc: 'puan', yerlestirme: 'yerleştirme',
     isabet: (cm) => `isabet · ${cm} cm sapma`,
     hiz: (sure) => `hız · ${sure}`,
@@ -532,6 +545,8 @@ const TR: Metinler = {
       : 'bölümdeki son yük — toparlayabilirsin',
   },
   sonuc: {
+    araSureler: 'ARA SÜRELER',
+    ilkTur: 'ilk tamamlanan tur — bundan sonrası buna karşı koşacak',
     devrildi: 'ARAÇ DEVRİLDİ', tamamlandi: 'BÖLÜM TAMAMLANDI', usta: 'USTA OPERATÖR',
     puan: (n) => `${n} puan`,
     gorev: 'tamamlanan görev', sure: 'süre', maxMoment: 'en yüksek kaldırma momenti',
@@ -818,6 +833,7 @@ const EN: Metinler = {
     },
   },
   kondu: {
+    toplam: (sure) => `run total · ${sure}`,
     tik: '✓ SET DOWN', kazanc: 'pts', yerlestirme: 'placement',
     isabet: (cm) => `accuracy · ${cm} cm off`,
     hiz: (sure) => `speed · ${sure}`,
@@ -827,6 +843,8 @@ const EN: Metinler = {
       : 'last load of the level — pack up',
   },
   sonuc: {
+    araSureler: 'SPLITS',
+    ilkTur: 'first completed run — from now on you race this one',
     devrildi: 'MACHINE TIPPED', tamamlandi: 'LEVEL COMPLETE', usta: 'MASTER OPERATOR',
     puan: (n) => `${n} pts`,
     gorev: 'tasks completed', sure: 'time', maxMoment: 'peak load moment',

@@ -515,6 +515,11 @@ function main(): void {
     + `  (en az iken LMI %${r.pabuc.lmi.toFixed(0)} · ${r.pabuc.etiket})`);
   say(`  en cok egim ${r.enCokEgim.deg.toFixed(2)}° (t=${r.enCokEgim.t.toFixed(1)}s)`
     + `  devrildi ${r.scene.devrildiMi ? 'E' : 'H'}  carpma ${r.scene.carpma}`);
+  // Ara sureler: speedrun karsilastirmasinin ham verisi. Kumulatif saklaniyor,
+  // parca suresi iki kumulatifin farki.
+  const b = r.mission.score.bitisler;
+  say(`  ara sureler ${b.map((x, i) => `${(x - (b[i - 1] ?? 0)).toFixed(0)}s`).join(' · ')}`
+    + `   kumulatif ${b.map((x) => x.toFixed(0)).join(' · ')}`);
   say(`  faz ${r.mission.phase}  tamamlanan ${sk.sapmalar.length}/${DIRSEKLI_GOREVLER.length}`
     + `  sure ${sk.sure.toFixed(0)}s  not ${res?.not ?? '-'} (${res?.puan.toFixed(0) ?? '-'})`
     + `  usta ${res?.usta ? 'E' : 'H'}`);

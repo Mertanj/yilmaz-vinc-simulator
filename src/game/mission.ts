@@ -31,6 +31,15 @@ export interface Score {
   carpma: number;
   /** Her görevde hedef merkezine uzaklık (m). */
   sapmalar: number[];
+  /**
+   * Her görevin BİTTİĞİ an (s, tur başından) — speedrun ara süreleri.
+   *
+   * Kümülatif saklanıyor, parça parça değil: karşılaştırma kümülatif üzerinden
+   * yapılıyor ("bu görevin sonunda rekor turdan kaç saniye öndeyim"), parça
+   * süresi ise iki kümülatifin farkı olarak zaten çıkıyor. Tersi yönde
+   * saklamak her karşılaştırmada bir toplam almayı gerektirirdi.
+   */
+  bitisler: number[];
   /** Toplanan puan. */
   puan: number;
 }
@@ -60,6 +69,8 @@ export interface Tamamlanan {
   kalan: number;
   /** Kaçıncı görev — aynı özetin iki kez gösterilmemesi için. */
   sira: number;
+  /** Tur başından bu görevin bitişine kadar geçen süre (s). */
+  toplamSure: number;
 }
 
 export interface Result {
@@ -112,7 +123,8 @@ export class Mission {
   private sifirlandi = false;
 
   readonly score: Score = {
-    sure: 0, maxLmi: 0, kirmiziSn: 0, maxSalinim: 0, carpma: 0, sapmalar: [], puan: 0,
+    sure: 0, maxLmi: 0, kirmiziSn: 0, maxSalinim: 0, carpma: 0,
+    sapmalar: [], bitisler: [], puan: 0,
   };
 
   constructor(private readonly scene: OyunSahnesi) {}
@@ -161,6 +173,7 @@ export class Mission {
     this.score.maxSalinim = 0;
     this.score.carpma = 0;
     this.score.sapmalar.length = 0;
+    this.score.bitisler.length = 0;
     this.scene.carpma = 0;
     this.gorevBasi = 0;
     this.gorevMaxLmi = 0;
@@ -225,6 +238,7 @@ export class Mission {
     const gorevSure = this.score.sure - this.gorevBasi;
     const gorevCarpma = this.scene.carpma - this.gorevCarpmaBasi;
     this.score.sapmalar.push(sapma);
+    this.score.bitisler.push(this.score.sure);
     this.durulmaSn = 0;
     this.index++;
     if (biten) {
@@ -240,6 +254,7 @@ export class Mission {
         sure: gorevSure,
         kalan: this.gorevler.length - this.index,
         sira: this.index,
+        toplamSure: this.score.sure,
       };
     }
     this.gorevBasi = this.score.sure;
