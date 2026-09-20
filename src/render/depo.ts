@@ -2,8 +2,10 @@ import { Container, Graphics } from 'pixi.js';
 import { C } from './palette';
 import { worldText } from './text';
 import {
-  RAF_KATLARI, RAF_X, RAF_DERINLIK, GIRIS_X, PALET_AYAK, TESLIM_KOTU, katAdi,
+  ADA_X, RAF_KATLARI, RAF_DERINLIK, GIRIS_X, PALET_AYAK, TESLIM_KOTU,
+  RAF_STOGU, adresIndeksi, adresKotu, adresX, katAdi,
 } from '../game/forkliftTasks';
+import { drawLoad } from './missionView';
 import { M } from '../ui/dil';
 
 /**
@@ -15,46 +17,108 @@ import { M } from '../ui/dil';
  * gerekiyor. Raf katlarının kotu fizikten okunuyor, tekrar yazılmıyor.
  */
 
-/** Rafın çizimi — tek yapı, fizikteki kirişlerle aynı kotlarda. */
+/**
+ * Rafların çizimi — üç ada, fizikteki kirişlerle aynı kotlarda.
+ *
+ * Kotlar `RAF_KATLARI`'ndan okunuyor, burada tekrar yazılmıyor: bu depoda
+ * aynı sınıftan bir hata bir kez oldu (görev metni iki yerde durup sessizce
+ * ayrıştı), ve rafın çizimi ile rafın fiziği ayrışırsa oyuncu var olmayan
+ * bir kirişin üstüne palet koymaya çalışır.
+ */
 export function drawRaf(): Container {
   const c = new Container();
   const g = new Graphics();
   const ust = (RAF_KATLARI[RAF_KATLARI.length - 1] ?? 4.8) + 1.1;
-  const on = RAF_X;
-  const arka = RAF_X + RAF_DERINLIK;
 
-  // Dikmeler — delikli çelik profil, önde ve arkada
-  for (const x of [on - 0.1, arka + 0.1]) {
-    g.rect(x - 0.1, 0, 0.2, ust).fill(C.rack);
-    g.rect(x - 0.1, 0, 0.07, ust).fill({ color: C.rackLight, alpha: 0.85 });
-    for (let y = 0.3; y < ust; y += 0.32) {
-      g.rect(x - 0.035, y, 0.07, 0.11).fill({ color: C.rackDark, alpha: 0.85 });
+  ADA_X.forEach((on, ada) => {
+    const arka = on + RAF_DERINLIK;
+
+    // Dikmeler — delikli çelik profil, önde ve arkada
+    for (const x of [on - 0.1, arka + 0.1]) {
+      g.rect(x - 0.1, 0, 0.2, ust).fill(C.rack);
+      g.rect(x - 0.1, 0, 0.07, ust).fill({ color: C.rackLight, alpha: 0.85 });
+      for (let y = 0.3; y < ust; y += 0.32) {
+        g.rect(x - 0.035, y, 0.07, 0.11).fill({ color: C.rackDark, alpha: 0.85 });
+      }
+      g.rect(x - 0.19, 0, 0.38, 0.09).fill(C.rackDark);
+      // Dikme koruyucusu: her depoda vardır, sarıdır, çarpmadan yer.
+      g.rect(x - 0.15, 0, 0.3, 0.42).fill({ color: C.hazardY, alpha: 0.9 });
+      g.rect(x - 0.15, 0.16, 0.3, 0.06).fill({ color: 0x1D2226, alpha: 0.5 });
     }
-    g.rect(x - 0.19, 0, 0.38, 0.09).fill(C.rackDark);
-  }
-  // Çaprazlar — iki dikme arasında, derinlik hissi
-  for (let y = 0.3; y < ust - 0.8; y += 1.05) {
-    g.moveTo(on, y).lineTo(arka, y + 0.62)
-      .stroke({ width: 0.055, color: C.rackDark, alpha: 0.42 });
-    g.moveTo(arka, y).lineTo(on, y + 0.62)
-      .stroke({ width: 0.055, color: C.rackDark, alpha: 0.28 });
-  }
+    // Çaprazlar — iki dikme arasında, derinlik hissi
+    for (let y = 0.3; y < ust - 0.8; y += 1.05) {
+      g.moveTo(on, y).lineTo(arka, y + 0.62)
+        .stroke({ width: 0.055, color: C.rackDark, alpha: 0.42 });
+      g.moveTo(arka, y).lineTo(on, y + 0.62)
+        .stroke({ width: 0.055, color: C.rackDark, alpha: 0.28 });
+    }
 
-  RAF_KATLARI.forEach((kot, i) => {
-    g.rect(on, kot - 0.16, RAF_DERINLIK, 0.16).fill(C.rack);
-    g.rect(on, kot - 0.16, RAF_DERINLIK, 0.05).fill({ color: C.rackLight, alpha: 0.9 });
-    g.rect(on, kot - 0.04, RAF_DERINLIK, 0.04).fill(C.rackDark);
-    // Arka dayanak
-    g.rect(arka - 0.07, kot, 0.14, 0.52).fill(C.rackDark);
-    // Kat adresi ve kotu: depo raflarında gerçekten yazar
-    // Etiket rafın ARKA yarısında: ön yarıda hedef işaretiyle üst üste
-    // biniyordu ve ikisi de okunmuyordu.
-    const et = worldText(`${katAdi(i)} · ${kot.toFixed(2)} m`, 0.26, { fill: 0xD6E2EA });
-    et.position.set(on + RAF_DERINLIK - 1.25, kot - 0.58);
-    c.addChild(et);
+    RAF_KATLARI.forEach((kot, kat) => {
+      const i = adresIndeksi(ada, kat);
+      if (kot > 0.001) {
+        g.rect(on, kot - 0.16, RAF_DERINLIK, 0.16).fill(C.rack);
+        g.rect(on, kot - 0.16, RAF_DERINLIK, 0.05).fill({ color: C.rackLight, alpha: 0.9 });
+        g.rect(on, kot - 0.04, RAF_DERINLIK, 0.04).fill(C.rackDark);
+        // Arka dayanak
+        g.rect(arka - 0.07, kot, 0.14, 0.52).fill(C.rackDark);
+      }
+      // Kat adresi ve kotu: depo raflarında gerçekten yazar.
+      // Etiket adanın ARKA yarısında: ön yarıda hedef işaretiyle üst üste
+      // biniyordu ve ikisi de okunmuyordu.
+      const ad = kot > 0.001
+        ? `${katAdi(i)} · ${kot.toFixed(2)} m` : `${katAdi(i)} · zemin`;
+      const et = worldText(ad, 0.26, { fill: 0xD6E2EA });
+      et.position.set(on + RAF_DERINLIK - 1.25, Math.max(kot, 0.62) - 0.58);
+      c.addChild(et);
+    });
+
+    // Ada harfi — dikmenin üstünde, uzaktan okunacak kadar büyük.
+    const harf = worldText(katAdi(adresIndeksi(ada, 1)).slice(0, 1), 0.62,
+      { fill: C.hazardY });
+    harf.position.set(on + RAF_DERINLIK / 2 - 0.2, ust + 0.25);
+    c.addChild(harf);
   });
 
   c.addChildAt(g, 0);
+  // Önceden konmuş stok EN ARKADA: gözün derinliğinde duruyor.
+  c.addChildAt(drawStok(), 0);
+  return c;
+}
+
+/**
+ * Bir paleti "gözün derinliğinde" gösteren dönüşüm.
+ *
+ * Konan palet artık hiçbir şeyle çarpışmıyor (bkz. `MASKE.stok`) ve bunun
+ * görsel karşılığı olmalı, yoksa makine paletin içinden geçiyormuş gibi
+ * görünür. Derinliğe itilmiş bir şey biraz yukarıda, biraz sağda, biraz
+ * küçük ve biraz loş görünür — üç tanesi birden, çünkü tek başına hiçbiri
+ * yetmiyor.
+ */
+export function derinlige(c: Container): Container {
+  c.position.set(c.position.x + 0.42, c.position.y + 0.2);
+  c.scale.set(0.93);
+  c.alpha = 0.72;
+  return c;
+}
+
+/** Bölüm başlamadan önce raflarda duran mal. Tamamen dekor. */
+function drawStok(): Container {
+  const c = new Container();
+  for (const s of RAF_STOGU) {
+    const kot = adresKotu(s.hedef);
+    const on = adresX(s.hedef);
+    if (kot === undefined || on === undefined) continue;
+    const kutu = new Container();
+    const yuk = drawLoad({
+      kod: '', ad: '', tonnes: 0, kind: s.kind, hedef: s.hedef,
+      halfWidth: s.halfWidth, halfHeight: s.halfHeight, brif: '',
+    }, { etiket: false });
+    const palet = drawPalet(s.halfWidth);
+    palet.position.set(0, -s.halfHeight);
+    kutu.addChild(palet, yuk);
+    kutu.position.set(on + s.halfWidth + 0.06, kot + PALET_AYAK + s.halfHeight);
+    c.addChild(derinlige(kutu));
+  }
   return c;
 }
 

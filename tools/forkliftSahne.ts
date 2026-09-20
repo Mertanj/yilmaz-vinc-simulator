@@ -13,7 +13,8 @@
 import { ForkliftSahnesi } from '../src/sim/forkliftSahne';
 import { FORKLIFT, forkliftKapasitesi } from '../src/sim/forklift';
 import {
-  FORKLIFT_TASKS, GIRIS_X, PALET_AYAK, RAF_DERINLIK, RAF_X, katAdi, katKotu,
+  BEKLEME_CIZGISI, FORKLIFT_TASKS, GIRIS_X, PALET_AYAK, RAF_DERINLIK, RAF_X,
+  adresX, katAdi, katKotu,
 } from '../src/game/forkliftTasks';
 import { Mission } from '../src/game/mission';
 import { IDLE, type SceneInput } from '../src/sim/scene';
@@ -147,8 +148,23 @@ function main(): number {
     // yetmiyor: 18 km/sa'te fren mesafesi iki metre ve makine paleti onune
     // katip itiyordu (olculdu: palet 12 cm kaydi, catal hic girmedi).
     r.asama = 'gorev-basi'; iz('gorev-basi');
+    // **Once bekleme cizgisinin BATISINA gec, palet insin.** Eskiden bu adim
+    // yoktu ve palet ancak rig frenlerken cizgiyi kazara gectigi icin
+    // iniyordu: dar paletin turunda yeterince savrulmayinca palet hic inmedi
+    // ve gorev "alinamadi" sayildi. Gercek operator de mal kabulun onunu
+    // acar, sonra yanasir.
+    if (!r.sahne.paletHazir) {
+      const bekle = BEKLEME_CIZGISI - FORKLIFT.forkLengthM - 0.25;
+      r.runUntil(130, (x) => x.sahne.paletHazir, (x) => x.suru(bekle, 3.0));
+      r.runUntil(12, (x) => x.sahne.paletHazir, (x) => x.dur());
+    }
     const yaklas = r.sahne.load.getPosition().x - task.halfWidth - 0.75;
-    r.runUntil(70, (x) => Math.abs(x.sahne.forklift.forkWorld.x - yaklas) < 0.05
+    // **Zaman aşımı 70 değil 130 saniye.** Depo üç adaya yayılınca en uzun
+    // dönüş 19 metre oldu ve rig palete 16.48'de, hedefin 75 santim
+    // uzağında yakalanıyordu: yük alınamıyor sanılıyordu, oysa süre
+    // bitmişti. Rig bilerek yavaş sürüyor (frenleme payı bırakıyor), o
+    // yüzden sınır mesafeyle birlikte büyümeli.
+    r.runUntil(130, (x) => Math.abs(x.sahne.forklift.forkWorld.x - yaklas) < 0.05
       && x.sahne.forklift.speedKmh < 0.25,
       (x) => x.suru(yaklas, 4.0));
     r.run(1.0, (x) => x.dur());
@@ -162,6 +178,12 @@ function main(): number {
     r.runUntil(20, (x) => x.sahne.forklift.forkWorld.x >= yakinYuz - 0.04,
       (x) => x.suru(yakinYuz - 0.02, 0.6));
     r.run(0.8, (x) => x.dur());
+    if (process.env['IZ']) {
+      say(`   kapi tip=${r.sahne.forklift.forkTip.x.toFixed(2)}`
+        + ` topuk=${r.sahne.forklift.forkWorld.x.toFixed(2)}`
+        + ` yaklas=${yaklas.toFixed(2)} paletHazir=${r.sahne.paletHazir ? 'E' : 'H'}`
+        + ` paletY=${r.sahne.load.getPosition().y.toFixed(2)}`);
+    }
     say(`${task.kod} AL   durum ${r.sahne.forklift.durum(r.sahne.grabbables)}`
       + `  topuk ${r.sahne.forklift.forkWorld.x.toFixed(2)}`
       + `  palet ${r.sahne.load.getPosition().x.toFixed(2)}`);
@@ -192,7 +214,7 @@ function main(): number {
     const konumX = hedef.x - merkez;
     // Kaldirmadan once gozun BATISINDA dur: bicak gozun icindeyken yukari
     // kaldirmak kirise dayaniyor (fizik dogru, ama once cekilmek gerekiyor).
-    r.runUntil(60, (x) => Math.abs(x.sahne.forklift.forkWorld.x - (konumX - 2.0)) < 0.08
+    r.runUntil(110, (x) => Math.abs(x.sahne.forklift.forkWorld.x - (konumX - 2.0)) < 0.08
       && x.sahne.forklift.speedKmh < 0.8,
       (x) => x.suru(konumX - 2.0, 4.0));
     r.run(1.5, (x) => x.dur());
@@ -239,7 +261,11 @@ function main(): number {
     // once bunu dogrulamak sart: bicak gozun icindeyken asagi inince
     // kirisin altina giriyor, makinenin burnunu kaldiriyor ve araba 45
     // derece sahlaniyordu (olculdu: t=120.2s, cekilme asamasi).
-    const gozBati = RAF_X - 0.3;
+    // **Bu GÖREVİN adasının batısı**, ilk adanın değil. `RAF_X` sabiti üç
+    // adadan sadece birincisini gösteriyor; C adasına koyduktan sonra rig
+    // bıçağı 4.36 metrede tutarak 12 metre batıya sürüyor, B adasının
+    // kirişine dayanıp makineyi 145 dereceye deviriyordu.
+    const gozBati = (adresX(task.hedef) ?? RAF_X) - 0.3;
     r.runUntil(40, (x) => x.sahne.forklift.forkTip.x < gozBati,
       (x) => x.suru(gozBati - FORKLIFT.forkLengthM - 0.3, 3.0));
     r.run(0.8, (x) => x.dur());

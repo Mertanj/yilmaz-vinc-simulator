@@ -11,7 +11,7 @@ import type { Task } from '../game/tasks';
  * farkı oynanışın tamamını değiştiriyor. Hepsinde üstte iki kaldırma mapası
  * var — sapanın nereye bağlandığı görünsün diye.
  */
-export function drawLoad(t: Task): Container {
+export function drawLoad(t: Task, secenek: { etiket?: boolean } = {}): Container {
   const c = new Container();
   const g = new Graphics();
   const { halfWidth: hw, halfHeight: hh } = t;
@@ -261,6 +261,10 @@ export function drawLoad(t: Task): Container {
   // "ağırlıklar şeffaf" şikâyetinin ikinci yarısı buydu. Şimdi yüke göre
   // ölçekleniyor, altta duruyor ve arkasında koyu bir plaka var: her mal
   // renginde okunuyor, ama malın kendisini örtmüyor.
+  // Rafta duran stokta tonaj yazmıyor: o, oyuncunun ŞU AN taşıdığı yüke ait
+  // bir bilgi. Dekor paletlerin hepsinde yazsaydı ekran rakamla dolar ve
+  // asıl okunması gereken sayı kaybolurdu.
+  if (secenek.etiket === false) return c;
   const boy = Math.min(0.26, hh * 0.58);
   const etiket = worldText(`${t.tonnes.toFixed(2)} t`, boy, { fill: 0xF4F7F8 });
   const plakaW = boy * 2.6;

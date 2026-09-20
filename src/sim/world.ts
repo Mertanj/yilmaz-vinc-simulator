@@ -46,6 +46,8 @@ export const KATEGORI = {
   yuk: 0x0020,
   /** Direk kanalı — çataldan ayrı, çünkü rafa girmeyen tek makine parçası o. */
   direk: 0x0040,
+  /** Gözüne konmuş, artık stok olan palet. */
+  stok: 0x0080,
 } as const;
 
 export const MASKE = {
@@ -73,6 +75,21 @@ export const MASKE = {
    * geçemiyordu (ölçüm: makine ilk gözde durdu, paletin 19 metre gerisinde).
    */
   direk: 0xFFFF & ~KATEGORI.raf & ~KATEGORI.paletAyagi,
+  /**
+   * Konmuş palet HİÇBİR ŞEYLE çarpışmıyor.
+   *
+   * Sebebi geometrik, kolaycılık değil: gözüne konan palet rafın derinliğine
+   * itiliyor ve koridordan çıkıyor. Makine sonraki göze giderken onun
+   * ÖNÜNDEN geçiyor, içinden değil — çizim de paleti derinliğe kaydırılmış,
+   * küçültülmüş ve loşlaştırılmış gösteriyor. Sahada da böyle: arkanda
+   * bıraktığın koridor temiz kalır.
+   *
+   * Alternatifi denendi ve level'ı bozuyordu: konmuş palet çarpışmaya devam
+   * edince makine ikinci adaya hiç geçemiyor, ya da geçebilmek için en alt
+   * kirişi 3 metreye çıkarmak gerekiyordu — yani konan yükü sahnede tutmanın
+   * bedeli rafın kendisini yalan yapmaktı.
+   */
+  stok: 0,
 } as const;
 
 export const SIM = {

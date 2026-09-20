@@ -15,6 +15,7 @@ import { CableView, drawHookBlock } from './craneView';
 import { ForkliftView, drawForkliftWheel } from './forkliftView';
 import {
   drawRaf, drawDepoZemin, drawDepoIci, drawPalet, drawDepoArkaPlan, drawKonveyor,
+  derinlige,
 } from './depo';
 import {
   drawGround, drawFactory, drawFarSkyline, drawEntranceSign, drawPropBox,
@@ -91,7 +92,7 @@ export abstract class SahneGorunumu {
   }
 
   /** Yükün çizimi; forklift altına palet ekliyor. */
-  protected yukCiz(t: Task): Container { return drawLoad(t); }
+  protected yukCiz(t: Task, etiket = true): Container { return drawLoad(t, { etiket }); }
 }
 
 /** Vinç sahnesi — sanayi sitesi avlusu. */
@@ -271,15 +272,49 @@ export class ForkliftGorunumu extends SahneGorunumu {
     // duruyor. Kamyondaki sıra (teker altta) burada makineyi kızak gibi
     // gösteriyordu. Yük ise EN ÜSTTE, çünkü çatalda taşınan yük direğin
     // önünde duruyor — arkasında değil.
+    // Stok katmanı yükün ve makinenin ALTINDA: konan palet gözün
+    // derinliğinde duruyor, koridordaki her şey onun önünden geçiyor.
+    this.aktorler.addChild(this.stokKatmani);
     this.aktorler.addChild(this.makineView, ...this.wheelViews);
     this.yukuKur();
   }
+
+  /** Oyuncunun yerine koyduğu paletler — sahnede kalıyorlar. */
+  private readonly stokKatmani = new Container();
+  private cizilenStok = 0;
 
   dekor(): Container[] {
     return [
       drawDepoIci(DEPO_BATI, DEPO_DOGU), drawDepoZemin(DEPO_BATI, DEPO_DOGU),
       drawRaf(), drawKonveyor(),
     ];
+  }
+
+  /**
+   * Konan paletleri çiz. Kare başına yeniden kurmuyor: sahne listeye yeni
+   * bir kayıt eklediğinde bir kez çiziliyor ve orada kalıyor.
+   */
+  private stoguGuncelle(): void {
+    const liste = this.s.stok;
+    // Bölüm yeniden başladıysa liste boşalıyor; çizim de boşalmalı.
+    if (liste.length < this.cizilenStok) {
+      for (const c of this.stokKatmani.removeChildren()) c.destroy({ children: true });
+      this.cizilenStok = 0;
+    }
+    for (let i = this.cizilenStok; i < liste.length; i++) {
+      const kayit = liste[i];
+      if (!kayit) continue;
+      const kutu = this.yukCiz(kayit.task, false);
+      kutu.position.set(kayit.x, kayit.y);
+      this.stokKatmani.addChild(derinlige(kutu));
+    }
+    this.cizilenStok = liste.length;
+  }
+
+  override ciz(alpha: number, hedef: { x: number; y: number } | null,
+               hedefHw: number): void {
+    super.ciz(alpha, hedef, hedefHw);
+    this.stoguGuncelle();
   }
 
   /** Kapalı mekân: gökyüzü yok, deponun loş iç hacmi var. */
@@ -291,9 +326,9 @@ export class ForkliftGorunumu extends SahneGorunumu {
   }
 
   /** Forklift yükü paletten alıyor; palet yükün altında çiziliyor. */
-  protected override yukCiz(t: Task): Container {
+  protected override yukCiz(t: Task, etiket = true): Container {
     const c = new Container();
-    const yuk = drawLoad(t);
+    const yuk = drawLoad(t, { etiket });
     const palet = drawPalet(t.halfWidth);
     palet.position.set(0, -t.halfHeight);
     c.addChild(palet, yuk);

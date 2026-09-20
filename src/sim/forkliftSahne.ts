@@ -4,8 +4,8 @@ import { Forklift, forkliftKapasitesi, FORKLIFT_NEUTRAL } from './forklift';
 import type { Grabbable } from './crane';
 import { LmiZone, type LmiReading } from './loadChart';
 import {
-  FORKLIFT_TASKS, GIRIS_X, PALET_AYAK, RAF_DERINLIK, RAF_KATLARI, RAF_X,
-  TESLIM_HIZI, TESLIM_KOTU, katKotu,
+  ADA_X, BEKLEME_CIZGISI, FORKLIFT_TASKS, GIRIS_X, PALET_AYAK, RAF_DERINLIK,
+  RAF_KATLARI, RAF_X, TESLIM_HIZI, TESLIM_KOTU, adresKotu, adresX,
 } from '../game/forkliftTasks';
 import type { Task } from '../game/tasks';
 import type { SceneInput } from './scene';
@@ -25,28 +25,57 @@ import { M, kumandaAdi } from '../ui/dil';
 export function createRaf(world: World): Body {
   const body = world.createBody();
   const filtre = { filterCategoryBits: KATEGORI.raf, filterMaskBits: MASKE.raf };
-  for (const kot of RAF_KATLARI) {
-    // Kat kirişi. **Ön kenarı PAHLI** — dikdörtgen kiriş çatalı yakalıyordu:
-    // bırakma sonrası bıçak kirişle aynı kota denk gelirse geri çekilirken
-    // altına giriyor, krikoya dönüşüp makineyi 146 dereceye kadar döndürüyordu.
-    // Gerçek raf kirişinin de ön yüzü kıvrık; kama profil bıçağı yakalamak
-    // yerine yukarı ya da aşağı kaydırıyor.
-    const on = RAF_X;
-    const arka = RAF_X + RAF_DERINLIK;
-    body.createFixture(new Polygon([
-      new Vec2(on, kot - 0.08),
-      new Vec2(on + 0.12, kot - 0.16),
-      new Vec2(arka, kot - 0.16),
-      new Vec2(arka, kot),
-      new Vec2(on + 0.12, kot),
-    ]), { friction: 0.9, ...filtre });
-    // Arka dayanak: yük rafı geçip arkaya düşmesin. **Tam boy dikme DEĞİL** —
-    // dikme koridoru kapatıyor ve makine rafın doğusundaki giriş alanına hiç
-    // geçemiyordu. Gerçek rafta da dikmeler derinlik yönünde durur.
-    body.createFixture(
-      new Box(0.07, 0.26, new Vec2(RAF_X + RAF_DERINLIK, kot + 0.26), 0),
-      { friction: 0.6, ...filtre },
-    );
+  for (const on of ADA_X) {
+    const arka = on + RAF_DERINLIK;
+    for (const kot of RAF_KATLARI) {
+      // **Zemin gözünün kirişi yok.** Kot sıfırsa palet doğrudan betona
+      // oturuyor; gerçek rafta da en alt palet zemindedir. Bu bir estetik
+      // tercih değil, level'ın çalışma şartı: 1.30 metredeki bir kiriş,
+      // taşıma kotunda giden paletin (üstü 1.41 m) tam üstüne geliyor ve
+      // makine ikinci adaya hiç geçemiyordu.
+      if (kot <= 0.001) continue;
+      // Kat kirişi. **Ön yüzü DÜZ, alt ve üst kenarı pahlı.**
+      //
+      // Önce tamamen kama profildi, çünkü dikdörtgen kiriş bıçağı
+      // yakalıyordu: bırakma sonrası bıçak kirişle aynı kota denk gelirse
+      // geri çekilirken altına giriyor, krikoya dönüşüp makineyi 146
+      // dereceye kadar döndürüyordu. Kama alttan geleni kurtardı ama yeni
+      // bir bıçak ağzı yarattı — ölçüldü: çatalını 4.35'te unutup koridorda
+      // ilerleyen makine kamanın tepesine dayanıp 120 dereceye devrildi.
+      //
+      // Gerçek raf kirişi de böyle: 10 santimlik düz bir ön yüz, üstte ve
+      // altta kıvrık kenar. Düz yüze çarpan bıçak DURUYOR; alttan ya da
+      // üstten gelen kayıp kurtuluyor. İkisi de gerekli.
+      body.createFixture(new Polygon([
+        new Vec2(on, kot - 0.13),
+        new Vec2(on + 0.06, kot - 0.16),
+        new Vec2(arka, kot - 0.16),
+        new Vec2(arka, kot),
+        new Vec2(on + 0.06, kot),
+        new Vec2(on, kot - 0.03),
+      ]), { friction: 0.9, ...filtre });
+      // Arka dayanak: yük gözü geçip arkaya düşmesin. **Tam boy dikme DEĞİL** —
+      // dikme koridoru kapatıyor ve makine adanın doğusuna hiç geçemiyordu.
+      // Gerçek rafta da dikmeler derinlik yönünde durur.
+      //
+      // **Batı yüzü de PAHLI**, kirişin ön kenarı gibi ve aynı sebeple:
+      // dikdörtgen dayanak, batıdan gelen bıçağı yakalıyordu. Ölçüldü —
+      // çatalı 3.55 metrede unutup koridorda ilerleyen makine dayanağa
+      // takılıp 92 dereceye devrildi. Gerçek raf arka dayanağı da yuvarlak
+      // profildir; bıçağı kilitlemek yerine yukarı kaydırır.
+      body.createFixture(new Polygon([
+        new Vec2(arka - 0.07, kot + 0.16),
+        new Vec2(arka + 0.07, kot),
+        new Vec2(arka + 0.07, kot + 0.52),
+        new Vec2(arka - 0.07, kot + 0.52),
+      ]), { friction: 0.6, ...filtre });
+    }
+    // **Zemin gözünün arka dayanağı YOK** ve bu ölçümle karara bağlandı.
+    // Konulduğunda makine ikinci adaya hiç geçemiyordu: taşıma kotundaki
+    // (0.35 m) bıçak 25.6'daki dayanağa dayanıyor, kriko gibi çalışıp çatalı
+    // 2.17 metreye kaldırıyor ve makineyi 15.9 dereceye yatırıyordu. Zaten
+    // gerekli de değil — zemin gözüne konan palet oraya oturuyor ve bir
+    // sonraki görev başlayınca stoğa geçip çarpışmayı tamamen bırakıyor.
   }
   return body;
 }
@@ -90,8 +119,37 @@ export class ForkliftSahnesi implements OyunSahnesi {
     });
   }
 
+  /**
+   * Gözüne konmuş paletler — **fizik gövdesi yok, kayıt var.**
+   *
+   * Kodda yıllardır duran not buydu: *"Konanları da sahnede tutmak Sprint 5
+   * işi."* Tutmamanın bedeli görünüyordu: oyuncu paleti rafa koyuyor, bir
+   * sonraki görev başlayınca palet buharlaşıyordu — yani emeğinin izi
+   * kalmıyordu ve depo bölümün sonunda başladığı kadar boştu.
+   *
+   * Gövde yerine kayıt tutmak kasıtlı: konan palet gözün derinliğine itilmiş
+   * sayılıyor ve koridordan çıkıyor (bkz. `MASKE.stok`). Fizik gövdesi
+   * bıraksaydık ya makine ikinci adaya geçemezdi ya da paleti çarpışmasız
+   * yapmak için yine aynı yere gelirdik — üstelik bir de boşuna çözülen
+   * gövde taşıyarak.
+   */
+  readonly stok: Array<{ task: Task; x: number; y: number }> = [];
+
   spawnLoad(spec: Task | null): void {
-    if (this.load) this.world.destroyBody(this.load);
+    // `gorevler[0]` ile çağrılmak bölümün BAŞI demek: ya ilk açılış ya da
+    // yeniden başlatma. İkisinde de depo boş sayfadan başlamalı.
+    const bolumBasi = spec !== null && spec === FORKLIFT_TASKS[0];
+    if (bolumBasi) this.stok.length = 0;
+    if (this.load) {
+      // Bölüm ortasında yeni görev geliyorsa öncekini oyuncu YERİNE KOYDU;
+      // sahnede kalsın. Başta ise eskisini temizliyoruz.
+      const onceki = this.loadSpec;
+      if (!bolumBasi && onceki) {
+        const p = this.load.getPosition();
+        this.stok.push({ task: onceki, x: p.x, y: p.y });
+      }
+      this.world.destroyBody(this.load);
+    }
     this.loadSpec = spec;
     if (!spec) { this.grabbables = []; return; }
     // **Palet ancak makine yükleme karesinin BATISINDAYKEN iniyor.**
@@ -101,7 +159,7 @@ export class ForkliftSahnesi implements OyunSahnesi {
     // (ölçüldü: palet 1.7 metre süründü, çatal cebe hiç girmedi). Mal kabul
     // konveyörü sahada da tam olarak bunu yapıyor: sen yerine geçince indirir.
     const yerKotu = spec.halfHeight + PALET_AYAK;
-    const acik = this.forklift.forkTip.x < this.teslimKapisi(spec.halfWidth);
+    const acik = this.forklift.forkTip.x < this.teslimKapisi();
     this.teslim = acik ? 'hazir' : 'bekliyor';
     const body = this.world.createDynamicBody({
       x: GIRIS_X, y: acik ? yerKotu : TESLIM_KOTU + spec.halfHeight,
@@ -136,29 +194,41 @@ export class ForkliftSahnesi implements OyunSahnesi {
 
   /** Forklift bölümü — depo. Hedefler raf katları. */
   readonly gorevler = FORKLIFT_TASKS;
-  /** Ölçülen tur: görev başına 26–35 s. Forklift bölümü kısa, eşik de öyle. */
-  readonly hizEsikleri = { tam: 22, sifir: 70 };
+  /**
+   * Ölçülen tur: görev başına 25–90 s.
+   *
+   * Eşik 22/70'ten 30/95'e çıktı ve sebebi bölümün kendisi: depo tek rafken
+   * her görev 7 metrelik bir şeritte geçiyordu, şimdi üç adaya yayılmış
+   * durumda ve en uzun tur 18 metre gidip 18 metre dönüyor. Eski eşikle
+   * başsız rig iki görevde sıfır hız bonusu alıyordu — yani puan artık
+   * sürüşün kalitesini değil, sadece mesafeyi ölçüyordu.
+   */
+  readonly hizEsikleri = { tam: 30, sifir: 95 };
   hedefNoktasi(t: Task): { x: number; y: number } | null {
-    const kot = katKotu(t.hedef);
-    if (kot === undefined) return null;
-    // **Rafın ORTASI değil, ÖN KENARI.** Paleti dibine kadar sokmak çatalı
+    const kot = adresKotu(t.hedef);
+    const on = adresX(t.hedef);
+    if (kot === undefined || on === undefined) return null;
+    // **Adanın ORTASI değil, ÖN KENARI.** Paleti dibine kadar sokmak çatalı
     // bir buçuk metre rafın içine sokmak demek; geri çekilirken bıçak kirişe
     // takılıyor ve makine şahlanıyordu. Sahada da palet gözün ön kenarına
     // konur — çatal ancak paletin boyu kadar içeri girer.
     // Palet rafa AYAKLARIYLA oturuyor: tabanı kirişin `PALET_AYAK` üstünde.
-    return { x: RAF_X + t.halfWidth + 0.06, y: kot + PALET_AYAK };
+    // Zemin gözünde kot 0, yani palet doğrudan betona oturuyor — formül aynı.
+    return { x: on + t.halfWidth + 0.06, y: kot + PALET_AYAK };
   }
   /** Hedef işareti kirişin ÜSTÜNDE dursun, paletin tabanında değil. */
   isaretNoktasi(t: Task): { x: number; y: number } | null {
-    const kot = katKotu(t.hedef);
-    return kot === undefined ? null : { x: RAF_X + t.halfWidth + 0.06, y: kot };
+    const kot = adresKotu(t.hedef);
+    const on = adresX(t.hedef);
+    return kot === undefined || on === undefined
+      ? null : { x: on + t.halfWidth + 0.06, y: kot };
   }
   /**
-   * Rafın içine oturmalı. Vinçteki 2 metrelik pencere burada anlamsız olurdu
-   * — teras geniş bir düzlem, raf katı ise paletten birkaç on santim büyük.
+   * Gözün içine oturmalı. Vinçteki 2 metrelik pencere burada anlamsız olurdu
+   * — teras geniş bir düzlem, raf gözü ise paletten birkaç on santim büyük.
    */
   yerlestirmeToleransi(t: Task): { x: number; y: number } {
-    // Yük rafın derinliğine sığmalı: geniş palette hata payı 30 cm'e iniyor.
+    // Yük adanın derinliğine sığmalı: geniş palette hata payı 30 cm'e iniyor.
     return { x: Math.max(0.2, (RAF_DERINLIK - t.halfWidth * 2) / 2), y: 0.32 };
   }
   get sasiHizi(): number { return this.forklift.chassis.getLinearVelocity().x; }
@@ -248,7 +318,7 @@ export class ForkliftSahnesi implements OyunSahnesi {
     const spec = this.loadSpec;
     if (!spec || this.teslim === 'hazir') return;
     if (this.teslim === 'bekliyor') {
-      if (this.forklift.forkTip.x >= this.teslimKapisi(spec.halfWidth)) return;
+      if (this.forklift.forkTip.x >= this.teslimKapisi()) return;
       this.load.setLinearVelocity({ x: 0, y: -TESLIM_HIZI });
       this.teslim = 'iniyor';
       return;
@@ -265,10 +335,13 @@ export class ForkliftSahnesi implements OyunSahnesi {
     this.teslim = 'hazir';
   }
 
-  /** Paletin inebilmesi için çatal ucunun batısında kalması gereken çizgi. */
-  private teslimKapisi(halfWidth: number): number {
-    return GIRIS_X - halfWidth - 0.45;
-  }
+  /**
+   * Paletin inebilmesi için çatal ucunun batısında kalması gereken çizgi.
+   *
+   * Artık yüke göre değişmiyor: zeminde boyalı duran çizgiyle aynı yerde
+   * (bkz. `BEKLEME_CIZGISI`). Oyuncunun göremediği bir kural, kural değil.
+   */
+  private teslimKapisi(): number { return BEKLEME_CIZGISI; }
 
   /** Palet yere indi mi? HUD ve rig bunu soruyor. */
   get paletHazir(): boolean { return this.teslim === 'hazir'; }
