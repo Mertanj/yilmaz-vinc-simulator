@@ -147,6 +147,36 @@ class Rig {
     return clamp((this.scene.bom.halatBoyuM - hedefM) / 0.6, -1, 1);
   }
 
+  /**
+   * Teleskobu acarken halat payi birakan vinc komutu.
+   *
+   * Teleskop artik halat yiyor (dirsekli.ts'teki iki-blok notu): uzama d metre
+   * artinca serbest halat d metre kisaliyor ve iki-blok bolgesinde uzatma
+   * KILITLI. Gercek operator teleskobu acarken ayni anda vinci salar; rig de
+   * salmali, yoksa yuksek hedefe hic erisemiyor.
+   *
+   * Sadece uzatma ISTENDIGINDE devreye giriyor. Uzatma bitince hedef halat
+   * neyse ona donuyor, yani tasima halati yine kisa kaliyor ve yuk terasin
+   * hizasinda sallanmiyor.
+   */
+  halataUzatmali(hedefM: number, uzat: number): number {
+    if (uzat <= 0) return this.halata(hedefM);
+    // **Pay KUCUK ve sabit, kalan uzamanin tamami degil.**
+    //
+    // Once kalan uzamanin tamami pesinen salindi (3.8 m) ve rig S3'un
+    // ALMASINDA kirildi: kanca 57 dereceye savruldu, yukun 1.64 m yanina
+    // dustu, yan-cekme. Dogrusu servo: teleskop 0.55 m/s yiyor, vinc 1.0 m/s
+    // salabiliyor, yani ufak bir pay tutmak yetiyor ve halat hic iki-blok
+    // bolgesine girmiyor. Operatorun yaptigi da bu — pesinen degil, ACTIKCA.
+    // Pay SADECE esigin uzerinde kalmaya yetecek kadar. 0.30 denendi ve S5'i
+    // kirdi: halat 0.86'ya cikiyor, 1.24 m boyundaki beton kovasi terasin
+    // korkuluguna takilip 57 dereceye devriliyor ve orada kaliyor. Teleskop
+    // 0.55 m/s yiyor, vinc 1.0 m/s saliyor — servo 10 santimle de esigin
+    // uzerinde kaliyor.
+    const gereken = DIRSEKLI.minHalatM + DIRSEKLI.ikiBlokPayiM + 0.10;
+    return this.halata(Math.max(hedefM, gereken));
+  }
+
   /** Uç hedefine ne kadar yakın (m)? */
   ucHatasi(tx: number, ty: number): number {
     const u = this.scene.bom.tipWorld;
@@ -308,6 +338,11 @@ function main(): void {
       () => ({ crane: { uzat: 0, luff: 0, telescope: 0, winch: 1 } }));
     // Ucu yukun ustune getir, halat kisa kalsin.
     r.runUntil(60, (rig) => rig.ucHatasi(yukX, almaUcY) < 0.15,
+      // **Almaya YAKLASIRKEN pay YOK, halat kisa.** Denendi ve kirildi: uzatma
+      // payi burada halati 1.15'e cikariyor, kanca bahce duvarinin harpustasina
+      // oturuyor ve orada kaliyor — `dur()` 25 saniye bekleyip pes ediyor,
+      // sonra yan-cekme. Bu yolda zaten uzatma degil KISALTMA gerekiyor
+      // (yerlestirme pozundan R 4.54, malzeme R 2.57), yani payin isi yok.
       (rig) => ({ crane: { ...rig.ucaSur(yukX, almaUcY), winch: rig.halata(0.6) } }));
     r.dur();
     iz('uc-yukun-ustunde');
@@ -378,8 +413,10 @@ function main(): void {
     const duvarX = (AVLU.duvarSol + AVLU.duvarSag) / 2;
     r.runUntil(50, (rig) => rig.scene.load.getPosition().y - task.halfHeight
         > AVLU.duvarY + 0.45,
-      (rig) => ({ crane: { ...rig.ucaSurSonumlu(duvarX, gecisY),
-        winch: rig.halata(tasimaHalat) } }));
+      (rig) => {
+        const k = rig.ucaSurSonumlu(duvarX, gecisY);
+        return { crane: { ...k, winch: rig.halataUzatmali(tasimaHalat, k.uzat) } };
+      });
     iz('duvarin-ustunde');
     // **Once TIRMAN, sonra iceri gir.** Duvari astiktan sonra dogrudan hedefe
     // surmek olmuyor: yuk ucun gerisinden geliyor ve daha yukselmeden binanin
@@ -392,8 +429,10 @@ function main(): void {
     const korkuluk = hedef.y >= AVLU.katYuksekligi * AVLU.katSayisi ? 0 : AVLU.korkulukY;
     const asmaKotu = hedef.y + korkuluk + task.halfHeight + 0.25;
     r.runUntil(60, (rig) => rig.scene.load.getPosition().y > asmaKotu,
-      (rig) => ({ crane: { ...rig.ucaSurSonumlu(tirmanX, Math.max(gecisY, terasY)),
-        winch: rig.halata(tasimaHalat) } }));
+      (rig) => {
+        const k = rig.ucaSurSonumlu(tirmanX, Math.max(gecisY, terasY));
+        return { crane: { ...k, winch: rig.halataUzatmali(tasimaHalat, k.uzat) } };
+      });
     iz('tirmandi');
 
     // **Cikis sarti UCUN degil YUKUN konumu.**
@@ -406,8 +445,10 @@ function main(): void {
     r.runUntil(90, (rig) => {
       const l = rig.scene.load.getPosition();
       return Math.abs(l.x - hedef.x) < 0.22 && l.y > asmaKotu;
-    }, (rig) => ({ crane: { ...rig.ucaSurSonumlu(hedef.x, Math.max(gecisY, terasY)),
-      winch: rig.halata(tasimaHalat) } }));
+    }, (rig) => {
+        const k = rig.ucaSurSonumlu(hedef.x, Math.max(gecisY, terasY));
+        return { crane: { ...k, winch: rig.halataUzatmali(tasimaHalat, k.uzat) } };
+      });
     r.dur();
     say(`${task.kod} GEC  duvar payi ${r.duvarPayi < -90 ? '—'
       : r.duvarPayi.toFixed(2) + ' m'}  (duvar ${AVLU.duvarY} m)`);
@@ -417,7 +458,10 @@ function main(): void {
     r.etiket = `${task.kod}-koyma`;
     const koymaUcY = hedef.y + task.halfHeight * 2 + korkuluk + 0.6;
     r.runUntil(40, (rig) => rig.ucHatasi(hedef.x, koymaUcY) < 0.20,
-      (rig) => ({ crane: { ...rig.ucaSurSonumlu(hedef.x, koymaUcY), winch: rig.halata(tasimaHalat) } }));
+      (rig) => {
+        const k = rig.ucaSurSonumlu(hedef.x, koymaUcY);
+        return { crane: { ...k, winch: rig.halataUzatmali(tasimaHalat, k.uzat) } };
+      });
     r.dur();
     iz('koyma-ustunde');
     // Halati usulca sal: yuk hedefe otursun. Hedef halat boyu ucun kotundan

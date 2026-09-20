@@ -14,6 +14,7 @@
     "sahne:forklift": "esbuild tools/forkliftSahne.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/fsahne.mjs --log-level=warning && node node_modules/.cache/fsahne.mjs",
     "skor": "esbuild tools/skorTesti.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/skorTesti.mjs --log-level=warning && node node_modules/.cache/skorTesti.mjs",
     "dirsekli:olc": "esbuild tools/dirsekliOlc.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/dolc.mjs --log-level=warning && node node_modules/.cache/dolc.mjs",
+    "halat": "esbuild tools/halatModeli.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/halat.mjs --log-level=warning && node node_modules/.cache/halat.mjs",
     "zarf": "esbuild tools/dirsekliZarf.ts --bundle --platform=node --format=esm --outfile=node_modules/.cache/zarf.mjs --log-level=warning && node node_modules/.cache/zarf.mjs"
   },
   "dependencies": {

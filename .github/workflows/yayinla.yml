@@ -48,6 +48,14 @@ jobs:
       - name: Skor kaydı birim testi
         run: npm run skor
 
+      # İki makinenin halat modeli AYNI mı? Sahadan gelen gözlem üzerine
+      # eklendi: dirseklide iki-blok bayrağı hesaplanıyor ama hiçbir şeyi
+      # kilitlemiyordu ve teleskop halat yemiyordu — yani bedava hamleydi.
+      # Bu depoda iki kopyanın sessizce ayrışması daha önce de oldu (görev
+      # metinleri); gözle yakalanmıyor, ölçümle yakalanıyor.
+      - name: Halat modeli (iki makine aynı mı)
+        run: npm run halat
+
       - name: Derle
         run: npm run build
         env:

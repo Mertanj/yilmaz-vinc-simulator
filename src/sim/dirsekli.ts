@@ -64,6 +64,23 @@ export const DIRSEKLI = {
 
   /** Halat: kancanın bom ucuna dayanma eşiği (m). */
   minHalatM: 0.5,
+  /**
+   * İki-blok bölgesinin genişliği (m) — kanca kafaya BU kadar yaklaşınca
+   * halatı kısaltan hareketler kilitleniyor.
+   *
+   * **Ölçümle küçüldü: 0.35 denendi ve bölüm oynanamaz hale geldi.** Vinçteki
+   * pay 0.55 ve orada asgari halat 2.0 (yani %27); aynı oranı buraya taşımak
+   * yanlış çıktı, çünkü bu bölüm 0.6 metrelik bir ÇALIŞMA halatıyla tasarlandı
+   * — taşıma halatı yüksek hedeflerde bilerek kısa tutuluyor, yoksa yük tam
+   * terasın hizasında sallanıyor. 0.35'lik pay eşiği 0.85'e çıkarıyor, yani
+   * bölümün normal çalışma halatı sürekli iki-blok bölgesinde kalıyor ve
+   * teleskop hiç açılamıyordu: rig 2/5'te takıldı.
+   *
+   * 0.06 eşiği 0.56'ya koyuyor. Kilit hâlâ gerçek — kanca kafaya dayanmadan
+   * önce devreye giriyor — ama makinenin kendi ölçeğinde: bu vinçte asgari
+   * halat 0.5 ve yol konumu 0.35, yani zaten santimlerle çalışan bir düzen.
+   */
+  ikiBlokPayiM: 0.06,
   maxHalatM: 12.0,
   /**
    * Yol konumunda kanca bom ucuna toplanır (m).
@@ -341,6 +358,23 @@ export class Dirsekli {
     let uzat = input.uzat;
     if (kilit && uzat > 0) { uzat = 0; this.kilitliDenendi = true; }
 
+    // **İki-blok koruması — vinçteki modelin AYNISI, ve bir kusurun tamiri.**
+    //
+    // Sahadan gelen gözlem: *"kırmalı vinçte halatı salmadan çok yukarıda bom
+    // kırabiliyorken normal vinçte halat kilitlenebiliyor."* Ölçüldü ve
+    // haklıydı: aynı pozdan teleskop komutu verildiğinde vinçte uzama 0.00 m
+    // (kilit devrede), dirseklide 2.80 m — halat ise 0.50'de sabit. Yani
+    // `ikiBlokta` bayrağı yanıyordu ama HİÇBİR ŞEYİ kilitlemiyordu ve teleskop
+    // halat yemiyordu.
+    //
+    // Vincin kendi yorumu bunu zaten yazmış: "modellemezsek teleskop bedava
+    // bir hamle olur ve iki-blok diye bir tehlike hiç oluşmaz." İki makine
+    // aynı fiziği paylaşmalı; oyuncunun öğrendiği kural makineye göre
+    // değişmemeli.
+    const ikiBlok = this.halatM <= DIRSEKLI.minHalatM + DIRSEKLI.ikiBlokPayiM;
+    this.ikiBlokta = ikiBlok;
+    if (ikiBlok && uzat > 0) { uzat = 0; this.kilitliDenendi = true; }
+
     // **Sıkışma: hidrolik kesildi.** Yarıçabı büyüten her şey zaten yukarıda
     // kilitli; burada ucu AŞAĞI indiren hareketler de duruyor, çünkü sıkışan
     // yükü daha da ezen hareket odur. Kurtulma yolları açık: kırmayı katla
@@ -350,15 +384,32 @@ export class Dirsekli {
       if (kirma > 0) { kirma = 0; this.kilitliDenendi = true; }
       if (uzat !== 0) { uzat = 0; this.kilitliDenendi = true; }
     }
+    const oncekiUzama = this.uzamaM;
     this.uzamaM = clamp(
       this.uzamaM + uzat * S.uzamaHizMps * olcek * dt, 0, S.kirmaUzamaM,
     );
 
-    // Halat: kanca bom ucuna dayanınca sarmak kilitli (iki-blok).
-    const hedefHalat = this.halatM - input.winch * S.winchSpeedMps * olcek * dt;
-    this.ikiBlokta = hedefHalat <= DIRSEKLI.minHalatM;
-    if (this.ikiBlokta && input.winch > 0) this.kilitliDenendi = true;
-    this.halatM = clamp(hedefHalat, DIRSEKLI.minHalatM, DIRSEKLI.maxHalatM);
+    // **Halat bom boyunu takip ediyor.** Toplam halat sabit: tambur→uç yolu ile
+    // uç→kanca parçasının toplamı. Teleskop uzayınca birincisi uzuyor, yani
+    // İKİNCİSİ kısalıyor — teleskobu açmak kancayı uca doğru çekiyor. Gerçek
+    // operatör de teleskobu açarken aynı anda vinci salar.
+    //
+    // Kırmayı katlamak halat YEMİYOR ve yememeli: dirsek makarası döndüğünde
+    // halat bükülüyor, yolu uzamıyor. Vinçte de bom açısı halata dokunmuyor —
+    // iki makine yine aynı kuralda.
+    this.halatM = clamp(
+      this.halatM - (this.uzamaM - oncekiUzama),
+      DIRSEKLI.minHalatM, DIRSEKLI.maxHalatM,
+    );
+
+    // İki-blok bölgesindeyken halatı daha da SARMAK kilitli; salmak serbest,
+    // çıkış yolu o.
+    const winchIzin = ikiBlok ? Math.min(0, input.winch) : input.winch;
+    if (winchIzin !== input.winch) this.kilitliDenendi = true;
+    this.halatM = clamp(
+      this.halatM - winchIzin * S.winchSpeedMps * olcek * dt,
+      DIRSEKLI.minHalatM, DIRSEKLI.maxHalatM,
+    );
 
     this.govdeleriYerlestir();
     this.kanca.halatiAyarla(this.halatM);
