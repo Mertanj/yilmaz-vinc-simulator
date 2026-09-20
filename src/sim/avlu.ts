@@ -1,4 +1,7 @@
 import { Box, type Body, type World } from 'planck';
+import type { DirsekliBolum } from './dirsekliBolum';
+import { DIRSEKLI_GOREVLER } from '../game/dirsekliGorevler';
+import { M, kumandaAdi } from '../ui/dil';
 
 /**
  * Bölüm 1 — "Dar Sokak": bahçe duvarı ve duvarın ardında yükselen kaba inşaat.
@@ -160,3 +163,70 @@ export function createAvlu(world: World): Body {
   kutu(AVLU.duvarSol, AVLU.duvarSag, 0, AVLU.duvarY);
   return body;
 }
+
+/**
+ * Bölüm 1 — "Dar Sokak".
+ *
+ * Yukarıdaki geometri ile `dirsekliGorevler.ts`'teki görev listesini tek bir
+ * `DirsekliBolum`'de birleştiriyor. Sahne artık bunların hiçbirini doğrudan
+ * import etmiyor; bölüm değiştirmek bu nesneyi değiştirmek demek.
+ */
+export const DAR_SOKAK: DirsekliBolum = {
+  id: 'dirsekli-dar-sokak',
+  kur: (world) => { createAvlu(world); },
+  spawnX: AVLU.spawnX,
+  malzemeX: AVLU.malzemeX,
+  gorevler: DIRSEKLI_GOREVLER,
+
+  hedefNoktasi(t) { return hedefler[t.hedef] ?? null; },
+  /**
+   * Avlu dar: vinçteki 2 metrelik pencere burada bütün avluyu kaplardı.
+   * Döşeme 2.9 m geniş, hedefler de onun üstünde.
+   */
+  yerlestirmeToleransi() { return { x: 1.1, y: 0.4 }; },
+
+  /**
+   * Ölçülen turdan. Başsız tur görev başına 90–321 saniye sürüyor (yük 7.2
+   * metre tırmanıyor ve üç eksen birden sürülüyor); ilk kalibrasyon 55/150 idi
+   * ve bölüm dikeyleşince her görev sıfır bonus alıyordu. Vinçteki oran
+   * korunuyor: rig tam bonus eşiğinin biraz üstünde.
+   */
+  hizEsikleri: { tam: 100, sifir: 340 },
+  /** Sahne 25 metre; vinçinki 100'dü. Aynı ölçek burada makineyi karınca yapardı. */
+  kameraOlcegi: { yakin: 46, uzak: 26 },
+
+  /**
+   * **Park penceresi.** Fiziksel takoz olmadığı için geri geri yanaşmanın
+   * doğal bir sonu yok: kamyon bahçe duvarına dayanana kadar gidiyor ve orada
+   * tabla malzemenin BERİSİNE düşüyor, yani yükü alamıyor. Kurtarılabilir bir
+   * durum ama oyuncunun neyin yanlış olduğunu tahmin etmesi gerekirdi.
+   *
+   * Cebin İÇİNDE olmak da söyleniyor: eskiden yalnız hata bildiriliyor, doğru
+   * yerde durmak hiç onaylanmıyordu.
+   */
+  surusIpucu(sasiX) {
+    const k = M.dirsekli.ipucu;
+    const t = kumandaAdi();
+    if (sasiX < AVLU.parkX - AVLU.parkPayiM) return { metin: k.cebiGectin, mod: 'drive' };
+    if (sasiX <= AVLU.parkX + AVLU.parkPayiM) return { metin: k.cepte(t), mod: 'ready' };
+    return { metin: k.yanasma(t), mod: 'drive' };
+  },
+
+  /**
+   * **Duvar uyarısı.** Sahadan gelen en ağır bulgu buydu: ilk görevde hedef
+   * alçak olduğu için oyuncu bomu kaldırmadan yatay gidiyor, yük bahçe
+   * duvarının üstünü sürüyor ve tur 10–14 çarpma yazıyordu. Geometri acımasız:
+   * kanca sonuna kadar sarılıyken bile yük ucun 1.7 metre altında asılı
+   * kalıyor, yani 3 metrelik duvarı aşmak için ucun 4.7 metrede olması
+   * gerekiyor — alma pozunda 4.4. Makine bunu zaten biliyor; söylemesi yetiyor.
+   */
+  tasimaIpucu(yuk) {
+    if (yuk.x > AVLU.duvarSag && yuk.y - yuk.yariBoy < AVLU.duvarY + 0.35) {
+      return { metin: M.dirsekli.ipucu.duvariAs, mod: 'crane' };
+    }
+    return null;
+  },
+};
+
+/** Hedefler bir kez hesaplanıyor — `avluHedefleri()` saf, her çağrı aynı. */
+const hedefler = avluHedefleri();

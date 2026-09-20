@@ -5,8 +5,8 @@ import { Outriggers } from './outriggers';
 import { Dirsekli, DIRSEKLI, DIRSEKLI_NEUTRAL, type DirsekliInput } from './dirsekli';
 import { DIRSEKLI_SPEC as S, dirsekliCozum } from './dirsekliGeometri';
 import type { Grabbable } from './kanca';
-import { AVLU, avluHedefleri, createAvlu } from './avlu';
-import { DIRSEKLI_GOREVLER } from '../game/dirsekliGorevler';
+import { DAR_SOKAK } from './avlu';
+import type { DirsekliBolum } from './dirsekliBolum';
 import type { Task } from '../game/tasks';
 import { OutriggerState } from './loadChart';
 import type { SceneInput } from './scene';
@@ -65,14 +65,21 @@ export class DirsekliSahne implements OyunSahnesi {
   /** Son çarpmanın üstünden geçen süre (s). */
   private carpmaBekleme = 0;
 
-  constructor() {
+  /**
+   * Bölüm varsayılanla geliyor: çağıran tarafların hiçbiri (main.ts, üç rig)
+   * bölüm seçmiyor, hepsi tek bölümü oynuyordu. Varsayılan olmasaydı bu
+   * ayıklama sekiz çağrı yerini birden değiştirmek zorunda kalırdı ve
+   * değişiklik "davranış aynı kaldı mı" sorusuna cevap vermesi zor bir şey
+   * olurdu.
+   */
+  constructor(readonly bolum: DirsekliBolum = DAR_SOKAK) {
     createGround(this.world);
-    createAvlu(this.world);
-    this.truck = new Truck(this.world, this.snaps, AVLU.spawnX);
+    bolum.kur(this.world);
+    this.truck = new Truck(this.world, this.snaps, bolum.spawnX);
     this.outriggers = new Outriggers(this.world, this.truck.chassis, this.snaps);
     this.bom = new Dirsekli(this.world, this.truck.chassis, this.snaps);
 
-    this.spawnLoad(DIRSEKLI_GOREVLER[0] ?? null);
+    this.spawnLoad(bolum.gorevler[0] ?? null);
 
     this.world.on('post-solve', (contact: Contact, impulse: { normalImpulses: number[] }) => {
       const a = contact.getFixtureA().getBody();
@@ -92,7 +99,7 @@ export class DirsekliSahne implements OyunSahnesi {
     this.loadSpec = spec;
     if (!spec) { this.grabbables = []; return; }
     const body = this.world.createDynamicBody({
-      x: AVLU.malzemeX, y: spec.halfHeight + 0.05,
+      x: this.bolum.malzemeX, y: spec.halfHeight + 0.05,
     });
     body.createFixture(new Box(spec.halfWidth, spec.halfHeight), {
       density: 1, friction: 0.85, restitution: 0.02,
@@ -108,28 +115,18 @@ export class DirsekliSahne implements OyunSahnesi {
     this.grabbables = [{ body, halfWidth: spec.halfWidth, halfHeight: spec.halfHeight }];
   }
 
-  // --- bölüm ---
-  readonly gorevler = DIRSEKLI_GOREVLER;
-  /**
-   * Hız eşikleri — ölçülen turdan. Başsız tur görev başına 90–321 saniye
-   * sürüyor (yük 7.2 metre tırmanıyor ve üç eksen birden sürülüyor); ilk
-   * kalibrasyon 55/150 idi ve bölüm dikeyleşince her görev sıfır bonus
-   * alıyordu. Vinçteki oran korunuyor: rig tam bonus eşiğinin biraz üstünde.
-   */
-  readonly hizEsikleri = { tam: 100, sifir: 340 };
-  private readonly hedefler = avluHedefleri();
+  // --- bölüm --- (hepsi `DirsekliBolum`'den; gerekçeler orada)
+  get gorevler(): readonly Task[] { return this.bolum.gorevler; }
+  get hizEsikleri(): { tam: number; sifir: number } { return this.bolum.hizEsikleri; }
   hedefNoktasi(t: Task): { x: number; y: number } | null {
-    return this.hedefler[t.hedef] ?? null;
+    return this.bolum.hedefNoktasi(t);
   }
-  /**
-   * Avlu dar: vinçteki 2 metrelik pencere burada bütün avluyu kaplardı.
-   * Döşeme 2.9 m geniş, hedefler de onun üstünde.
-   */
-  yerlestirmeToleransi(): { x: number; y: number } { return { x: 1.1, y: 0.4 }; }
+  yerlestirmeToleransi(t: Task): { x: number; y: number } {
+    return this.bolum.yerlestirmeToleransi(t);
+  }
 
   get sasiHizi(): number { return this.truck.chassis.getLinearVelocity().x; }
-  /** Sahne 25 metre; vinçinki 100'dü. Aynı ölçek burada makineyi karınca yapardı. */
-  readonly kameraOlcegi = { yakin: 46, uzak: 26 };
+  get kameraOlcegi(): { yakin: number; uzak: number } { return this.bolum.kameraOlcegi; }
   get devrildiMi(): boolean { return Math.abs(this.tiltDeg) > 8; }
   get loadTask(): Task | null { return this.loadSpec; }
 
@@ -162,7 +159,7 @@ export class DirsekliSahne implements OyunSahnesi {
   step(input: SceneInput, dt: number): void {
     this.carpmaBekleme = Math.max(0, this.carpmaBekleme - dt);
     if (input.reset) {
-      this.truck.reset(AVLU.spawnX);
+      this.truck.reset(this.bolum.spawnX);
       this.outriggers.reset(this.truck.chassis);
     }
     const u = M.vinc.uyari;
@@ -372,43 +369,26 @@ export class DirsekliSahne implements OyunSahnesi {
     const k = M.dirsekli.ipucu;
     const t = kumandaAdi();
     if (!this.calismaModunda) {
-      // **Cebi geçtiyse söyle.** Fiziksel takoz olmadığı için geri geri
-      // yanaşmanın doğal bir sonu yok: kamyon bahçe duvarına dayanana kadar
-      // gidiyor ve orada tabla malzemenin BERİSİNE düşüyor, yani yükü
-      // alamıyor. Kurtarılabilir bir durum (ayakları topla, ileri al) ama
-      // oyuncunun neyin yanlış olduğunu tahmin etmesi gerekirdi.
+      // Park penceresi BÖLÜME ait — gerekçesi `DAR_SOKAK.surusIpucu`'da.
       const x = this.truck.chassis.getPosition().x;
-      if (x < AVLU.parkX - AVLU.parkPayiM) {
-        return { metin: k.cebiGectin, mod: 'drive' };
-      }
-      // **Cebe girdiğini de söyle.** Cebi geçince uyarı vardı, cebin içinde
-      // olunca yoktu: oyuncuya sadece hatası bildiriliyor, doğru yerde durduğu
-      // hiç onaylanmıyordu. Geri geri yanaşmanın fiziksel bir sonu da olmadığı
-      // için "yeterince geldim mi?" sorusunun cevabı tahmine kalıyordu.
-      if (x <= AVLU.parkX + AVLU.parkPayiM) {
-        return { metin: k.cepte(t), mod: 'ready' };
-      }
-      return { metin: k.yanasma(t), mod: 'drive' };
+      return this.bolum.surusIpucu?.(x) ?? { metin: k.yanasma(t), mod: 'drive' };
     }
     if (this.hasLoad) {
+      // **Aşılacak engel BÖLÜME ait, teleskop MAKİNEYE.** Duvar uyarısını
+      // bölüm veriyor (gerekçesi `DAR_SOKAK.tasimaIpucu`'da) ve önce o
+      // soruluyor: engelin altındayken "bomu uzat" demek oyuncuyu duvarın
+      // içine sürerdi.
+      const l = this.load.getPosition();
+      const gorev = this.loadTask;
+      const engel = this.bolum.tasimaIpucu?.({
+        x: l.x, y: l.y, yariBoy: gorev ? gorev.halfHeight : 0,
+      });
+      if (engel) return engel;
       // **Teleskobu KEŞFETTİRMEK gerekiyor.** Dördüncü eksen tuş listesinde
       // yazıyor ama oyun içinde hiçbir şey onu istemiyordu; üst teraslara
       // teleskop olmadan çıkılamıyor ve oyuncunun bunu tahmin etmesi
       // gerekirdi. Ters kinematik zaten hedefin ne kadar uzama istediğini
       // biliyor — soruyoruz ve cevabı satıra yazıyoruz.
-      // **Duvar uyarısı en önde.** Sahadan gelen en ağır bulgu buydu: ilk
-      // görevde hedef alçak olduğu için oyuncu bomu kaldırmadan yatay
-      // gidiyor, yük bahçe duvarının üstünü sürüyor ve tur 10–14 çarpma
-      // yazıyor. Geometri acımasız: kanca sonuna kadar sarılıyken bile yük
-      // ucun 1.7 metre altında asılı kalıyor, yani 3 metrelik duvarı aşmak
-      // için ucun 4.7 metrede olması gerekiyor — alma pozunda 4.4.
-      // Makine bunu zaten biliyor; söylemesi yetiyor.
-      const l = this.load.getPosition();
-      const gorev = this.loadTask;
-      const yukAlti = l.y - (gorev ? gorev.halfHeight : 0);
-      if (l.x > AVLU.duvarSag && yukAlti < AVLU.duvarY + 0.35) {
-        return { metin: k.duvariAs, mod: 'crane' };
-      }
       const gereken = this.gerekenUzama();
       if (gereken !== null && gereken > this.bom.uzamaBoyuM + 0.35) {
         return { metin: k.uzat(t), mod: 'crane' };
