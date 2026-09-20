@@ -375,6 +375,11 @@ function main(): void {
     + `  en cok %${(r.pabuc.enCok * 100).toFixed(1)}`
     + `  (en az iken LMI %${Number.isFinite(r.pabuc.lmi) ? r.pabuc.lmi.toFixed(0) : '—'}`
     + ` · ${r.pabuc.etiket})`);
+  // Ara sureler: speedrun karsilastirmasinin ham verisi.
+  {
+    const b = r.mission.score.bitisler;
+    say(`  ara sureler ${b.map((x, i) => `${(x - (b[i - 1] ?? 0)).toFixed(0)}s`).join(' · ')}`);
+  }
   say(`  faz ${r.mission.phase}  tamamlanan ${s.sapmalar.length}/${TASKS.length}`
     + `  sure ${s.sure.toFixed(0)}s  not ${res?.not ?? '-'} (${res?.puan.toFixed(0) ?? '-'})`
     + `  usta ${res?.usta ? 'E' : 'H'}`);

@@ -274,7 +274,12 @@ function main(): number {
   say(`  DEVRILME: ${r.devrilmeRaporu || 'yok'}`);
   say(`  her an en buyuk egim ${r.enCokEgimHer.toFixed(2)}° (t=${r.egimAni.toFixed(1)}s)`);
   if (res) {
-    say(`  not ${res.not} (${res.puan.toFixed(0)})  usta ${res.usta ? 'E' : 'H'}`
+    // Ara sureler: speedrun karsilastirmasinin ham verisi.
+  {
+    const b = r.mission.score.bitisler;
+    say(`  ara sureler ${b.map((x, i) => `${(x - (b[i - 1] ?? 0)).toFixed(0)}s`).join(' · ')}`);
+  }
+  say(`  not ${res.not} (${res.puan.toFixed(0)})  usta ${res.usta ? 'E' : 'H'}`
       + `  devrildi ${res.devrildi ? 'E' : 'H'}`);
   }
   void GIRIS_X; void FORKLIFT;
