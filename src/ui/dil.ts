@@ -139,6 +139,9 @@ export interface Metinler {
        */
       bomKilitliBas: string; bomKilitliGovde: string;
       bomKilitliCozum: (k: KumandaAdi) => string;
+      /** Ayaklar yerdeyken sürmeye kalkınca — aynı sessizliğin ters yönü. */
+      surusKilitliBas: string; surusKilitliGovde: string;
+      surusKilitliCozum: (k: KumandaAdi) => string;
     };
     ipucu: {
       sallaniyor: string; yanCekme: string; ortala: string;
@@ -307,7 +310,7 @@ const TR: Metinler = {
       + '<b>kurulum</b> <kbd>Q</kbd> ayak aç/kapa<br>'
       + '<b>vinç</b> <kbd>W</kbd><kbd>S</kbd> bom <kbd>⇧W</kbd><kbd>⇧S</kbd> teleskop<br>'
       + '<kbd>↑</kbd><kbd>↓</kbd> kanca <kbd>boşluk</kbd> bağla/bırak<br>'
-      + '<kbd>K</kbd> halat katı <kbd>I</kbd> detay <kbd>R</kbd> sıfırla'
+      + '<kbd>K</kbd> halat katı <kbd>I</kbd> detay <kbd>M</kbd> ses <kbd>R</kbd> sıfırla'
       + ' <kbd>Esc</kbd> makine değiştir',
     baslik: 'KALDIRMA MOMENTİ',
     durum: {
@@ -365,6 +368,10 @@ const TR: Metinler = {
       bomKilitliGovde: 'Ayaklar yerde değilken vinç çalışmıyor. Lastiğin üstünde'
         + ' kaldırma yapmak makineyi kendi üstüne devirir.',
       bomKilitliCozum: (k) => `Çalışma alanına yanaş, sonra ayakları aç (${k.ayaklar}).`,
+      surusKilitliBas: 'SÜRÜŞ KİLİTLİ',
+      surusKilitliGovde: 'Ayaklar yerde. Vinç kurulmuşken kamyon hareket etmez —'
+        + ' ayak pabuçları zemine basıyor.',
+      surusKilitliCozum: (k) => `Sürmek için önce ayakları topla (${k.ayaklar}).`,
     },
     ipucu: {
       surus: (k) => `çalışma alanına yanaş, sonra ayakları aç (${k.ayaklar})`,
@@ -397,7 +404,7 @@ const TR: Metinler = {
       + '<b>bom</b> <kbd>W</kbd><kbd>S</kbd> ana bom <kbd>⇧W</kbd><kbd>⇧S</kbd> kırma<br>'
       + '<kbd>↑</kbd><kbd>↓</kbd> kanca <kbd>⇧↑</kbd><kbd>⇧↓</kbd> teleskop<br>'
       + '<kbd>boşluk</kbd> bağla/bırak<br>'
-      + '<kbd>I</kbd> detay <kbd>R</kbd> sıfırla <kbd>Esc</kbd> makine değiştir',
+      + '<kbd>I</kbd> detay <kbd>M</kbd> ses <kbd>R</kbd> sıfırla <kbd>Esc</kbd> makine değiştir',
     baslik: 'KALDIRMA MOMENTİ',
     satir: {
       anaBom: 'ana bom', kirma: 'kırma', uzama: 'teleskop', ucKotu: 'uç kotu',
@@ -440,7 +447,7 @@ const TR: Metinler = {
       + '<b>çatal</b> <kbd>W</kbd><kbd>S</kbd> kaldır/indir '
       + '<kbd>⇧W</kbd><kbd>⇧S</kbd> direk eğimi<br>'
       + '<b>yük alma tuşu yok</b> — bıçağı paletin cebine sok ve kaldır'
-      + ' <kbd>I</kbd> detay <kbd>R</kbd> sıfırla <kbd>Esc</kbd> makine değiştir',
+      + ' <kbd>I</kbd> detay <kbd>M</kbd> ses <kbd>R</kbd> sıfırla <kbd>Esc</kbd> makine değiştir',
     baslik: 'DEVRİLME PAYI',
     durum: {
       devrilir: 'DEVRİLİR — ÇOK AĞIR', dikkat: 'DİKKAT · ARKA TEKER HAFİFLİYOR',
@@ -584,7 +591,7 @@ const EN: Metinler = {
       + '<b>setup</b> <kbd>Q</kbd> outriggers<br>'
       + '<b>crane</b> <kbd>W</kbd><kbd>S</kbd> boom <kbd>⇧W</kbd><kbd>⇧S</kbd> telescope<br>'
       + '<kbd>↑</kbd><kbd>↓</kbd> hoist <kbd>space</kbd> hook on/off<br>'
-      + '<kbd>K</kbd> parts of line <kbd>I</kbd> detail <kbd>R</kbd> restart'
+      + '<kbd>K</kbd> parts of line <kbd>I</kbd> detail <kbd>M</kbd> sound <kbd>R</kbd> restart'
       + ' <kbd>Esc</kbd> switch machine',
     baslik: 'LOAD MOMENT',
     durum: {
@@ -644,6 +651,10 @@ const EN: Metinler = {
       bomKilitliGovde: 'The crane does not work with the outriggers up. Lifting'
         + ' on the tyres puts the machine over on its side.',
       bomKilitliCozum: (k) => `Pull up to the set-up zone, then set the outriggers (${k.ayaklar}).`,
+      surusKilitliBas: 'DRIVING IS LOCKED',
+      surusKilitliGovde: 'The outriggers are down. A set-up crane does not drive'
+        + ' — the pads are bearing on the ground.',
+      surusKilitliCozum: (k) => `Retract the outriggers first (${k.ayaklar}).`,
     },
     ipucu: {
       surus: (k) => `pull up to the set-up zone, then set the outriggers (${k.ayaklar})`,
@@ -677,7 +688,7 @@ const EN: Metinler = {
       + ' <kbd>⇧W</kbd><kbd>⇧S</kbd> knuckle<br>'
       + '<kbd>↑</kbd><kbd>↓</kbd> hook <kbd>⇧↑</kbd><kbd>⇧↓</kbd> telescope<br>'
       + '<kbd>space</kbd> attach/release<br>'
-      + '<kbd>I</kbd> detail <kbd>R</kbd> reset <kbd>Esc</kbd> change machine',
+      + '<kbd>I</kbd> detail <kbd>M</kbd> sound <kbd>R</kbd> reset <kbd>Esc</kbd> change machine',
     baslik: 'LIFTING MOMENT',
     satir: {
       anaBom: 'main boom', kirma: 'knuckle', uzama: 'telescope', ucKotu: 'tip height',
@@ -721,7 +732,7 @@ const EN: Metinler = {
       + '<b>forks</b> <kbd>W</kbd><kbd>S</kbd> raise/lower '
       + '<kbd>⇧W</kbd><kbd>⇧S</kbd> mast tilt<br>'
       + '<b>no pick-up key</b> — slide the blades into the pocket and lift'
-      + ' <kbd>I</kbd> detail <kbd>R</kbd> restart <kbd>Esc</kbd> switch machine',
+      + ' <kbd>I</kbd> detail <kbd>M</kbd> sound <kbd>R</kbd> restart <kbd>Esc</kbd> switch machine',
     baslik: 'TIPPING MARGIN',
     durum: {
       devrilir: 'WILL TIP — TOO HEAVY', dikkat: 'CAUTION · REAR AXLE GOING LIGHT',

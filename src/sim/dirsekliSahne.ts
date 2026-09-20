@@ -164,6 +164,32 @@ export class DirsekliSahne implements OyunSahnesi {
       this.outriggers.reset(this.truck.chassis);
     }
     const u = M.vinc.uyari;
+
+    // **Faz kilitleri EN ÖNDE yazılıyor, özel retler sonra.**
+    //
+    // Sessizliğin iki yönü de kapanıyor: sürüş fazında bom tuşları ve
+    // çalışma fazında sürüş tuşları hiçbir şey yapmıyor, hiçbir şey de
+    // söylemiyordu; oyuncunun "yanlış tuş" ile "oyun donmuş" arasını
+    // ayırmasının yolu yoktu.
+    //
+    // Sıra önemli: `Ret.yaz` son yazanı tutuyor. Oyuncu yüklü kancayla
+    // ayak düğmesine basarken ok tuşunu da basılı tutuyorsa iki ret birden
+    // doğuyor ve doğru cevap "ayaklar toplanamadı" — genel "sürüş kilitli"
+    // değil. O yüzden genel olan önce yazılıyor, özel olan üstüne.
+    const bomModu = this.calismaModunda;
+    if (bomModu && (input.drive.throttle !== 0 || input.drive.handbrake)) {
+      this.ret.yaz({
+        bas: u.surusKilitliBas, govde: u.surusKilitliGovde,
+        cozum: u.surusKilitliCozum(kumandaAdi()),
+      });
+    }
+    if (!bomModu && bomGirdisiVar(input)) {
+      this.ret.yaz({
+        bas: u.bomKilitliBas, govde: u.bomKilitliGovde,
+        cozum: u.bomKilitliCozum(kumandaAdi()),
+      });
+    }
+
     if (input.toggleOutriggers) {
       // Yük kancadayken ayak toplanmaz — gerekçesi vinç sahnesinde, aynı yer.
       if (this.hasLoad) {
@@ -174,7 +200,6 @@ export class DirsekliSahne implements OyunSahnesi {
       }
     }
 
-    const bomModu = this.calismaModunda;
     // **Kilitli kumanda artık sessiz değil.** Sürüş fazında bom tuşları
     // hiçbir şey yapmıyordu ve hiçbir şey de söylemiyordu; oyuncunun "yanlış
     // tuş" ile "oyun donmuş" arasını ayırmasının yolu yoktu.
@@ -308,7 +333,7 @@ export class DirsekliSahne implements OyunSahnesi {
     // uyarısının görüneceği tek yer sürüş fazı. Sıkışma bile bunun altında —
     // sıkışma kendi kendine devam ediyor, ret ise az önceki harekete cevap.
     const red = this.ret.aktif;
-    if (red) return { zone: 'amber', carpiyor: false, ...red };
+    if (red) return { zone: 'amber', carpiyor: false, ret: true, ...red };
     if (!this.calismaModunda) return null;
 
     // **Sıkışma en önde.** Diğer uyarılar süregelen bir DURUMU anlatıyor

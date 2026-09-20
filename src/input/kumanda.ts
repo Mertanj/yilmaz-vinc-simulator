@@ -58,6 +58,8 @@ export class Kumanda {
   detayToggled = false;
   /** Esc'e basıldığı karede bir kez true olur — araç seçimine dön. */
   cikisIstendi = false;
+  /** M'ye basıldığı karede bir kez true olur — sesi aç/kapat. */
+  sesToggled = false;
 
   constructor(target: EventTarget = window) {
     target.addEventListener('keydown', (e) => {
@@ -69,6 +71,7 @@ export class Kumanda {
       if (ev.code === 'Space') this.hookToggled = true;
       if (ev.code === 'KeyK') this.katToggled = true;
       if (ev.code === 'KeyI') this.detayToggled = true;
+      if (ev.code === 'KeyM') this.sesToggled = true;
       if (ev.code === 'Escape') this.cikisIstendi = true;
       // Boşluk ve ok tuşları sayfayı kaydırmasın.
       if (ev.code === 'Space' || ev.code.startsWith('Arrow')) ev.preventDefault();
@@ -186,6 +189,13 @@ export class Kumanda {
     return r;
   }
 
+  /** Ses aç/kapat istendi mi. */
+  consumeSesToggle(): boolean {
+    const r = this.sesToggled;
+    this.sesToggled = false;
+    return r;
+  }
+
   /** Araç seçimine dönülsün mü. */
   consumeCikis(): boolean {
     const r = this.cikisIstendi;
@@ -209,6 +219,7 @@ export class Kumanda {
     this.hookToggled = false;
     this.katToggled = false;
     this.detayToggled = false;
+    this.sesToggled = false;
     this.cikisIstendi = false;
   }
 }

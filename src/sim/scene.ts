@@ -314,7 +314,7 @@ export class Scene implements OyunSahnesi {
     // uyarısının görüneceği tek yer SÜRÜŞ fazı. Üç buçuk saniye sonra kendi
     // kendine çekiliyor ve altındaki uyarı neyse o geri geliyor.
     const red = this.ret.aktif;
-    if (red) return { zone: 'amber', carpiyor: false, ...red };
+    if (red) return { zone: 'amber', carpiyor: false, ret: true, ...red };
     if (!this.craneMode) return null;
 
     // İki-blok, yük momentinden ÖNCE gelir: kanca kafaya dayanmışsa mesele
@@ -425,6 +425,32 @@ export class Scene implements OyunSahnesi {
       this.outriggers.reset(this.truck.chassis);
     }
     const u = M.vinc.uyari;
+
+    // **Faz kilitleri EN ÖNDE yazılıyor, özel retler sonra.**
+    //
+    // Sessizliğin iki yönü de kapanıyor: sürüş fazında bom tuşları ve
+    // çalışma fazında sürüş tuşları hiçbir şey yapmıyor, hiçbir şey de
+    // söylemiyordu; oyuncunun "yanlış tuş" ile "oyun donmuş" arasını
+    // ayırmasının yolu yoktu.
+    //
+    // Sıra önemli: `Ret.yaz` son yazanı tutuyor. Oyuncu yüklü kancayla
+    // ayak düğmesine basarken ok tuşunu da basılı tutuyorsa iki ret birden
+    // doğuyor ve doğru cevap "ayaklar toplanamadı" — genel "sürüş kilitli"
+    // değil. O yüzden genel olan önce yazılıyor, özel olan üstüne.
+    const craneMode = this.craneMode;
+    if (craneMode && (input.drive.throttle !== 0 || input.drive.handbrake)) {
+      this.ret.yaz({
+        bas: u.surusKilitliBas, govde: u.surusKilitliGovde,
+        cozum: u.surusKilitliCozum(kumandaAdi()),
+      });
+    }
+    if (!craneMode && bomGirdisiVar(input)) {
+      this.ret.yaz({
+        bas: u.bomKilitliBas, govde: u.bomKilitliGovde,
+        cozum: u.bomKilitliCozum(kumandaAdi()),
+      });
+    }
+
     if (input.toggleOutriggers) {
       // **Yük kancadayken ayak toplanmaz.** Toplanırsa `craneMode` düşüyor,
       // bom yol konumuna katlanıyor ve asılı yükü yanında sürüklüyor. Eskiden
@@ -438,7 +464,6 @@ export class Scene implements OyunSahnesi {
       }
     }
 
-    const craneMode = this.craneMode;
     // **Kilitli kumanda artık sessiz değil.** Sürüş fazında bom tuşları
     // hiçbir şey yapmıyordu ve hiçbir şey de söylemiyordu; oyuncunun "yanlış
     // tuş" ile "oyun donmuş" arasını ayırmasının yolu yoktu.

@@ -12,6 +12,7 @@ import {
 import { dokunmatikKur, dokunmatikVar } from './ui/dokunmatik';
 import type { DokunmatikDuzeni } from './ui/dokunmatik';
 import { oku, yaz } from './ui/kayit';
+import { Ses } from './ses/ses';
 
 /**
  * Detay modu açık mı?
@@ -23,6 +24,16 @@ import { oku, yaz } from './ui/kayit';
  * yeniden açmak istemiyor.
  */
 const DETAY_ANAHTARI = 'yv.detay';
+
+/**
+ * Ses, Pixi uygulaması ve klavye gibi DÖNGÜNÜN DIŞINDA, tek.
+ *
+ * Her araçta yeni bir `AudioContext` açmak tarayıcının bağlam sayısını
+ * tüketir (Chrome ~6'da sessizce reddediyor) ve makine değiştiren oyuncu
+ * üçüncü turda sessiz bir oyun bulurdu. Sessizlik tercihi de araçlar arasında
+ * korunuyor — sesi kapatan biri onu her makinede yeniden kapatmak istemez.
+ */
+const ses = new Ses();
 
 /**
  * Oyunun dış kabuğu: seç → oyna → seçime dön.
@@ -55,10 +66,18 @@ async function boot(): Promise<void> {
 
   for (;;) {
     const arac = await aracSec(secimHost);
+    // **Ses bağlamı TAM BURADA açılıyor.** Tarayıcı `AudioContext`in ancak bir
+    // kullanıcı hareketinden sonra çalışmasına izin veriyor; karta basmak
+    // oyuna girmenin zaten tek yolu, yani başka bir "sesi başlat" düğmesi
+    // uydurmaya gerek yok. Sekmeden çıkıp dönünce bağlam askıya alınıyor, o
+    // yüzden her turda yeniden çağrılıyor — `ac()` bunu bekliyor.
+    ses.ac();
     // Hazır olmayan kart zaten `disabled`; yine de oyunu düşürmüyoruz.
     if (!arac.kur) continue;
     keys.sifirla();
     await oyna(stage, keys, arac);
+    // Döngü durdu; süregelen sesleri indir, yoksa seçim ekranında motor çalar.
+    ses.bosta();
     temizle(stage);
   }
 }
@@ -207,8 +226,22 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
   };
   stage.app.renderer.on('resize', yenidenBoyutlandi);
 
+  // --- ses: olaylar DURUM DEĞİŞİMİNDEN türetiliyor ---
+  //
+  // Sahneye "ses çal" diye bir çağrı eklemek yerine main.ts her karede neyin
+  // değiştiğine bakıyor. Sebep sınır: `src/sim` altında ses diye bir şey yok
+  // ve olmamalı — başsız rigler node'da koşuyor, orada `AudioContext` yok.
+  // Değişim izlemek zaten bedava, çünkü bu değerlerin hepsi HUD için okunuyor.
+  let oncekiCarpma = scene.carpma;
+  let oncekiYuk = scene.hasLoad;
+  let oncekiSira = 0;
+  let oncekiAyak = scene.calismaModunda;
+  let oncekiUyari = '';
+  let inceMod = false;
+
   return new Promise<void>((cik) => {
     const step = (dt: number): void => {
+      if (keys.consumeSesToggle()) ses.degistir();
       if (keys.consumeDetayToggle()) {
         detay = !detay;
         yaz(DETAY_ANAHTARI, detay ? '1' : '0');
@@ -243,10 +276,24 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
     const render = (alpha: number, frameDt: number): void => {
       gorunum.ciz(alpha, mission.marker, mission.task?.halfWidth ?? 1);
 
+      sesiSur(frameDt);
+
       // Kadraja girmesi gerekenleri makine söylüyor; hedefi biz ekliyoruz.
       const bakilacak = scene.odakNoktalari();
       const hedefNoktasi = mission.target;
       if (hedefNoktasi && scene.hasLoad) bakilacak.push(hedefNoktasi);
+
+      // **İnce hizalamada kadraj daralıyor.** Karar sunum katmanında, çünkü
+      // kullandığı her şey (kanca, yük, hedef) zaten burada okunuyor ve
+      // makinenin bunu bilmesi gerekmiyor. Girme/çıkma eşikleri AYRI: tek
+      // eşikte kamera sınırda gidip gelen bir yükle birlikte nefes alıyordu.
+      const k = scene.yukNoktasi;
+      const yukP = scene.load.getPosition();
+      const nokta = scene.hasLoad ? hedefNoktasi : { x: yukP.x, y: yukP.y };
+      const uzaklik = nokta ? Math.hypot(k.x - nokta.x, k.y - nokta.y) : Infinity;
+      inceMod = uzaklik < (inceMod ? 4.6 : 3.0);
+      camera.inceHizalama(inceMod);
+
       camera.follow(
         bakilacak, scene.sasiHizi, stage.app.screen.width, stage.app.screen.height, frameDt,
       );
@@ -257,6 +304,52 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
 
     const loop = new FixedLoop(step, render);
     loop.start();
+
+    /**
+     * Süregelen sesleri besler ve olayları değişimden türetir.
+     *
+     * Gaz doğrudan okunmuyor: `sasiHizi` var ve motorun duyulması gereken şey
+     * zaten o — duran bir kamyonda rölanti, hızlananda yükselen devir.
+     * Hidrolik için kolların mutlak en büyüğü alınıyor; oyuncu hangi ekseni
+     * sürerse sürsün pompa aynı pompa.
+     */
+    function sesiSur(frameDt: number): void {
+      const c = keys.readCrane();
+      const hidrolik = scene.calismaModunda
+        ? Math.max(Math.abs(c.luff), Math.abs(c.telescope),
+          Math.abs(c.uzat), Math.abs(c.winch))
+        : 0;
+      ses.guncelle({
+        gaz: Math.min(1, Math.abs(scene.sasiHizi) / 9),
+        hidrolik,
+        zone: scene.gosterge().zone,
+      }, frameDt);
+
+      if (scene.carpma !== oncekiCarpma) {
+        oncekiCarpma = scene.carpma;
+        ses.olay('carpma');
+        camera.sars(0.22);
+      }
+      if (scene.hasLoad !== oncekiYuk) {
+        ses.olay(oncekiYuk ? 'birak' : 'bagla');
+        oncekiYuk = scene.hasLoad;
+      }
+      const t = mission.sonTamamlanan;
+      if (t && t.sira !== oncekiSira) {
+        oncekiSira = t.sira;
+        ses.olay('kondu');
+      }
+      if (scene.calismaModunda !== oncekiAyak) {
+        oncekiAyak = scene.calismaModunda;
+        ses.olay('ayak');
+      }
+      // Ret şeridi YENİ açıldıysa bir kez öt: şerit 3.5 saniye duruyor ve
+      // her karede ötseydi alarm olurdu.
+      const u = scene.uyari();
+      const bas = u?.ret === true ? u.bas : '';
+      if (bas !== '' && bas !== oncekiUyari) ses.olay('ret');
+      oncekiUyari = bas;
+    }
 
     function detayMetni(): string {
       return dokunmatik ? M.panel.detayDokunma(detay) : M.panel.detayIpucu(detay);

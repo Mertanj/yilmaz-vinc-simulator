@@ -61,8 +61,25 @@ export class Camera {
     this.ppm = Math.min(yakin, Math.max(uzak, this.ppm));
   }
   /** Kutunun çevresinde bırakılan pay (m). */
-  private readonly padX = 5;
-  private readonly padY = 3.5;
+  private padX = 5;
+  private padY = 3.5;
+  private static readonly PAD_X = 5;
+  private static readonly PAD_Y = 3.5;
+
+  /**
+   * İnce hizalama modu: pay küçülüyor, yani kamera yaklaşıyor.
+   *
+   * Oyun testi: *"18 dakikalık boğuşmanın tamamında yakınlaştırma sabit
+   * hissettirdi; 45 santimlik bir hassasiyet için kavga eden oyuncunun daha
+   * yakın bir görüntüye fena halde ihtiyacı var."* Ölçeği doğrudan zorlamak
+   * yerine payı kısıyoruz, çünkü ölçeği belirleyen kutu; pay küçülünce kutu
+   * küçülüyor ve mevcut mekanizma kendiliğinden yaklaşıyor. Geçişi de
+   * `tauZoom` zaten yumuşatıyor.
+   */
+  inceHizalama(acik: boolean): void {
+    this.padX = acik ? 1.8 : Camera.PAD_X;
+    this.padY = acik ? 1.4 : Camera.PAD_Y;
+  }
 
   /**
    * @param points görünmesi gereken noktalar (şasi, bom ucu, kanca…)
@@ -124,6 +141,15 @@ export class Camera {
     this.x = approach(this.x, hedefX + look, this.tauX, dt);
     this.x = clamp(this.x, hedefX - this.maxOffset, hedefX + this.maxOffset);
     this.y = approach(this.y, hedefY, this.tauY, dt);
+
+    // Sarsıntı EN SONDA ve yumuşatmanın DIŞINDA ekleniyor: yumuşatmanın içine
+    // girseydi kamera sarsıntıyı "hedef" sanıp peşinden gider, sallanma da
+    // sönmek yerine sürüklenirdi.
+    if (this.sarsinti > 0.002) {
+      this.sarsinti = approach(this.sarsinti, 0, Camera.SARSINTI_TAU, dt);
+      this.x += (Math.random() * 2 - 1) * this.sarsinti;
+      this.y += (Math.random() * 2 - 1) * this.sarsinti * 0.7;
+    } else this.sarsinti = 0;
   }
 
   /**
@@ -142,6 +168,24 @@ export class Camera {
     this.x = x;
     this.y = y;
     this.ppm = this.maxPpm;
+    this.sarsinti = 0;
+  }
+
+  /** Kalan sarsıntı genliği (m). */
+  private sarsinti = 0;
+  /** Sarsıntının sönme zaman sabiti (s) — kısa, yoksa mide bulandırıyor. */
+  private static readonly SARSINTI_TAU = 0.11;
+
+  /**
+   * Çarpmada kamerayı sars.
+   *
+   * Oyun testi: *"yük yere konduğunda mekanik olarak sadece… duruyor. Ne ses,
+   * ne ikincil hareket, ne toz."* Çarpma zaten puandan götürüyor ve uyarı
+   * şeridinde yazıyor, ama oyuncunun BEDENİ bir cevap bekliyor. Genlik
+   * bilerek küçük (santimetreler): kadrajı bozmadan hissediliyor.
+   */
+  sars(siddet: number): void {
+    this.sarsinti = Math.min(0.55, Math.max(this.sarsinti, siddet));
   }
 
   /**

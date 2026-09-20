@@ -147,6 +147,15 @@ export interface Uyari {
   cozum: string;
   /** Oyuncu şu an kilitli bir kola basıyor mu — şerit yanıp sönsün. */
   carpiyor: boolean;
+  /**
+   * Bu bir REDDİN cevabı mı, yoksa süregelen bir durum mu?
+   *
+   * Şerit ikisini de sarı gösteriyor ve göstermeli: oyuncu için ikisi de
+   * "dikkat". Ses için ise aynı değiller — ret bir OLAY ve bir kez ötmesi
+   * gerekiyor, yük momentinin sarıya girmesi ise bir DURUM ve kendi tekrarlı
+   * uyarı tonu zaten var. Ayırmadan ikisi üst üste biniyordu.
+   */
+  ret?: boolean;
 }
 
 
