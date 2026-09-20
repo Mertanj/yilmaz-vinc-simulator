@@ -24,9 +24,23 @@
  * (dirsekli bom). Ayrı bir tip yapmadık: `Task` üç bölümde de aynı ve
  * çizim tarafı zaten tek bir `switch` ile karşılıyor.
  */
+/**
+ * Yük türü — ÇİZİM buna bakıyor, ada değil.
+ *
+ * Üç makinenin üç ayrı kümesi var ve karışmamaları şart. Bir kez karıştı:
+ * forkliftin beş görevi de vincin türlerini kullanıyordu, yani "Çimento
+ * paleti" ekranda bir CNC TEZGÂHI olarak çiziliyordu. Ad veri dosyasında,
+ * çizim `missionView.ts`'te; ikisi ayrı yerde durduğu için kayma sessiz
+ * kaldı. `drawLoad` artık tüketicilik denetimli — yeni bir tür eklenip
+ * çizimi unutulursa derlenmiyor.
+ */
 export type LoadKind =
+  // Vinç — sanayi sitesi: fabrikadan çıkan makine ve malzeme.
   | 'bobin' | 'tezgah' | 'jenerator' | 'kompresor' | 'klima'
-  | 'briket' | 'donati' | 'kum' | 'kalip' | 'kova';
+  // Dirsekli — kaba inşaat: şantiyeye çıkan malzeme.
+  | 'briket' | 'donati' | 'kum' | 'kalip' | 'kova'
+  // Forklift — depo: paletli ticari mal.
+  | 'cimento' | 'fayans' | 'varil' | 'balya' | 'profil';
 
 export interface Task {
   kod: string;

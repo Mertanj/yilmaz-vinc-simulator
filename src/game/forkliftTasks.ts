@@ -93,27 +93,27 @@ export function katKotu(index: number): number | undefined {
 export const FORKLIFT_TASKS: readonly Task[] = [
   {
     kod: 'D1', ad: 'Çimento paleti', tonnes: 1.29,
-    halfWidth: 0.58, halfHeight: 0.42, kind: 'tezgah', hedef: 0,
+    halfWidth: 0.58, halfHeight: 0.42, kind: 'cimento', hedef: 0,
     brif: 'R1, 1.30 m — ısınma turu: çatalı paletin cebine dibine kadar sok',
   },
   {
     kod: 'D2', ad: 'Fayans paleti', tonnes: 1.45,
-    halfWidth: 0.60, halfHeight: 0.38, kind: 'bobin', hedef: 1,
+    halfWidth: 0.60, halfHeight: 0.38, kind: 'fayans', hedef: 1,
     brif: 'R2, 3.00 m — kapasite tam burada erimeye başlıyor',
   },
   {
     kod: 'D3', ad: 'Boya varilleri', tonnes: 1.20,
-    halfWidth: 0.88, halfHeight: 0.45, kind: 'jenerator', hedef: 1,
+    halfWidth: 0.88, halfHeight: 0.45, kind: 'varil', hedef: 1,
     brif: 'Geniş palet — çatal az girerse yük merkezi uzar, ibre tırmanır',
   },
   {
     kod: 'D4', ad: 'Yalıtım balyası', tonnes: 1.02,
-    halfWidth: 0.95, halfHeight: 0.45, kind: 'klima', hedef: 2,
+    halfWidth: 0.95, halfHeight: 0.45, kind: 'balya', hedef: 2,
     brif: 'Bölümün en hafifi ama en genişi — en üst kat, 4.70 m',
   },
   {
     kod: 'D5', ad: 'Çelik profil', tonnes: 1.78,
-    halfWidth: 0.52, halfHeight: 0.30, kind: 'kompresor', hedef: 2,
+    halfWidth: 0.52, halfHeight: 0.30, kind: 'profil', hedef: 2,
     brif: 'Bölümün en ağırı, en üst kat — ibre sınıra dayanır',
   },
 ];
