@@ -217,6 +217,22 @@ export function forkliftKapasitesi(loadCentreM: number, liftM: number): number {
   return 0;
 }
 
+/** Bıçağın palet cebindeki durumu — çizim ve ipucu bunu okuyor. */
+export interface CepOlcumu {
+  /** Bıçağın cebe girdiği derinlik (m). */
+  giren: number;
+  /** Girilebilecek en derin yer (m). */
+  tam: number;
+  /** Bıçak cebin kotunda mı? */
+  hizada: boolean;
+  /** Paletin yakın (batı) yüzü — gösterge burada başlıyor. */
+  x: number;
+  /** Cebin orta kotu. */
+  y: number;
+  /** Şu an alınsa okunacak yük merkezi (m). */
+  merkez: number;
+}
+
 export interface ForkliftInput {
   /** -1 çatalı indir, +1 kaldır. */
   lift: number;
@@ -599,6 +615,52 @@ export class Forklift {
       else if (girdi) enIyi = 'alcak';
       else if (altinda) enIyi = 'yanas';
       else enIyi = enIyi === 'uzak' ? 'kot' : enIyi;
+    }
+    return enIyi;
+  }
+
+  /**
+   * Bıçağın paletin cebine ne kadar girdiği (m) — **oyuncunun göremediği
+   * tek sayı buydu.**
+   *
+   * Bölümün bütün zorluğu yük merkezi mesafesinde: yarı yamalak sokulmuş
+   * palet gerçekten daha uzun okuyor ve kapasiteyi gerçekten düşürüyor.
+   * Ama bu ancak yükü KALDIRDIKTAN sonra panelde bir sayı olarak
+   * görünüyordu — yani oyuncu hatayı ancak iş işten geçtikten sonra
+   * öğreniyordu. Sahadan gelen *"ağırlık koyma deneyimi idealden öte"*
+   * cümlesinin karşılığı burası.
+   *
+   * Ölçüm gerçek: bıçağın ucu ile paletin yakın yüzü arasındaki mesafe.
+   * `null` dönmesi "ortada girilecek bir cep yok" demek.
+   */
+  cep(adaylar: Grabbable[]): CepOlcumu | null {
+    if (this.hasLoad) return null;
+    const h = this.forkWorld;
+    const t = this.forkTip;
+    let enIyi: CepOlcumu | null = null;
+    for (const item of adaylar) {
+      const p = item.body.getWorldCenter();
+      const taban = p.y - item.halfHeight;
+      const yakinYuz = p.x - item.halfWidth;
+      // Sadece ÖNÜNDEKİ paleti göster: arkada kalanın cebi oyuncuyu
+      // ilgilendirmiyor ve iki gösterge üst üste binerdi.
+      if (t.x < yakinYuz - 2.5 || h.x > p.x + item.halfWidth) continue;
+      // Cep paletin kendi derinliği kadar: bıçak baştan sona geçtiyse
+      // "dibine kadar girdi" demektir. Bıçak (1.35 m) çoğu paletten uzun,
+      // o yüzden ölçüyü bıçağın boyuna göre vermek şeridi paletin dışına
+      // taşırıyordu.
+      const tam = item.halfWidth * 2;
+      const giren = Math.max(0, Math.min(tam, t.x - yakinYuz));
+      const hizada = h.y < taban - 0.01 && h.y > taban - FORKLIFT.paletCebiM;
+      const aday: CepOlcumu = {
+        giren, tam, hizada,
+        x: yakinYuz, y: taban - FORKLIFT.paletCebiM / 2,
+        // `loadCentreM` ile AYNI hesap: yük merkezinin çatal yüzüne (yani
+        // bıçağın topuğuna) uzaklığı. İki formül ayrışırsa oyuncu alırken
+        // bir sayı, kaldırdıktan sonra başka bir sayı görür.
+        merkez: Math.max(0.2, p.x - t.x + FORKLIFT.forkLengthM),
+      };
+      if (!enIyi || giren > enIyi.giren) enIyi = aday;
     }
     return enIyi;
   }

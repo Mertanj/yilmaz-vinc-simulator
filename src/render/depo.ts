@@ -1,4 +1,5 @@
 import { Container, Graphics } from 'pixi.js';
+import type { CepOlcumu } from '../sim/forklift';
 import { C } from './palette';
 import { worldText } from './text';
 import {
@@ -371,4 +372,111 @@ function karistir(a: number, b: number, t: number): number {
   return (Math.round(ar + (br - ar) * t) << 16)
     | (Math.round(ag + (bg - ag) * t) << 8)
     | Math.round(ab + (bb - ab) * t);
+}
+
+/**
+ * Çatalın palet cebindeki derinliğini PALETİN ÜSTÜNDE gösteren şerit.
+ *
+ * Panelde "yük merkezi 0.95 m" yazıyordu ve bu doğru bir sayıydı ama yanlış
+ * zamanda: oyuncu onu ancak yükü kaldırdıktan sonra görüyordu, yani hatayı
+ * düzeltemeyeceği anda. Bölümün bütün zorluğu bıçağın cebe ne kadar
+ * girdiğinde olduğu için, ölçüm oyuncunun BAKTIĞI yerde durmalı.
+ *
+ * Renk üç durumu anlatıyor: bıçak kotu tutmuyorsa gri (önce kotu tuttur),
+ * tutuyor ama sığsa amber, dibe kadar girdiyse yeşil.
+ */
+export class CepGostergesi extends Container {
+  private readonly g = new Graphics();
+  private readonly yazi = worldText('', 0.2, { fill: 0xF4F7F8 });
+
+  constructor() {
+    super();
+    this.addChild(this.g, this.yazi);
+  }
+
+  guncelle(o: CepOlcumu | null): void {
+    this.visible = o !== null && o.tam > 0.1;
+    if (!o) return;
+    const oran = Math.min(1, o.giren / o.tam);
+    // Dibe kadar = %90 ve üstü: bıçağın ucu paletin uzak yüzüne varmış
+    // demek. Tam %100 istemek imkânsıza yakın; gerçek operatör de paleti
+    // sırtlığa dayayınca "girdi" sayar.
+    const renk = !o.hizada ? 0x8B959B : oran >= 0.9 ? 0x39B36A : C.hazardY;
+    const h = 0.16;
+    this.g.clear();
+    this.g.roundRect(o.x, o.y - h / 2, o.tam, h, 0.04)
+      .fill({ color: 0x0E1417, alpha: 0.55 });
+    if (oran > 0.01) {
+      this.g.roundRect(o.x, o.y - h / 2, o.tam * oran, h, 0.04)
+        .fill({ color: renk, alpha: 0.92 });
+    }
+    this.g.roundRect(o.x, o.y - h / 2, o.tam, h, 0.04)
+      .stroke({ width: 0.025, color: renk, alpha: 0.9 });
+    // Dibin işareti: buraya kadar girmek yük merkezini en kısa yapıyor.
+    this.g.rect(o.x + o.tam * 0.9 - 0.015, o.y - h / 2 - 0.05, 0.03, h + 0.1)
+      .fill({ color: 0xF4F7F8, alpha: 0.75 });
+
+    // Yazı şeridin ALTINDA: üstünde tonaj plakasıyla üst üste biniyordu ve
+    // ikisi de okunmuyordu. Arkasında koyu bir plaka var, çünkü zemin de
+    // palet de açık renk.
+    const yaziY = o.y - 0.26;
+    this.g.roundRect(o.x + o.tam / 2 - 0.36, yaziY - 0.13, 0.72, 0.26, 0.04)
+      .fill({ color: 0x0E1417, alpha: 0.7 });
+    this.yazi.text = `${o.merkez.toFixed(2)} m`;
+    this.yazi.style.fill = renk;
+    this.yazi.position.set(o.x + o.tam / 2, yaziY);
+  }
+}
+
+/**
+ * Yük yere/kirişe otururken kalkan toz.
+ *
+ * Bırakma anı sessizdi: palet duruyordu, ekranda hiçbir şey olmuyordu ve
+ * oyuncu "oturdu mu" sorusunu ancak HUD'dan öğreniyordu. Toz o anı yükün
+ * KENDİSİNDE gösteriyor — sahada da bir paleti betona koyunca kalkan şey o.
+ */
+export class TozBulutu extends Container {
+  private readonly g = new Graphics();
+  private readonly zerreler: Array<{ x: number; y: number; vx: number; vy: number;
+    r: number; omur: number; yas: number }> = [];
+
+  constructor() {
+    super();
+    this.addChild(this.g);
+  }
+
+  /** @param siddet 0–1; düşüş hızından geliyor. */
+  patlat(x: number, y: number, en: number, siddet: number): void {
+    const adet = Math.round(6 + siddet * 10);
+    for (let i = 0; i < adet; i++) {
+      const yon = Math.random() < 0.5 ? -1 : 1;
+      this.zerreler.push({
+        x: x + (Math.random() - 0.5) * en,
+        y: y + Math.random() * 0.06,
+        vx: yon * (0.5 + Math.random() * 1.4) * (0.4 + siddet),
+        vy: (0.25 + Math.random() * 0.7) * (0.4 + siddet),
+        r: 0.05 + Math.random() * 0.1,
+        omur: 0.5 + Math.random() * 0.5,
+        yas: 0,
+      });
+    }
+  }
+
+  sur(dt: number): void {
+    this.g.clear();
+    for (let i = this.zerreler.length - 1; i >= 0; i--) {
+      const z = this.zerreler[i];
+      if (!z) continue;
+      z.yas += dt;
+      if (z.yas >= z.omur) { this.zerreler.splice(i, 1); continue; }
+      z.x += z.vx * dt;
+      z.y += z.vy * dt;
+      // Toz yerden kalkar, yavaşlar ve asılı kalır — düşmez.
+      z.vx *= 1 - Math.min(1, dt * 2.2);
+      z.vy *= 1 - Math.min(1, dt * 3.4);
+      const t = z.yas / z.omur;
+      this.g.circle(z.x, z.y, z.r * (1 + t * 1.6))
+        .fill({ color: 0xC9C2B2, alpha: 0.4 * (1 - t) });
+    }
+  }
 }

@@ -5,7 +5,7 @@ import { SIM } from '../sim/world';
 import { Scene, SCENE } from '../sim/scene';
 import { ForkliftSahnesi } from '../sim/forkliftSahne';
 import { DirsekliSahne } from '../sim/dirsekliSahne';
-import { DEPO_BATI, DEPO_DOGU } from '../game/forkliftTasks';
+import { DEPO_BATI, DEPO_DOGU, PALET_AYAK } from '../game/forkliftTasks';
 import { TRUCK } from '../sim/truck';
 import { FORKLIFT } from '../sim/forklift';
 import { drawLoad, TargetMarker } from './missionView';
@@ -15,7 +15,7 @@ import { CableView, drawHookBlock } from './craneView';
 import { ForkliftView, drawForkliftWheel } from './forkliftView';
 import {
   drawRaf, drawDepoZemin, drawDepoIci, drawPalet, drawDepoArkaPlan, drawKonveyor,
-  derinlige,
+  derinlige, CepGostergesi, TozBulutu,
 } from './depo';
 import {
   drawGround, drawFactory, drawFarSkyline, drawEntranceSign, drawPropBox,
@@ -70,7 +70,9 @@ export abstract class SahneGorunumu {
     this.aktorler.addChild(this.marker, this.loadView);
   }
 
-  ciz(alpha: number, hedef: { x: number; y: number } | null, hedefHw: number): void {
+  ciz(alpha: number, hedef: { x: number; y: number } | null, hedefHw: number,
+      frameDt = 1 / 60): void {
+    void frameDt;
     this.makine(alpha);
 
     // Görev değiştiyse yük çizimini yenile: her yükün ölçüsü ve türü farklı.
@@ -277,11 +279,16 @@ export class ForkliftGorunumu extends SahneGorunumu {
     this.aktorler.addChild(this.stokKatmani);
     this.aktorler.addChild(this.makineView, ...this.wheelViews);
     this.yukuKur();
+    // Cep göstergesi ve toz EN ÜSTTE: ikisi de makinenin önünde geçiyor.
+    this.aktorler.addChild(this.toz, this.cepGostergesi);
   }
 
   /** Oyuncunun yerine koyduğu paletler — sahnede kalıyorlar. */
   private readonly stokKatmani = new Container();
   private cizilenStok = 0;
+  private readonly cepGostergesi = new CepGostergesi();
+  private readonly toz = new TozBulutu();
+  private oncekiDusus = 0;
 
   dekor(): Container[] {
     return [
@@ -312,9 +319,33 @@ export class ForkliftGorunumu extends SahneGorunumu {
   }
 
   override ciz(alpha: number, hedef: { x: number; y: number } | null,
-               hedefHw: number): void {
-    super.ciz(alpha, hedef, hedefHw);
+               hedefHw: number, frameDt = 1 / 60): void {
+    super.ciz(alpha, hedef, hedefHw, frameDt);
     this.stoguGuncelle();
+    this.cepGostergesi.guncelle(this.s.forklift.cep(this.s.grabbables));
+    this.tozuSur(frameDt);
+  }
+
+  /**
+   * Yük oturunca toz kaldır.
+   *
+   * Ölçüm burada: yükün düşey hızı belirgin şekilde eksiyken sıfıra
+   * dönüyorsa yere değmiştir. "Bırakma tuşuna basıldı" diye bakmak yanlış
+   * olurdu — forkliftte bırakma tuşu yok, palet çatal inerken kendiliğinden
+   * oturuyor; zaten oyuncunun hissetmek istediği an da o.
+   */
+  private tozuSur(frameDt: number): void {
+    const t = this.s.loadTask;
+    if (t && !this.s.hasLoad) {
+      const v = this.s.load.getLinearVelocity().y;
+      if (this.oncekiDusus < -0.35 && v > -0.08) {
+        const p = this.s.load.getPosition();
+        this.toz.patlat(p.x, p.y - t.halfHeight - PALET_AYAK,
+          t.halfWidth * 1.8, Math.min(1, -this.oncekiDusus / 1.6));
+      }
+      this.oncekiDusus = v;
+    } else this.oncekiDusus = 0;
+    this.toz.sur(frameDt);
   }
 
   /** Kapalı mekân: gökyüzü yok, deponun loş iç hacmi var. */

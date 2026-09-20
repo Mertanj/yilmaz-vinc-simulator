@@ -329,7 +329,7 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
     };
 
     const render = (alpha: number, frameDt: number): void => {
-      gorunum.ciz(alpha, mission.marker, mission.task?.halfWidth ?? 1);
+      gorunum.ciz(alpha, mission.marker, mission.task?.halfWidth ?? 1, frameDt);
 
       sesiSur(frameDt);
 
@@ -393,6 +393,10 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
       if (t && t.sira !== oncekiSira) {
         oncekiSira = t.sira;
         ses.olay('kondu');
+        // Çarpmanınkinden çok daha küçük bir sarsıntı: bu bir kaza değil,
+        // yükün oturduğu an. Sesin yanında tek başına duran görsel işaret
+        // HUD kartıydı ve o ekranın ortasında, yükün olduğu yerde değil.
+        camera.sars(0.06);
       }
       if (scene.calismaModunda !== oncekiAyak) {
         oncekiAyak = scene.calismaModunda;
