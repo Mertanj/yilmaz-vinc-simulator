@@ -610,7 +610,16 @@ export class Forklift {
       if (t.x < yakinYuz - 2.5 || h.x > uzakYuz) continue;
       const altinda = h.y < taban - 0.01 && h.y > taban - FORKLIFT.paletCebiM;
       const girdi = t.x >= yakinYuz + 0.25;
-      if (altinda && girdi) return 'hazir';
+      // **`hazir` artık cep göstergesiyle AYNI eşiği kullanıyor.** Eskiden
+      // 25 santim yeterliydi: gösterge hâlâ amber ("sığ") gösterirken ipucu
+      // "kaldır" diyordu, oyuncu kaldırıyor ve yük merkezi 1.68 m okuyup
+      // ibre %128'e çıkıyordu. İkisi aynı şeyi söylemeli.
+      //
+      // Sığ kaldırmak hâlâ MÜMKÜN — bölümün asıl dersi o. Değişen tek şey,
+      // oyunun artık bunu tavsiye etmiyor olması.
+      const dibinde = t.x >= yakinYuz + item.halfWidth * 2 * 0.9;
+      if (altinda && dibinde) return 'hazir';
+      if (altinda && girdi) enIyi = 'sig';
       if (girdi && h.y >= taban - 0.01) enIyi = 'yuksek';
       else if (girdi) enIyi = 'alcak';
       else if (altinda) enIyi = 'yanas';
@@ -693,7 +702,11 @@ export class Forklift {
   }
 }
 
-export type ForkReason = 'yuklu' | 'hazir' | 'yuksek' | 'alcak' | 'yanas' | 'kot' | 'uzak';
+export type ForkReason =
+  | 'yuklu' | 'hazir'
+  /** Bıçak cepte ama SIĞ: kaldırılabilir, ama yük merkezi uzar. */
+  | 'sig'
+  | 'yuksek' | 'alcak' | 'yanas' | 'kot' | 'uzak';
 
 
 function clamp(v: number, lo: number, hi: number): number {

@@ -1,7 +1,7 @@
 import { Container, Graphics } from 'pixi.js';
 import type { CepOlcumu } from '../sim/forklift';
 import { C } from './palette';
-import { worldText } from './text';
+import { worldText, kapla } from './text';
 import {
   ADA_X, RAF_KATLARI, RAF_DERINLIK, GIRIS_X, PALET_AYAK, TESLIM_KOTU,
   BEKLEME_CIZGISI, RAF_STOGU, adresIndeksi, adresKotu, adresX, katAdi,
@@ -63,13 +63,20 @@ export function drawRaf(): Container {
         // Arka dayanak
         g.rect(arka - 0.07, kot, 0.14, 0.52).fill(C.rackDark);
       }
-      // Kat adresi ve kotu: depo raflarında gerçekten yazar.
-      // Etiket adanın ARKA yarısında: ön yarıda hedef işaretiyle üst üste
-      // biniyordu ve ikisi de okunmuyordu.
-      const ad = kot > 0.001
-        ? `${katAdi(i)} · ${kot.toFixed(2)} m` : `${katAdi(i)} · zemin`;
-      const et = worldText(ad, 0.26, { fill: 0xD6E2EA });
-      et.position.set(on + RAF_DERINLIK - 1.25, Math.max(kot, 0.62) - 0.58);
+      // **Göz adresi: yalnızca ADRES, kot değil.**
+      //
+      // Önce "A1 · 3.00 m" yazıyordu ve iki kez çakıştı: kirişin üstünde
+      // paletin arkasına giriyor, altında ise sarı hedef üçgeninin tam
+      // üstüne düşüyordu — oyuncu işaretin hangi katı gösterdiğini yazıdan
+      // ayırt edemiyordu. Gerçek rafta da gözün üstünde ADRES yazar, kot
+      // değil; kotu zaten brifing ve HUD söylüyor ("B1, 3.00 m").
+      //
+      // Yeri gözün ARKA ucu: en geniş palet (yarı en 0.95) ön yüzden
+      // 2.00 metreye kadar uzanıyor, etiket 2.25'te başlıyor.
+      const et = worldText(katAdi(i), 0.3, { fill: 0xD6E2EA });
+      et.anchor.set(0.5, 0);
+      et.scale.y = -Math.abs(et.scale.y);
+      et.position.set(on + RAF_DERINLIK - 0.35, Math.max(kot, 0.02) + 0.1);
       c.addChild(et);
     });
 
@@ -137,8 +144,9 @@ function drawStok(): Container {
  * da o bandın içinde, uzaklaştıkça incelerek duruyor — yani bant bir
  * perspektif şeridi gibi okunuyor.
  */
-export function drawDepoZemin(left: number, right: number): Graphics {
+export function drawDepoZemin(left: number, right: number): Container {
   const g = new Graphics();
+  const yazilar: Container[] = [];
   // Zeminin kendisi ve kenar pahı
   g.rect(left, -8, right - left, 8).fill(C.depoFloor);
   g.rect(left, -0.06, right - left, 0.06).fill(C.depoFloorD);
@@ -179,12 +187,16 @@ export function drawDepoZemin(left: number, right: number): Graphics {
     }
     g.rect(on, -1.05, RAF_DERINLIK, 0.07).fill({ color: C.hazardY, alpha: 0.9 });
     // Gözün adresi zemine stensille yazılır; rafın üstündekiyle AYNI dizeden.
+    // Arkasında koyu bir plaka var: yazı tam sarı koridor şeridinin üstüne
+    // denk geliyordu ve çizgiyle kesişince okunmuyordu.
+    g.roundRect(on + RAF_DERINLIK / 2 - 0.55, -0.86, 1.1, 0.46, 0.05)
+      .fill({ color: 0x141A1E, alpha: 0.55 });
     const et = worldText(katAdi(zeminAdres), 0.42, { fill: 0xEBD79A });
     et.position.set(on + RAF_DERINLIK / 2, -0.62);
     et.anchor.set(0.5, 0.5);
     et.scale.y = Math.abs(et.scale.y) * -0.55;
     et.scale.x = Math.abs(et.scale.x);
-    g.addChild(et);
+    yazilar.push(et);
   });
 
   // --- 5. Yükleme karesi: paletler buraya iniyor ---
@@ -209,9 +221,9 @@ export function drawDepoZemin(left: number, right: number): Graphics {
   bekle.anchor.set(0.5, 0.5);
   bekle.scale.y = Math.abs(bekle.scale.y) * -0.55;
   bekle.scale.x = Math.abs(bekle.scale.x);
-  g.addChild(bekle);
+  yazilar.push(bekle);
 
-  return g;
+  return kapla(g, ...yazilar);
 }
 
 /** Zemine boyalı tek yönlü ok. */

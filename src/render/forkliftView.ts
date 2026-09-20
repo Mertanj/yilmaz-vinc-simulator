@@ -1,6 +1,6 @@
 import { Container, Graphics } from 'pixi.js';
 import { C } from './palette';
-import { worldText } from './text';
+import { worldText, kapla } from './text';
 import { FORKLIFT } from '../sim/forklift';
 
 /**
@@ -89,7 +89,7 @@ export class ForkliftView extends Container {
   }
 }
 
-function drawGovde(): Graphics {
+function drawGovde(): Container {
   const g = new Graphics();
   const L = F.chassisHalfLength;
   const H = F.chassisHalfHeight;
@@ -132,9 +132,8 @@ function drawGovde(): Graphics {
   // Giydirme: kamyonda ne varsa burada da. Aynı firma, başka makine.
   const logo = worldText('YILMAZ', 0.2, { fill: 0x2A1608, letterSpacing: 1 });
   logo.position.set(-0.05, -0.02);
-  g.addChild(logo);
 
-  return g;
+  return kapla(g, logo);
 }
 
 /**

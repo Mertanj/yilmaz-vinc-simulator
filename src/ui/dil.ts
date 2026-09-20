@@ -242,6 +242,8 @@ export interface Metinler {
     satir: { catalda: string; yukMerkezi: string; arkaAks: string; catalKotu: string; direkEgimi: string };
     alt: { merkez: (m: string) => string; alcakTasi: string; ustuDusuyor: (carpan: string) => string };
     uyari: {
+      kirisBas: string;
+      kirisGovde: (kot: string, catal: string) => string; kirisCozum: string;
       burunBas: string; burunGovde: (egim: string) => string; burunCozum: string;
       arkaBas: string; arkaGovde: (pay: string) => string; arkaCozum: string;
       asiriBas: string;
@@ -251,7 +253,9 @@ export interface Metinler {
     };
     ipucu: {
       teslimIniyor: string; teslimBekle: string;
-      yuklu: string; yanas: string; uzak: string;
+      yuklu: string; yanas: string; uzak: string; sig: string;
+      /** Paleti gözün dışına bıraktın — ne olduğunu söyle. */
+      kacirdi: string;
       hazir: (k: KumandaAdi) => string;
       yuksek: (k: KumandaAdi) => string;
       alcak: (k: KumandaAdi) => string;
@@ -503,6 +507,11 @@ const TR: Metinler = {
       ustuDusuyor: (carpan) => `3.3 m üstü: kapasite düşüyor (×${carpan})`,
     },
     uyari: {
+      kirisBas: '⚠ ÇATAL RAF KİRİŞİNİN ALTINDA',
+      kirisGovde: (kot, catal) =>
+        `${kot} m kirişi tam üstünde; çatal ${catal} m. Buradan kaldırmak `
+        + 'kirişe dayanır ve makineyi krikolar — raf seni devirir, yük değil.',
+      kirisCozum: 'Önce gözden geri çık, koridorda kaldır, sonra içeri sür.',
       burunBas: '⚠ BURUN YERE DÜŞTÜ — ÇATALIN ÜSTÜNDESİN',
       burunGovde: (egim) => `Araç <b>${egim}°</b> öne devrildi ve çatalının`
         + ' üstüne oturdu. Ön tekerler artık yönlendirmiyor.',
@@ -524,14 +533,16 @@ const TR: Metinler = {
     },
     ipucu: {
       teslimIniyor: 'palet iniyor · konveyörün önünde bekle',
-      teslimBekle: 'yeni palet için yükleme karesinin batısına geç',
+      teslimBekle: 'yeni palet için DUR çizgisinin batısına geç',
       yuklu: 'yük çatalda · gözün önüne gel, kaldır, içeri sür, indir',
-      hazir: (k) => `ÇATAL CEPTE · kaldır, palet gelecek (${k.kaldir})`,
+      hazir: (k) => `ÇATAL CEBİN DİBİNDE · kaldır (${k.kaldir})`,
+      sig: 'cepte ama SIĞ · biraz daha ileri sür, yoksa yük merkezi uzar',
+      kacirdi: 'palet gözün dışında kaldı · yeniden al ve gözüne koy',
       yuksek: (k) => `çatal çok yüksek · cebin altına in (${k.indir})`,
       alcak: (k) => `çatal çok alçak · paletin cebine getir (${k.kaldir})`,
       yanas: 'kot doğru · ileri sür, bıçağı cebe sok',
       kot: (k) => `çatalı paletin cebi hizasına getir (${k.ikisi})`,
-      uzak: 'paletler koridorun doğu ucunda · sağa sür',
+      uzak: 'paletler yükleme karesine iniyor · doğuya sür',
     },
   },
   kondu: {
@@ -806,6 +817,11 @@ const EN: Metinler = {
       ustuDusuyor: (carpan) => `above 3.3 m: capacity derated (×${carpan})`,
     },
     uyari: {
+      kirisBas: '⚠ FORKS ARE UNDER A RACK BEAM',
+      kirisGovde: (kot, catal) =>
+        `The ${kot} m beam is right above you; forks at ${catal} m. Lifting here `
+        + 'jacks the truck off the beam — the rack tips you, not the load.',
+      kirisCozum: 'Back out of the bay, lift in the aisle, then drive in.',
       burunBas: '⚠ NOSE DOWN — YOU ARE SITTING ON YOUR FORKS',
       burunGovde: (egim) => `The truck has pitched <b>${egim}°</b> forward and come`
         + ' to rest on its forks. The front wheels no longer steer.',
@@ -827,9 +843,11 @@ const EN: Metinler = {
     },
     ipucu: {
       teslimIniyor: 'pallet coming down · wait clear of the conveyor',
-      teslimBekle: 'move west of the loading square for the next pallet',
+      teslimBekle: 'move west of the DUR line for the next pallet',
       yuklu: 'load on the forks · line up with the bay, lift, drive in, lower',
-      hazir: (k) => `BLADES IN THE POCKET · lift, the pallet rides with you (${k.kaldir})`,
+      hazir: (k) => `BLADES FULLY HOME · lift (${k.kaldir})`,
+      sig: 'in the pocket but SHALLOW · go in further or the load centre runs out',
+      kacirdi: 'the pallet is outside the bay · pick it up and place it again',
       yuksek: (k) => `forks too high · get under the pocket (${k.indir})`,
       alcak: (k) => `forks too low · line up with the pocket (${k.kaldir})`,
       yanas: 'height is right · drive in, slide the blades into the pocket',

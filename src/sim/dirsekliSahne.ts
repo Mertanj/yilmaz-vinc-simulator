@@ -458,7 +458,7 @@ export class DirsekliSahne implements OyunSahnesi {
       uzak: k.uzak(t),
     };
     return {
-      metin: almaSatiri(reason, sapma, say[reason]),
+      metin: almaSatiri(reason, sapma, say[reason], M.dirsekli.ipucu.yanasma(kumandaAdi())),
       mod: reason === 'hazir' ? 'ready' : 'crane',
     };
   }

@@ -185,13 +185,27 @@ export interface Uyari {
  * gösteriyor: önce yükün üstüne gelinir, sonra inilir — sapancının yaptığı da
  * bu.
  */
+/**
+ * Makinenin uzanabileceği en büyük yatay mesafe (m) için üst sınır.
+ *
+ * Bundan uzaktaki bir sapmayı metre metre bildirmek yalan söylemek oluyor:
+ * oyun testinde dirsekli vinç, park cebi yerine yanlış yere sürüldüğünde
+ * *"kancayı 89.8 m sola getir"* diyordu — 9 tonmetrelik, en fazla 8 metre
+ * yarıçaplı bir makine için fiziksel olarak imkânsız bir talimat. Sapma bu
+ * sınırın ötesindeyse söylenecek doğru şey yön değil, "önce doğru yere
+ * yanaş"tır.
+ */
+const ERISIM_SINIRI_M = 26;
+
 export function almaSatiri(
   reason: AttachReason,
   sapma: { dx: number; dy: number } | null,
   varsayilan: string,
+  cokUzak?: string,
 ): string {
   if (!sapma) return varsayilan;
   const i = M.vinc.ipucu;
+  if (cokUzak && Math.abs(sapma.dx) > ERISIM_SINIRI_M) return cokUzak;
   if (reason === 'ortala' || reason === 'uzak') {
     return i.sapmaYatay(Math.abs(sapma.dx).toFixed(1), sapma.dx > 0);
   }

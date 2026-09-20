@@ -102,6 +102,12 @@ async function boot(): Promise<void> {
     // uydurmaya gerek yok. Sekmeden çıkıp dönünce bağlam askıya alınıyor, o
     // yüzden her turda yeniden çağrılıyor — `ac()` bunu bekliyor.
     ses.ac();
+    // **Çevirme çağrısını dilden SONRA yeniden kur.** Bir kez açılışta
+    // kuruluyordu; oyuncu seçim ekranından dili değiştirdiğinde o katman
+    // açılış dilinde kalıyordu — Türkçe oynayan birinin telefonda gördüğü
+    // İLK ekran İngilizceydi. Düğmeler her seferinde yeniden yazıldığı için
+    // dinleyiciler eskileriyle birlikte gidiyor, birikmiyorlar.
+    yatayCagrisiniKur();
     // Hazır olmayan kart zaten `disabled`; yine de oyunu düşürmüyoruz.
     if (!arac.kur) continue;
     keys.sifirla();
@@ -302,12 +308,20 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
         yaz(DETAY_ANAHTARI, detay ? '1' : '0');
       }
       const reset = keys.consumeReset();
+      // **Tur bitince kumanda kapanıyor.** Oyun testinde sonuç paneli ekranda
+      // dururken `W` hâlâ çatalı kaldırıyordu; devrilen makine kendini
+      // toparlayıp sürülebilir hale geliyor, ama süre donmuş ve tur "bitmiş"
+      // sayılıyordu. Fizik dönmeye devam ediyor (yük oturmasını bitirsin,
+      // devrilme animasyonu sönsün) — giden şey yalnızca oyuncunun girdisi.
+      // `R` istisna: turu yeniden başlatmanın yolu o.
+      const oyunAcik = mission.suruyor;
       scene.step({
-        drive: keys.readDrive(),
-        crane: keys.readCrane(),
-        toggleOutriggers: keys.consumeOutriggerToggle(),
-        toggleHook: keys.consumeHookToggle(),
-        toggleKat: keys.consumeKatToggle(),
+        drive: oyunAcik ? keys.readDrive() : { throttle: 0, handbrake: true },
+        crane: oyunAcik ? keys.readCrane()
+          : { luff: 0, telescope: 0, uzat: 0, winch: 0 },
+        toggleOutriggers: oyunAcik && keys.consumeOutriggerToggle(),
+        toggleHook: oyunAcik && keys.consumeHookToggle(),
+        toggleKat: oyunAcik && keys.consumeKatToggle(),
         reset,
       }, dt);
       if (reset) {

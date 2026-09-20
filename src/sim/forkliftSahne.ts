@@ -1,16 +1,17 @@
 import { Box, Polygon, Vec2, type Body, type Contact, type World } from 'planck';
 import { createWorld, createGround, KATEGORI, MASKE, Snapshotter, SIM } from './world';
-import { Forklift, forkliftKapasitesi, FORKLIFT_NEUTRAL } from './forklift';
+import { Forklift, forkliftKapasitesi, FORKLIFT, FORKLIFT_NEUTRAL } from './forklift';
 import type { Grabbable } from './crane';
 import { LmiZone, type LmiReading } from './loadChart';
 import {
-  ADA_X, BEKLEME_CIZGISI, FORKLIFT_TASKS, GIRIS_X, PALET_AYAK, RAF_DERINLIK,
-  RAF_KATLARI, RAF_X, TESLIM_HIZI, TESLIM_KOTU, ZEMIN_BANDI, adresKotu, adresX,
+  ADA_X, BEKLEME_CIZGISI, DEPO_BATI, DEPO_DOGU, FORKLIFT_TASKS, GIRIS_X,
+  PALET_AYAK, RAF_DERINLIK, RAF_KATLARI, RAF_X, TESLIM_HIZI, TESLIM_KOTU,
+  ZEMIN_BANDI, adresKotu, adresX,
 } from '../game/forkliftTasks';
 import type { Task } from '../game/tasks';
 import type { SceneInput } from './scene';
 import type { Gosterge, OyunSahnesi, PanelSatiri, Uyari } from './sahne';
-import { imzaliDerece } from './sahne';
+import { imzaliDerece, tasimaSatiri } from './sahne';
 import { M, kumandaAdi } from '../ui/dil';
 
 /**
@@ -81,6 +82,31 @@ export function createRaf(world: World): Body {
 }
 
 /**
+ * Deponun iki ucundaki duvarlar.
+ *
+ * **Bunlar yokken bölüm 20 saniyede bitiyordu.** Ölçüldü: başlangıçtan
+ * itibaren sadece geri vitese basmak yeterli — makine 65 metre batıya
+ * gidiyor, çizilmiş deponun dışına çıkıyor ve x = −61'de zemin plakasının
+ * ucundan düşüyor (`SIM.groundLeft` −60). Sonuç: hiçbir uyarı almadan,
+ * görünürde hiçbir şeye çarpmadan `ARAÇ DEVRİLDİ`, 0 puan.
+ *
+ * Duvar hem dürüst hem ucuz: depo KAPALI bir mekân, arka duvarı ve çatısı
+ * zaten çiziliyordu; eksik olan yalnızca iki uçtaki sınırdı. Makineyle,
+ * yükle ve çatalla çarpışıyor.
+ */
+export function createDepoDuvarlari(world: World): Body {
+  const body = world.createBody();
+  const yukseklik = 9;
+  for (const x of [DEPO_BATI, DEPO_DOGU]) {
+    body.createFixture(
+      new Box(0.4, yukseklik, new Vec2(x + (x < 0 ? -0.4 : 0.4), yukseklik), 0),
+      { friction: 0.4, restitution: 0 },
+    );
+  }
+  return body;
+}
+
+/**
  * Forklift sahnesi.
  *
  * Vinç sahnesiyle aynı arayüzü uyguluyor, dolayısıyla görev akışı, puanlama,
@@ -103,6 +129,7 @@ export class ForkliftSahnesi implements OyunSahnesi {
   constructor() {
     createGround(this.world);
     createRaf(this.world);
+    createDepoDuvarlari(this.world);
     this.forklift = new Forklift(this.world, this.snaps);
     this.spawnLoad(FORKLIFT_TASKS[0] ?? null);
 
@@ -249,6 +276,52 @@ export class ForkliftSahnesi implements OyunSahnesi {
     });
   }
 
+  /**
+   * Kaldırmayı kilitleyen raf kirişinin kotu — yoksa `null`.
+   *
+   * **Ölçümle bulundu ve oyunun en sinsi kaza sebebiydi.** Makine bir adanın
+   * altındayken (örn. x = 24.2, A adası 23.0–25.6) çatalı kaldırmak kirişe
+   * dayanıyor; kriko gibi çalışıp aracı kaldırıyor. Ölçüm: kot 2.29'da her
+   * şey normal, 2.69'da eğim 15.1°, arka aks %8 — ve **hiçbir uyarı yok.**
+   * Ana gösterge bu sırada %71 "GÜVENLİ" diyor, çünkü yük tablosu doğru:
+   * makineyi deviren şey yük değil, RAF.
+   *
+   * Fizik doğru ve kalıyor; eksik olan şey oyuncuya söylenmesiydi. Kiriş
+   * altında kaldırmanın meşru bir hali yok — göze koymak için aynen sahada
+   * olduğu gibi önce KORİDORDA kaldırıp sonra içeri sürmek gerekiyor, ipucu
+   * da bunu söylüyor. O yüzden uyarı değil, kilit: vinçteki iki-blok
+   * kilidinin forklift karşılığı.
+   *
+   * Kilit YALNIZCA temasın hemen öncesinde devrede (kirişin 40 cm altı),
+   * yoksa gözün önünde meşru kaldırmayı da engellerdi.
+   */
+  get kirisAltinda(): number | null {
+    const f = this.forklift;
+    const yuk = this.hasLoad ? this.loadSpec : null;
+    // Kirişe ilk dokunacak iki aday: sırtlığın tepesi (taşıyıcıda, dar) ve
+    // bıçağın/yükün üstü (çatal boyunca).
+    const topuk = f.forkWorld.x;
+    const adaylar: Array<{ x0: number; x1: number; ust: number }> = [
+      { x0: topuk - 0.1, x1: topuk + 0.1, ust: f.liftM + FORKLIFT.sirtlikM },
+      yuk
+        ? { x0: topuk, x1: topuk + yuk.halfWidth * 2,
+            ust: f.liftM + PALET_AYAK + yuk.halfHeight * 2 }
+        : { x0: topuk, x1: f.forkTip.x, ust: f.liftM + FORKLIFT.bicakKalinligiM },
+    ];
+    for (const on of ADA_X) {
+      const arka = on + RAF_DERINLIK;
+      for (const kot of RAF_KATLARI) {
+        if (kot <= 0.001) continue;
+        const alt = kot - 0.16;
+        for (const a of adaylar) {
+          if (a.x1 < on || a.x0 > arka) continue;
+          if (a.ust > alt - 0.4 && a.ust <= alt) return kot;
+        }
+      }
+    }
+    return null;
+  }
+
   get loadTask(): Task | null { return this.loadSpec; }
   /** Forkliftte kurulum yok: makine indiği an çalışır. */
   get calismaModunda(): boolean { return true; }
@@ -307,9 +380,13 @@ export class ForkliftSahnesi implements OyunSahnesi {
     this.forklift.drive(input.drive, dt);
     // Vinç kolları forkliftte kaldırma ve eğim oluyor: W/S çatal, ⇧W/⇧S direk.
     // **Yük alma tuşu yok** — çatal paleti fiziken kaldırıyor.
+    // Kaldırma iki sebeple kilitlenebiliyor: aşırı yük (tablo) ve raf kirişi
+    // (geometri). İkisi de aynı kanaldan geçiyor; hangisi olduğunu `uyari()`
+    // ayırt ediyor.
     this.forklift.update(
       { lift: input.crane.luff, tilt: input.crane.telescope },
-      dt, this.olcum.blockRadiusIncrease, this.grabbables,
+      dt, this.olcum.blockRadiusIncrease || this.kirisAltinda !== null,
+      this.grabbables,
     );
 
     this.teslimiYurut();
@@ -410,6 +487,15 @@ export class ForkliftSahnesi implements OyunSahnesi {
     const kilitli = this.forklift.kilitliDenendi;
     const egim = this.tiltDeg;
 
+    const kiris = this.kirisAltinda;
+    if (kiris !== null) {
+      return {
+        zone: 'red', carpiyor: kilitli,
+        bas: u.kirisBas,
+        govde: u.kirisGovde(kiris.toFixed(2), this.forklift.liftM.toFixed(2)),
+        cozum: u.kirisCozum,
+      };
+    }
     if (this.forklift.burunYerde) {
       return {
         zone: 'red', carpiyor: true,
@@ -456,13 +542,50 @@ export class ForkliftSahnesi implements OyunSahnesi {
     const durum = this.forklift.durum(this.grabbables);
     const k = kumandaAdi();
     const say: Record<typeof durum, string> = {
-      yuklu: i.yuklu, hazir: i.hazir(k), yuksek: i.yuksek(k),
+      yuklu: i.yuklu, hazir: i.hazir(k), sig: i.sig, yuksek: i.yuksek(k),
       alcak: i.alcak(k), yanas: i.yanas, kot: i.kot(k), uzak: i.uzak,
     };
+    let metin = say[durum];
+    const t = this.loadSpec;
+    const hedef = t ? this.hedefNoktasi(t) : null;
+
+    if (t && hedef && this.hasLoad) {
+      // **Hedefin nerede olduğunu SÖYLE.** Depo üç adaya yayılınca satır tek
+      // başına yetmez oldu: oyun testinde üç rafın da önünden geçip deponun
+      // doğu ucuna çıkan oyuncuya HUD 24 adım boyunca aynı cümleyi tekrarladı
+      // ("gözün önüne gel, kaldır…"), hedefin arkada kaldığını söylemedi.
+      // Vinç bölümü bunu zaten yapıyor; satırı aynı yerden alıyoruz.
+      const yon = tasimaSatiri(
+        { x: this.forklift.forkTip.x, y: this.forklift.liftM },
+        hedef, this.yerlestirmeToleransi(t),
+      );
+      if (yon) metin = `${metin} · ${yon}`;
+    } else if (t && hedef && this.kacirildi(t, hedef)) {
+      // **Işıksız bir hata olmasın.** Palet gözün yanına düştüğünde oyun hiçbir
+      // şey söylemiyordu: HUD sessizce alma ipucuna dönüyordu ve oyuncu neyi
+      // yanlış yaptığını hiç öğrenemiyordu.
+      metin = `${i.kacirdi} · ${metin}`;
+    }
+
     return {
-      metin: say[durum],
+      metin,
       mod: durum === 'hazir' ? 'ready' : durum === 'yuklu' ? 'crane' : 'drive',
     };
+  }
+
+  /**
+   * Palet yükleme karesinden çıkmış ama gözüne de girmemiş mi?
+   *
+   * Ölçüm: paletin yükleme karesinin doğusunda olması (yani oyuncu onu bir
+   * kez taşımış) ve hedef pencerenin dışında durması.
+   */
+  private kacirildi(t: Task, hedef: { x: number; y: number }): boolean {
+    if (this.hasLoad || !this.paletHazir) return false;
+    const p = this.load.getPosition();
+    if (p.x < GIRIS_X + 1.5) return false;
+    const tol = this.yerlestirmeToleransi(t);
+    return Math.abs(p.x - hedef.x) > tol.x
+      || Math.abs(p.y - (hedef.y + t.halfHeight)) > tol.y;
   }
 
   reset(): void { this.forklift.reset(); }

@@ -1,6 +1,6 @@
 import { Container, Graphics } from 'pixi.js';
 import { C } from './palette';
-import { worldText } from './text';
+import { worldText, kapla } from './text';
 import { BoomView } from './boomView';
 
 /**
@@ -52,7 +52,7 @@ export class TruckView extends Container {
   }
 }
 
-function drawChassis(): Graphics {
+function drawChassis(): Container {
   const g = new Graphics();
   const { halfLength: L, halfHeight: H } = RIG;
 
@@ -97,22 +97,19 @@ function drawChassis(): Graphics {
   // Gerçek araçta sarı zemine kırmızı — fotoğraftan alındı.
   const logo = worldText('YILMAZ VİNÇ', 0.38, { fill: C.liveryRed, letterSpacing: 2 });
   logo.position.set(-1.35, 0.11);
-  g.addChild(logo);
 
   // Telefon numarası — gerçek araçtaki en görünür ikinci giydirme.
   // Türk vinç kamyonlarında numara firma adı kadar önemli; fotoğrafta
   // kabin alnına kırmızıyla yazılmış.
   const tel = worldText('0532 242 94 47', 0.19, { fill: C.liveryRed, letterSpacing: 0.5 });
   tel.position.set(0.85, 0.11);
-  g.addChild(tel);
   const tel2 = worldText('0212 549 54 03', 0.19, { fill: C.liveryRed, letterSpacing: 0.5 });
   tel2.position.set(0.85, -0.14);
-  g.addChild(tel2);
 
-  return g;
+  return kapla(g, logo, tel, tel2);
 }
 
-function drawCab(): Graphics {
+function drawCab(): Container {
   const g = new Graphics();
   const { cabFront: F, cabBack: B, cabTop: T, halfHeight: H } = RIG;
 
@@ -164,15 +161,14 @@ function drawCab(): Graphics {
   // Kabin kapısı üstü küçük marka yazısı
   const door = worldText('YILMAZ', 0.17, { fill: C.liveryRed, letterSpacing: 1 });
   door.position.set(B + 0.95, 1.17);
-  g.addChild(door);
 
   // Kabin üstü bom yatağı
   g.roundRect(F - 1.9, T, 0.5, 0.66, 0.06).fill(C.frameDark);
 
-  return g;
+  return kapla(g, door);
 }
 
-function drawSuperstructure(): Graphics {
+function drawSuperstructure(): Container {
   const g = new Graphics();
   // Konum: bom ayağının altı. Yerel (0,0) = güverte üstü, bom pimi hizası.
   const top = RIG.boomFoot.y - RIG.deckTop;
@@ -204,7 +200,6 @@ function drawSuperstructure(): Graphics {
 
   const cw = worldText('YILMAZ VİNÇ', 0.26, { fill: C.liveryRed, letterSpacing: 1 });
   cw.position.set(-3.05, top * 0.62);
-  g.addChild(cw);
 
   // Operatör kabini (üst yapıda, bomun sağında)
   g.roundRect(0.45, 0.14, 1.0, top * 0.92, 0.1).fill(C.cab);
@@ -212,7 +207,7 @@ function drawSuperstructure(): Graphics {
   g.roundRect(0.45, 0.14, 1.0, top * 0.92, 0.1)
     .stroke({ width: 0.04, color: C.cabLine, alpha: 0.9 });
 
-  return g;
+  return kapla(g, cw);
 }
 
 /** Toplu haldeki outrigger kutuları. Sprint 2'de açılır hale gelecek. */

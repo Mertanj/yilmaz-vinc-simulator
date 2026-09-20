@@ -119,6 +119,15 @@ export class Mission {
   sonTamamlanan: Tamamlanan | null = null;
   private bitti = false;
   private devrildi = false;
+
+  /**
+   * Tur devam ediyor mu? Bitmişse oyuncunun girdisi artık makineye gitmiyor.
+   *
+   * Oyun testinde sonuç paneli ekranda dururken `W` hâlâ çatalı kaldırıyor,
+   * devrilen makine kendini toparlayıp sürülebilir hale geliyordu — süre
+   * donmuşken.
+   */
+  get suruyor(): boolean { return !this.bitti && !this.devrildi; }
   /** Oyuncu R'ye bastıysa "tek seferde" rozeti yanar. */
   private sifirlandi = false;
 
