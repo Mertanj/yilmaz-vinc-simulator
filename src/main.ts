@@ -37,6 +37,34 @@ const DETAY_ANAHTARI = 'yv.detay';
 const ses = new Ses();
 
 /**
+ * Bölüme ait gövde sınıflarını temizler.
+ *
+ * **Sahadan gelen hata:** *"bir turu bitirince herhangi bir araçla machines'a
+ * basınca ya da yeni oyuna başlayınca tuş pad gelmiyor."*
+ *
+ * Sebep bir sızıntıydı. `bitti` sınıfı sonuç paneli açılınca ekleniyor (ekran
+ * kumandasının sürüş ve çatal kümeleri panelin önünü kapatmasın diye) ve
+ * YALNIZCA `sonucGoster` içinde, `mission.result` null'a dönünce kaldırılıyor.
+ * Oyuncu sonuç ekranından Esc'e basınca döngü duruyor, o kod bir daha hiç
+ * çalışmıyor ve sınıf gövdede kalıyor — sonraki bölümde CSS `.pad.sol` ve
+ * `.pad.sag`'ı gizlemeye devam ediyor. `R` ile sıfırlamak bu hatayı
+ * göstermiyordu, çünkü orada `mission.result` gerçekten null'a dönüyor.
+ *
+ * Çıkışta `temizle()` çağırıyor — sonuç, uyarı ve yerleştirme panellerini
+ * gizleyen yer orası ve bu onların kardeşi; panellerin doğru temizlenip
+ * sınıfın unutulmasının sebebi zaten ikisinin ayrı yerlerde durmasıydı.
+ * Girişte bir kez daha çağrılıyor: sigorta, ileride başka bir çıkış yolu
+ * eklense bile bir sonraki bölüm kendini toparlasın.
+ *
+ * **Yalnız bölüme ait olanlar siliniyor.** `dokunmatik` cihaza ait,
+ * `yatay-zorla` ve `cevir-kapali` oyuncunun tercihi — üçü de turlar arasında
+ * yaşamalı.
+ */
+function bolumSiniflariniTemizle(): void {
+  document.body.classList.remove('bitti');
+}
+
+/**
  * Oyunun dış kabuğu: seç → oyna → seçime dön.
  *
  * Önceden `aracSec` açılışta bir kez bekleniyordu ve makineyi değiştirmenin
@@ -92,6 +120,7 @@ function temizle(stage: Stage): void {
     const el = document.getElementById(id);
     if (el) el.hidden = true;
   }
+  bolumSiniflariniTemizle();
 }
 
 /** Bir makineyle bir bölüm. Oyuncu seçime dönmek isteyince çözülür. */
@@ -114,6 +143,8 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
   const uzak = gorunum.uzak();
   if (uzak.length) stage.far.addChild(...uzak);
   stage.world.addChild(...gorunum.dekor(), gorunum.aktorler);
+
+  bolumSiniflariniTemizle();
 
   // Kipi sahne kurulur kurulmaz uygula: oyuncunun seçimi fiziğin ilk
   // adımından önce yerinde olmalı.
