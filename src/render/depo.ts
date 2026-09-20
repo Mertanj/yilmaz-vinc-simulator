@@ -3,7 +3,7 @@ import { C } from './palette';
 import { worldText } from './text';
 import {
   ADA_X, RAF_KATLARI, RAF_DERINLIK, GIRIS_X, PALET_AYAK, TESLIM_KOTU,
-  RAF_STOGU, adresIndeksi, adresKotu, adresX, katAdi,
+  BEKLEME_CIZGISI, RAF_STOGU, adresIndeksi, adresKotu, adresX, katAdi,
 } from '../game/forkliftTasks';
 import { drawLoad } from './missionView';
 import { M } from '../ui/dil';
@@ -122,25 +122,118 @@ function drawStok(): Container {
   return c;
 }
 
-/** Depo zemini: beton, derz çizgileri ve sarı trafik şeritleri. */
+/**
+ * Depo zemini — **boyalı**.
+ *
+ * Sahadan gelen şikâyet: *"harita tam net değil."* Zemin tek parça düz
+ * betondu; ne koridorun nerede olduğu, ne nerede durulacağı, ne de hangi
+ * gözün hangisi olduğu okunuyordu. Gerçek bir depoda bunların hepsi
+ * ZEMİNE BOYALIDIR ve operatör yolunu oradan bulur.
+ *
+ * Yan görünümde zemin çizgisi tek bir çizgi; boya nereye gidecek? Sahnenin
+ * zaten kullandığı sözleşmeyi sürdürüyoruz: **y = 0'ın ALTI, izleyiciye
+ * doğru uzanan zemin.** Beton derzleri en baştan böyle çiziliyordu. Boyalar
+ * da o bandın içinde, uzaklaştıkça incelerek duruyor — yani bant bir
+ * perspektif şeridi gibi okunuyor.
+ */
 export function drawDepoZemin(left: number, right: number): Graphics {
   const g = new Graphics();
+  // Zeminin kendisi ve kenar pahı
   g.rect(left, -8, right - left, 8).fill(C.depoFloor);
   g.rect(left, -0.06, right - left, 0.06).fill(C.depoFloorD);
-  // Beton derzleri
+  // Beton derzleri — döküm kareleri
   for (let x = Math.ceil(left / 4) * 4; x < right; x += 4) {
-    g.moveTo(x, 0).lineTo(x, -1.6).stroke({ width: 0.04, color: C.depoFloorD, alpha: 0.7 });
+    g.moveTo(x, 0).lineTo(x, -2.3).stroke({ width: 0.04, color: C.depoFloorD, alpha: 0.7 });
   }
-  // Yürüyüş yolu şeridi — depoda gerçekten çizilidir
-  for (let x = left + 1; x < right; x += 0.9) {
-    g.rect(x, 0.01, 0.5, 0.06).fill({ color: C.hazardY, alpha: 0.55 });
+  g.moveTo(left, -2.3).lineTo(right, -2.3)
+    .stroke({ width: 0.04, color: C.depoFloorD, alpha: 0.5 });
+
+  // --- 1. Koridor şeritleri: sürüş yolunun iki kenarı ---
+  // İkisi arasındaki bant makinenin yeri; rafın önündeki dar şerit ise
+  // yaya değil, çalışma alanı.
+  for (const [y, kalinlik, alfa] of [[-0.30, 0.09, 0.85], [-1.62, 0.09, 0.7]] as const) {
+    g.rect(left, y, right - left, kalinlik).fill({ color: C.hazardY, alpha: alfa });
   }
-  // Yükleme karesi: paletler buraya iniyor
-  g.rect(GIRIS_X - 1.6, 0.01, 3.2, 0.07).fill({ color: C.hazardY, alpha: 0.9 });
-  for (const x of [GIRIS_X - 1.6, GIRIS_X + 1.53]) {
-    g.rect(x, 0.01, 0.07, 1.0).fill({ color: C.hazardY, alpha: 0.9 });
+
+  // --- 2. Yaya yolu: yeşil boya, beyaz kenar — her modern depoda var ---
+  g.rect(left, -2.22, right - left, 0.52).fill({ color: 0x2C6E4A, alpha: 0.75 });
+  for (const y of [-2.24, -1.74]) {
+    g.rect(left, y, right - left, 0.045).fill({ color: 0xE8EEF0, alpha: 0.65 });
   }
+
+  // --- 3. Yön okları: koridor tek yönlü ---
+  for (let x = left + 4; x < right - 2; x += 7) {
+    okCiz(g, x, -0.96, 0.62);
+  }
+
+  // --- 4. Adaların önündeki taralı çalışma alanı ---
+  // Sarı-siyah tarama "burada durma, burası makinenin çalışma alanı" demek.
+  ADA_X.forEach((on, ada) => {
+    taraliAlan(g, on - 2.9, on - 0.2, -0.22, -0.62);
+    // Zemin gözünün ayak izi: paletin konacağı dikdörtgen.
+    const zeminAdres = adresIndeksi(ada, 0);
+    g.rect(on, -0.16, RAF_DERINLIK, 0.07).fill({ color: C.hazardY, alpha: 0.9 });
+    for (const x of [on, on + RAF_DERINLIK - 0.07]) {
+      g.rect(x, -1.05, 0.07, 0.95).fill({ color: C.hazardY, alpha: 0.9 });
+    }
+    g.rect(on, -1.05, RAF_DERINLIK, 0.07).fill({ color: C.hazardY, alpha: 0.9 });
+    // Gözün adresi zemine stensille yazılır; rafın üstündekiyle AYNI dizeden.
+    const et = worldText(katAdi(zeminAdres), 0.42, { fill: 0xEBD79A });
+    et.position.set(on + RAF_DERINLIK / 2, -0.62);
+    et.anchor.set(0.5, 0.5);
+    et.scale.y = Math.abs(et.scale.y) * -0.55;
+    et.scale.x = Math.abs(et.scale.x);
+    g.addChild(et);
+  });
+
+  // --- 5. Yükleme karesi: paletler buraya iniyor ---
+  g.rect(GIRIS_X - 1.6, -0.16, 3.2, 0.08).fill({ color: C.hazardY, alpha: 0.95 });
+  g.rect(GIRIS_X - 1.6, -1.15, 3.2, 0.08).fill({ color: C.hazardY, alpha: 0.95 });
+  for (const x of [GIRIS_X - 1.6, GIRIS_X + 1.52]) {
+    g.rect(x, -1.15, 0.08, 1.07).fill({ color: C.hazardY, alpha: 0.95 });
+  }
+  taraliAlan(g, GIRIS_X - 1.52, GIRIS_X + 1.52, -0.24, -1.07, 0.3);
+
+  // --- 6. Bekleme çizgisi: paletin inmesi için buranın batısında dur ---
+  // Kural zaten vardı ama GÖRÜNMÜYORDU: oyuncuya "yükleme karesinin
+  // batısına geç" deniyor, nereye kadar olduğu söylenmiyordu.
+  g.rect(BEKLEME_CIZGISI - 0.07, -2.3, 0.14, 2.3)
+    .fill({ color: 0xE8EEF0, alpha: 0.9 });
+  for (let y = -2.25; y < -0.1; y += 0.34) {
+    g.rect(BEKLEME_CIZGISI - 0.07, y, 0.14, 0.17)
+      .fill({ color: C.liveryRed, alpha: 0.95 });
+  }
+  const bekle = worldText('DUR', 0.36, { fill: 0xE8EEF0 });
+  bekle.position.set(BEKLEME_CIZGISI - 0.95, -0.52);
+  bekle.anchor.set(0.5, 0.5);
+  bekle.scale.y = Math.abs(bekle.scale.y) * -0.55;
+  bekle.scale.x = Math.abs(bekle.scale.x);
+  g.addChild(bekle);
+
   return g;
+}
+
+/** Zemine boyalı tek yönlü ok. */
+function okCiz(g: Graphics, x: number, y: number, boy: number): void {
+  const w = boy * 0.5;
+  g.moveTo(x, y - w).lineTo(x + boy * 0.55, y - w)
+    .lineTo(x + boy * 0.55, y - w * 1.5)
+    .lineTo(x + boy, y)
+    .lineTo(x + boy * 0.55, y + w * 1.5)
+    .lineTo(x + boy * 0.55, y + w)
+    .lineTo(x, y + w)
+    .fill({ color: C.hazardY, alpha: 0.5 });
+}
+
+/** Sarı-siyah tarama: "makinenin çalışma alanı, yaya girmez". */
+function taraliAlan(g: Graphics, x0: number, x1: number, y0: number, y1: number,
+                    alfa = 0.34): void {
+  const h = y0 - y1;
+  for (let x = x0; x < x1; x += 0.42) {
+    const w = Math.min(0.2, x1 - x);
+    g.moveTo(x, y0).lineTo(x + w, y0).lineTo(x + w - h, y1).lineTo(x - h, y1)
+      .fill({ color: C.hazardY, alpha: alfa });
+  }
 }
 
 /**

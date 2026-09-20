@@ -151,6 +151,17 @@ export const TESLIM_HIZI = 1.4;
  * boyalı duruyor.
  */
 export const BEKLEME_CIZGISI = GIRIS_X - 1.25;
+/**
+ * Zemin boyasının kapladığı bant (m) — y = 0'ın ALTINDA.
+ *
+ * Yan görünümde zemin tek bir çizgi; boya nereye gidecek? Sahnenin baştan
+ * beri kullandığı sözleşme bu: sıfırın altı, izleyiciye doğru uzanan zemin
+ * (beton derzleri de hep öyle çizildi). Kamera bu bandı kadrajda tutmak
+ * zorunda, yoksa koridor şeritleri, yön okları ve göz ayak izleri ekranın
+ * altında kalıyor — ölçüldü, boyanın tamamı görünmüyordu.
+ */
+export const ZEMIN_BANDI = 2.3;
+
 /** Depo duvarları — koridorun iki ucu. */
 export const DEPO_BATI = -12;
 export const DEPO_DOGU = 44;

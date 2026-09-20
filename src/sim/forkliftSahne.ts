@@ -5,7 +5,7 @@ import type { Grabbable } from './crane';
 import { LmiZone, type LmiReading } from './loadChart';
 import {
   ADA_X, BEKLEME_CIZGISI, FORKLIFT_TASKS, GIRIS_X, PALET_AYAK, RAF_DERINLIK,
-  RAF_KATLARI, RAF_X, TESLIM_HIZI, TESLIM_KOTU, adresKotu, adresX,
+  RAF_KATLARI, RAF_X, TESLIM_HIZI, TESLIM_KOTU, ZEMIN_BANDI, adresKotu, adresX,
 } from '../game/forkliftTasks';
 import type { Task } from '../game/tasks';
 import type { SceneInput } from './scene';
@@ -273,7 +273,16 @@ export class ForkliftSahnesi implements OyunSahnesi {
   odakNoktalari(): Array<{ x: number; y: number }> {
     const c = this.forklift.chassis.getPosition();
     const f = this.forklift.forkWorld;
-    return [{ x: c.x, y: c.y + 1.2 }, { x: f.x, y: f.y + 1.0 }];
+    return [
+      { x: c.x, y: c.y + 1.2 },
+      { x: f.x, y: f.y + 1.0 },
+      // **Zemin boyası da kadraja girmeli.** Boya y = 0'ın altındaki bantta
+      // duruyor (bkz. `ZEMIN_BANDI`) ve kamera kutusuna katılmadığında
+      // ekranın altında kalıyordu: koridor şeritleri, yön okları, gözlerin
+      // ayak izleri ve "DUR" çizgisi — yani oyuncuya nerede duracağını
+      // söyleyen her şey — çizilmiş ama görünmüyordu.
+      { x: c.x, y: -ZEMIN_BANDI },
+    ];
   }
 
   get olcum(): LmiReading {

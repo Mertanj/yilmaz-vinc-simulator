@@ -251,7 +251,17 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
     const yukseklik = ['.pad.sol', '.pad.sag']
       .map((s) => padHost?.querySelector<HTMLElement>(s)?.offsetHeight ?? 0)
       .reduce((a, b) => Math.max(a, b), 0);
-    camera.altPayi(yukseklik > 0 ? yukseklik + 22 : 0);
+    // **Klavye şeridi de dolu bir bant.** Pad kapalıyken (masaüstü) alt
+    // paydan hiç haberdar olunmuyordu ve makine tuş listesinin arkasına
+    // düşüyordu: forklift bölümünde çatalın cebe girdiği an tam orada
+    // geçiyor, yani oyuncu asıl bakması gereken yeri göremiyordu. Pad ile
+    // şerit aynı anda görünmüyor (`body.dokunmatik #tuslar` gizli), o
+    // yüzden büyüğünü almak ikisini birden karşılıyor.
+    const tusSerit = document.getElementById('tuslar');
+    const seritYuk = tusSerit && tusSerit.offsetParent !== null
+      ? tusSerit.offsetHeight : 0;
+    const dolu = Math.max(yukseklik, seritYuk);
+    camera.altPayi(dolu > 0 ? dolu + 22 : 0);
     const yardimci = padHost?.querySelector<HTMLElement>('.pad.yardimci');
     if (sahneKabi && yardimci) {
       sahneKabi.style.setProperty('--yardimci-en', `${yardimci.offsetWidth + 22}px`);
