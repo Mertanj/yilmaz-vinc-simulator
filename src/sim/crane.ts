@@ -1,5 +1,6 @@
 import { Vec2, type Body, type World } from 'planck';
 import type { Snapshotter } from './world';
+import type { SimKipi } from './kip';
 import {
   Kanca, type BaglanmaDurumu, type BirakRet, type Grabbable, type KancaAyari,
 } from './kanca';
@@ -412,8 +413,11 @@ export class Crane {
     // **İki-blok koruması.** Kanca bom kafasına dayanmışken halatı daha da
     // kısaltan üç hareket kilitlenir: vinç yukarı ve teleskop açma (aşağıdaki
     // halat modeli yüzünden teleskop da halat yer).
+    // `temel` kipte teleskop kilidi yok — gerekçesi `kip.ts`'te; orada halatı
+    // makine telafi ediyor, uzatmak halat yemiyor. Vinci yukarı sarmak iki
+    // kipte de kilitli.
     const ikiBlok = this.ropeLength <= CRANE.minRopeM + CRANE.ikiBlokPayiM;
-    const teleIzin = ikiBlok ? Math.min(0, teleCmd) : teleCmd;
+    const teleIzin = ikiBlok && this.kip === 'tam' ? Math.min(0, teleCmd) : teleCmd;
     const winchIzin = ikiBlok ? Math.min(0, input.winch) : input.winch;
     this.ikiBlokta = ikiBlok;
     if (teleIzin !== teleCmd || winchIzin !== input.winch) this.kilitliDenendi = true;
@@ -433,10 +437,12 @@ export class Crane {
     // kancayı kafaya doğru çeker. Gerçek operatör bu yüzden teleskobu açarken
     // aynı anda vinci salar; modellemezsek teleskop bedava bir hamle olur ve
     // iki-blok diye bir tehlike hiç oluşmaz.
-    this.ropeLength = clamp(
-      this.ropeLength - (this.extension - oncekiUzama),
-      CRANE.minRopeM, CRANE.maxRopeM,
-    );
+    if (this.kip === 'tam') {
+      this.ropeLength = clamp(
+        this.ropeLength - (this.extension - oncekiUzama),
+        CRANE.minRopeM, CRANE.maxRopeM,
+      );
+    }
 
     // Vinç hızı rampalı: komut basamak, hidrolik değil. Rampasız her basış
     // rijit halata bir darbe bindiriyor ve bomu aşağı çekiyordu.
@@ -500,6 +506,13 @@ export class Crane {
   }
 
   // --- okumalar ---
+
+  /**
+   * Simülasyon kipi. Varsayılan `tam`: bir sim modülünün varsayılanı "yardım
+   * açık" değil, yazıldığı fizik olmalı. Ürün varsayılanını `kip.ts` seçiyor.
+   */
+  private kip: SimKipi = 'tam';
+  kipiSec(k: SimKipi): void { this.kip = k; }
 
   get angleDeg(): number { return (this.angle * 180) / Math.PI; }
 

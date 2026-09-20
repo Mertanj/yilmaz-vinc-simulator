@@ -1,6 +1,7 @@
 import { araclar, type AracTanimi } from '../game/araclar';
 import { enIyiOku } from '../game/enIyi';
 import { DILLER, M, dilSec, sozluk, type Dil } from './dil';
+import { KIPLER, kipOku, kipYaz, type SimKipi } from '../sim/kip';
 import { oku, yaz } from './kayit';
 import { dokunmatikVar } from './dokunmatik';
 
@@ -44,6 +45,14 @@ export function aracSec(host: HTMLElement): Promise<AracTanimi> {
           ciz();
         });
       }
+      for (const el of Array.from(host.querySelectorAll<HTMLButtonElement>('button.kip'))) {
+        el.addEventListener('click', () => {
+          const k = el.dataset['kip'];
+          if (k !== 'temel' && k !== 'tam') return;
+          kipYaz(k);
+          ciz();
+        });
+      }
       for (const el of Array.from(host.querySelectorAll<HTMLButtonElement>('button.kart'))) {
         el.addEventListener('click', () => {
           const secilen = araclar().find((a) => a.id === el.dataset['id']);
@@ -68,8 +77,37 @@ function govde(): string {
         <p>${M.secim.soru}</p>
       </header>
       <div class="kartlar">${araclar().map((a) => kart(a, a.id === onceki)).join('')}</div>
+      ${kipSecimi()}
       <footer>${M.secim.altBilgi}</footer>
     </div>`;
+}
+
+/**
+ * Kumanda kipi — kartların ALTINDA, dil düğmelerinin yanında değil.
+ *
+ * Dil oyuna girmeden önce okunacak ilk şey; kip ise makineyi seçtikten sonra
+ * "nasıl oynayacağım" sorusu. Üste koymak ekranın ilk satırını iki karara
+ * birden ayırıyor ve asıl karardan (hangi makine) dikkat çalıyordu.
+ *
+ * Seçili olanın açıklaması YAZILI duruyor: bu, oyuncunun bir kez okuyup karar
+ * vereceği bir ayar, ve "Gelişmiş"in ne demek olduğunu denemeden anlaması
+ * gerekiyor.
+ */
+function kipSecimi(): string {
+  const secili = kipOku();
+  return `
+    <div class="kipler">
+      <span class="kip-baslik">${M.secim.kipBaslik}</span>
+      ${KIPLER.map((k) => kipDugmesi(k, k === secili)).join('')}
+      <p class="kip-aciklama">${
+  secili === 'temel' ? M.secim.kipTemelAciklama : M.secim.kipTamAciklama}</p>
+    </div>`;
+}
+
+function kipDugmesi(k: SimKipi, secili: boolean): string {
+  const ad = k === 'temel' ? M.secim.kipTemel : M.secim.kipTam;
+  return `<button class="kip${secili ? ' secili' : ''}" data-kip="${k}"`
+    + `${secili ? ' aria-current="true"' : ''}>${ad}</button>`;
 }
 
 function dilDugmesi(d: Dil): string {

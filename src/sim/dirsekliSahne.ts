@@ -11,6 +11,7 @@ import type { Task } from '../game/tasks';
 import { OutriggerState } from './loadChart';
 import { bomGirdisiVar, type SceneInput } from './scene';
 import { Ret } from './ret';
+import type { SimKipi } from './kip';
 import { imzaliDerece, almaSatiri, tasimaSatiri,
   type Gosterge, type OyunSahnesi, type PanelSatiri, type Uyari } from './sahne';
 import { M, kumandaAdi } from '../ui/dil';
@@ -157,6 +158,12 @@ export class DirsekliSahne implements OyunSahnesi {
     return [{ x: c.x, y: c.y + 1.6 }, this.bom.tipWorld, this.yukNoktasi];
   }
 
+  kipiSec(k: SimKipi): void { this.kip = k; this.bom.kipiSec(k); }
+  private kip: SimKipi = 'tam';
+  private get kipAdi(): string {
+    return this.kip === 'temel' ? M.secim.kipTemel : M.secim.kipTam;
+  }
+
   step(input: SceneInput, dt: number): void {
     this.carpmaBekleme = Math.max(0, this.carpmaBekleme - dt);
     if (input.reset) {
@@ -275,6 +282,7 @@ export class DirsekliSahne implements OyunSahnesi {
       { etiket: `${M.panel.sinir} · ${k.satir.sinirMoment}`,
         deger: this.tabloDisi ? d.satir.tabloDisi : `${r.capacityTonnes.toFixed(2)} t` },
       { etiket: d.satir.yaricap, deger: `${this.bom.radiusM.toFixed(1)} m` },
+      { detay: true, etiket: M.panel.kip, deger: this.kipAdi },
       { detay: true, etiket: k.satir.anaBom, deger: `${this.bom.anaAciDeg.toFixed(0)}°` },
       { detay: true, etiket: k.satir.kirma, deger: `${this.bom.kirmaAciDeg.toFixed(0)}°` },
       { detay: true, etiket: k.satir.uzama, deger: `${this.bom.uzamaBoyuM.toFixed(1)} m` },
@@ -426,6 +434,10 @@ export class DirsekliSahne implements OyunSahnesi {
       // biliyor — soruyoruz ve cevabı satıra yazıyoruz.
       const gereken = this.gerekenUzama();
       if (gereken !== null && gereken > this.bom.uzamaBoyuM + 0.35) {
+        // **Kilitliyse SEBEBİNİ söyle.** Gelişmiş kipte teleskop iki-blokta
+        // kilitli; "bomu uzat" deyip uzatmayı kilitli bırakmak oyuncunun tek
+        // satıra bakıp takıldığı kusurun aynısı olurdu.
+        if (this.bom.ikiBlokta) return { metin: k.uzatHalatYok(t), mod: 'crane' };
         return { metin: k.uzat(t), mod: 'crane' };
       }
       // Engel de teleskop da tamamsa geriye nişan alma kalıyor: yön ve mesafe.

@@ -5,6 +5,7 @@ import type { LmiReading } from './loadChart';
 import type { Task } from '../game/tasks';
 import type { SceneInput } from './scene';
 import type { AttachReason } from './kanca';
+import type { SimKipi } from './kip';
 import { M } from '../ui/dil';
 
 /**
@@ -81,6 +82,15 @@ export interface OyunSahnesi {
    * 2° eğik duruyor ve oradan geri gelebiliyor.
    */
   readonly devrildiMi: boolean;
+
+  /**
+   * Simülasyon kipini uygular — halatı kim yönetiyor (bkz. `kip.ts`).
+   *
+   * İSTEĞE BAĞLI, çünkü her makinenin halatı yok: forkliftte yük çatalın
+   * üstünde duruyor, telafi edilecek bir şey de yok. Arayüzü zorunlu yapmak
+   * forklifte boş bir gövde yazdırırdı.
+   */
+  kipiSec?(k: SimKipi): void;
 
   step(input: SceneInput, dt: number): void;
   spawnLoad(spec: Task | null): void;

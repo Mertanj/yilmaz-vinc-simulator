@@ -1,6 +1,7 @@
 import { Vec2, type Body, type World } from 'planck';
 import type { Snapshotter } from './world';
 import { Kanca, type BirakRet, type Grabbable, type KancaAyari } from './kanca';
+import type { SimKipi } from './kip';
 import { LmiZone, type LmiReading } from './loadChart';
 import type { DirsekliDurum } from './dirsekliGeometri';
 import {
@@ -286,6 +287,13 @@ export class Dirsekli {
     return this.kanca.baglanmaDenetimi(adaylar);
   }
   canAttach(adaylar: Grabbable[]): boolean { return this.kanca.baglanabilir(adaylar); }
+  /**
+   * Simülasyon kipi. Varsayılan `tam`: bir sim modülünün varsayılanı "yardım
+   * açık" değil, yazıldığı fizik olmalı. Ürün varsayılanını `kip.ts` seçiyor.
+   */
+  private kip: SimKipi = 'tam';
+  kipiSec(k: SimKipi): void { this.kip = k; }
+
   /** Yük bir şeyin üstüne oturdu mu — bırakmanın şartı. */
   get yukOturdu(): boolean { return this.kanca.yukOturdu; }
 
@@ -371,9 +379,16 @@ export class Dirsekli {
     // bir hamle olur ve iki-blok diye bir tehlike hiç oluşmaz." İki makine
     // aynı fiziği paylaşmalı; oyuncunun öğrendiği kural makineye göre
     // değişmemeli.
+    //
+    // **`temel` kipte teleskop kilidi YOK** ve olmamalı: orada halatı makine
+    // telafi ediyor, yani uzatmak halat yemiyor ve kilitlenecek bir sebep de
+    // kalmıyor. İki-blok bayrağı yine hesaplanıyor — vinci yukarı sarmak iki
+    // kipte de kilitli, çünkü o oyuncunun kendi hareketi.
     const ikiBlok = this.halatM <= DIRSEKLI.minHalatM + DIRSEKLI.ikiBlokPayiM;
     this.ikiBlokta = ikiBlok;
-    if (ikiBlok && uzat > 0) { uzat = 0; this.kilitliDenendi = true; }
+    if (this.kip === 'tam' && ikiBlok && uzat > 0) {
+      uzat = 0; this.kilitliDenendi = true;
+    }
 
     // **Sıkışma: hidrolik kesildi.** Yarıçabı büyüten her şey zaten yukarıda
     // kilitli; burada ucu AŞAĞI indiren hareketler de duruyor, çünkü sıkışan
@@ -397,10 +412,12 @@ export class Dirsekli {
     // Kırmayı katlamak halat YEMİYOR ve yememeli: dirsek makarası döndüğünde
     // halat bükülüyor, yolu uzamıyor. Vinçte de bom açısı halata dokunmuyor —
     // iki makine yine aynı kuralda.
-    this.halatM = clamp(
-      this.halatM - (this.uzamaM - oncekiUzama),
-      DIRSEKLI.minHalatM, DIRSEKLI.maxHalatM,
-    );
+    if (this.kip === 'tam') {
+      this.halatM = clamp(
+        this.halatM - (this.uzamaM - oncekiUzama),
+        DIRSEKLI.minHalatM, DIRSEKLI.maxHalatM,
+      );
+    }
 
     // İki-blok bölgesindeyken halatı daha da SARMAK kilitli; salmak serbest,
     // çıkış yolu o.

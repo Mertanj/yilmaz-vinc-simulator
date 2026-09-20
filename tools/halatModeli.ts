@@ -26,6 +26,7 @@
  */
 import { Scene, IDLE, type SceneInput } from '../src/sim/scene';
 import { DirsekliSahne } from '../src/sim/dirsekliSahne';
+import type { SimKipi } from '../src/sim/kip';
 
 const DT = 1 / 60;
 let hata = 0;
@@ -70,7 +71,13 @@ function olc(
   for (let i = 0; i < 60 * 6; i++) adim(uzatKomutu(1));
   const a1 = oku();
 
-  // 2. Halatı sal, sonra yeniden aç — bu sefer pay var.
+  // 2. Teleskobu TOPLA, halatı sal, sonra yeniden aç — bu sefer pay var.
+  //
+  // Toplama şart: `temel` kipte birinci aşama kilitlenmiyor, dolayısıyla
+  // dirseklinin 2.8 metrelik teleskobu orada sonuna kadar açılıyor ve ikinci
+  // ölçümde açacak yer kalmıyordu (NaN). Vinçte 20.5 metre olduğu için aynı
+  // kusur görünmüyordu — ölçüm iki makinede AYNI şeyi ölçmüyordu.
+  for (let i = 0; i < 60 * 8; i++) adim(uzatKomutu(-1));
   halatSal(6);
   const b0 = oku();
   for (let i = 0; i < 60 * 6; i++) adim(uzatKomutu(1));
@@ -84,60 +91,90 @@ function olc(
   };
 }
 
-// --- VINC ---
-const v = new Scene();
-const vOlcum = olc(
-  (g) => { v.step(g, DT); },
-  (u) => ({ ...IDLE, crane: { luff: 0, telescope: u, uzat: 0, winch: 0 } }),
-  () => ({
-    halat: v.crane.ropeM, uzama: v.crane.extensionM,
-    ikiBlok: v.crane.ikiBlokta, kilitli: v.crane.kilitliDenendi,
-  }),
-  (sn) => {
-    for (let i = 0; i < 60 * sn; i++) {
-      v.step({ ...IDLE, crane: { luff: 0, telescope: 0, uzat: 0, winch: -1 } }, DT);
-    }
-  },
-);
+/** Bir makineyi verilen kipte ölçer. */
+function vinc(kip: SimKipi): Olcum {
+  const v = new Scene();
+  v.kipiSec(kip);
+  return olc(
+    (g) => { v.step(g, DT); },
+    (u) => ({ ...IDLE, crane: { luff: 0, telescope: u, uzat: 0, winch: 0 } }),
+    () => ({
+      halat: v.crane.ropeM, uzama: v.crane.extensionM,
+      ikiBlok: v.crane.ikiBlokta, kilitli: v.crane.kilitliDenendi,
+    }),
+    (sn) => {
+      for (let i = 0; i < 60 * sn; i++) {
+        v.step({ ...IDLE, crane: { luff: 0, telescope: 0, uzat: 0, winch: -1 } }, DT);
+      }
+    },
+  );
+}
 
-// --- DIRSEKLI ---
-const d = new DirsekliSahne();
-const dOlcum = olc(
-  (g) => { d.step(g, DT); },
-  (u) => ({ ...IDLE, crane: { luff: 0, telescope: 0, uzat: u, winch: 0 } }),
-  () => ({
-    halat: d.bom.halatBoyuM, uzama: d.bom.uzamaBoyuM,
-    ikiBlok: d.bom.ikiBlokta, kilitli: d.bom.kilitliDenendi,
-  }),
-  (sn) => {
-    for (let i = 0; i < 60 * sn; i++) {
-      d.step({ ...IDLE, crane: { luff: 0, telescope: 0, uzat: 0, winch: -1 } }, DT);
-    }
-  },
-);
+function dirsekli(kip: SimKipi): Olcum {
+  const d = new DirsekliSahne();
+  d.kipiSec(kip);
+  return olc(
+    (g) => { d.step(g, DT); },
+    (u) => ({ ...IDLE, crane: { luff: 0, telescope: 0, uzat: u, winch: 0 } }),
+    () => ({
+      halat: d.bom.halatBoyuM, uzama: d.bom.uzamaBoyuM,
+      ikiBlok: d.bom.ikiBlokta, kilitli: d.bom.kilitliDenendi,
+    }),
+    (sn) => {
+      for (let i = 0; i < 60 * sn; i++) {
+        d.step({ ...IDLE, crane: { luff: 0, telescope: 0, uzat: 0, winch: -1 } }, DT);
+      }
+    },
+  );
+}
+
+const vOlcum = vinc('tam');
+const dOlcum = dirsekli('tam');
+const vTemel = vinc('temel');
+const dTemel = dirsekli('temel');
 
 say('=== HALAT MODELI: VINC vs DIRSEKLI ===');
 say('');
-say('                                   vinc      dirsekli');
-say(`  iki-blokta uzama kilitli      ${String(vOlcum.kilitliyken0Uzama).padStart(8)}`
-  + `${String(dOlcum.kilitliyken0Uzama).padStart(14)}`);
-say(`  kilitli kol bildirildi        ${String(vOlcum.kilitBildirildi).padStart(8)}`
-  + `${String(dOlcum.kilitBildirildi).padStart(14)}`);
-say(`  uzama basina yenen halat      ${vOlcum.halatTakibi.toFixed(2).padStart(8)}`
-  + `${dOlcum.halatTakibi.toFixed(2).padStart(14)}`);
+const satir = (ad: string, a: unknown, b: unknown): void => {
+  say(`  ${ad.padEnd(30)}${String(a).padStart(8)}${String(b).padStart(14)}`);
+};
+say('kip: TAM (halati oyuncu yonetiyor)   vinc      dirsekli');
+satir('iki-blokta uzama kilitli', vOlcum.kilitliyken0Uzama, dOlcum.kilitliyken0Uzama);
+satir('kilitli kol bildirildi', vOlcum.kilitBildirildi, dOlcum.kilitBildirildi);
+satir('uzama basina yenen halat', vOlcum.halatTakibi.toFixed(2), dOlcum.halatTakibi.toFixed(2));
+say('');
+say('kip: TEMEL (vinc telafi ediyor)      vinc      dirsekli');
+satir('iki-blokta uzama kilitli', vTemel.kilitliyken0Uzama, dTemel.kilitliyken0Uzama);
+satir('kilitli kol bildirildi', vTemel.kilitBildirildi, dTemel.kilitBildirildi);
+satir('uzama basina yenen halat', vTemel.halatTakibi.toFixed(2), dTemel.halatTakibi.toFixed(2));
 say('');
 
-esit('iki-blokta uzatma IKI makinede de kilitli',
+// --- TAM kip: halat modeli gercek ---
+esit('TAM: iki-blokta uzatma IKI makinede de kilitli',
   [vOlcum.kilitliyken0Uzama, dOlcum.kilitliyken0Uzama], [true, true]);
-esit('kilitli kola basildigi IKI makinede de bildiriliyor',
+esit('TAM: kilitli kola basildigi IKI makinede de bildiriliyor',
   [vOlcum.kilitBildirildi, dOlcum.kilitBildirildi], [true, true]);
 // Takip 1.0 olmali: uzama d metre artinca serbest halat d metre kisaliyor.
-// Tolerans, vinc komutunun LMI hiz olcegiyle carpilmasindan (ikisi ayni
-// olceklemeyi kullanmiyor) ve rampalardan geliyor; model aynı ya da degil,
-// onu 0.9-1.1 bandi zaten ayiriyor (bagsiz hali 0.00 okuyordu).
+// Tolerans rampalardan ve vincin LMI hiz olceginden geliyor; model ayni ya da
+// degil, onu 0.9-1.1 bandi zaten ayiriyor (bagsiz hali 0.00 okuyordu).
 for (const [ad, x] of [['vinc', vOlcum.halatTakibi], ['dirsekli', dOlcum.halatTakibi]] as const) {
   const ok = Number.isFinite(x) && x > 0.9 && x < 1.1;
-  say(`${ok ? 'GECTI ' : 'KALDI '} ${ad}: teleskop halat yiyor (${x.toFixed(2)})`);
+  say(`${ok ? 'GECTI ' : 'KALDI '} TAM: ${ad} teleskop halat yiyor (${x.toFixed(2)})`);
+  if (!ok) hata = 1;
+}
+
+// --- TEMEL kip: makine telafi ediyor ---
+//
+// Sahadan gelen istek buydu: "birçok arkadasim yapamiyor." Temel kipte
+// teleskop halat yemiyor, dolayisiyla kilitlenecek bir sebep de yok. Iki
+// makine burada da AYNI davranmali — ayrisma bu dosyanin varlik sebebi.
+esit('TEMEL: uzatma IKI makinede de serbest',
+  [vTemel.kilitliyken0Uzama, dTemel.kilitliyken0Uzama], [false, false]);
+esit('TEMEL: kilitli kol uyarisi YOK',
+  [vTemel.kilitBildirildi, dTemel.kilitBildirildi], [false, false]);
+for (const [ad, x] of [['vinc', vTemel.halatTakibi], ['dirsekli', dTemel.halatTakibi]] as const) {
+  const ok = Number.isFinite(x) && Math.abs(x) < 0.05;
+  say(`${ok ? 'GECTI ' : 'KALDI '} TEMEL: ${ad} teleskop halat YEMIYOR (${x.toFixed(2)})`);
   if (!ok) hata = 1;
 }
 

@@ -13,6 +13,7 @@ import { dokunmatikKur, dokunmatikVar } from './ui/dokunmatik';
 import type { DokunmatikDuzeni } from './ui/dokunmatik';
 import { oku, yaz } from './ui/kayit';
 import { Ses } from './ses/ses';
+import { kipOku } from './sim/kip';
 
 /**
  * Detay modu açık mı?
@@ -113,6 +114,10 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
   const uzak = gorunum.uzak();
   if (uzak.length) stage.far.addChild(...uzak);
   stage.world.addChild(...gorunum.dekor(), gorunum.aktorler);
+
+  // Kipi sahne kurulur kurulmaz uygula: oyuncunun seçimi fiziğin ilk
+  // adımından önce yerinde olmalı.
+  scene.kipiSec?.(kipOku());
 
   // --- kamera ---
   const camera = new Camera();

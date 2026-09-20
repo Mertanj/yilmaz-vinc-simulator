@@ -666,6 +666,34 @@
     background: #2A343C; color: #AEBAC1; border-radius: 99px; padding: 3px 9px;
   }
   #secim .rozet.son { background: #E8A62C; color: #16191B; }
+  /* --- kumanda kipi ---
+     Kartların altında, ayrı bir şerit. Dil düğmeleriyle aynı görsel dil
+     (küçük, sakin, seçili olan amber dolu) ama kendi başlığı var, çünkü
+     "Temel/Gelişmiş" tek başına ne olduğunu söylemiyor. */
+  #secim .kipler {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    margin-top: 18px; padding-top: 14px; border-top: 1px solid #222B31;
+  }
+  #secim .kip-baslik {
+    font-size: 11px; letter-spacing: 0.12em; color: #6D777E;
+  }
+  #secim button.kip {
+    font: inherit; font-size: 11.5px; letter-spacing: 0.04em; cursor: pointer;
+    background: #171E22; border: 1px solid #2A343A; color: #8E9BA2;
+    border-radius: 3px; padding: 5px 13px;
+  }
+  #secim button.kip:hover { border-color: #3B4750; color: #C7D1D6; }
+  #secim button.kip.secili {
+    background: #E8A62C; border-color: #E8A62C; color: #16191B; font-weight: 600;
+  }
+  #secim button.kip:focus-visible { outline: 2px solid #E8A62C; outline-offset: 2px; }
+  /* Açıklama kendi satırına geçiyor: dar ekranda düğmelerin yanına sığmıyor
+     ve sığdırmaya çalışmak onu kırpardı — oysa okunması gereken asıl şey o. */
+  #secim .kip-aciklama {
+    flex-basis: 100%; margin: 2px 0 0; font-size: 11.5px; line-height: 1.5;
+    color: #7C878E;
+  }
+
   #secim footer {
     margin-top: 22px; text-align: center; color: #6D777E; font-size: 11.5px;
     line-height: 1.6;

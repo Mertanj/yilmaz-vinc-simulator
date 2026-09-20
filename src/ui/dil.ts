@@ -57,6 +57,15 @@ export interface Metinler {
     enIyi: (puan: string, not_: string) => string;
     /** Dokunmatik cihazda, ekran kumandası olmayan araçta. */
     klavyeGerek: string;
+    /**
+     * Simülasyon kipi seçimi.
+     *
+     * Dil düğmelerinin yanında duruyor ve sebebi aynı: oyun başladıktan
+     * sonra değişmeyen, bir kez okunup karar verilen bir şey.
+     */
+    kipBaslik: string;
+    kipTemel: string; kipTemelAciklama: string;
+    kipTam: string; kipTamAciklama: string;
   };
 
   /** Ekran üstü kumandanın düğme adları. */
@@ -82,6 +91,8 @@ export interface Metinler {
   ust: { puan: (n: number) => string; bolumTamam: string };
 
   panel: {
+    /** Detay satirinda: hangi kumanda kipindeyiz. */
+    kip: string;
     detayIpucu: (acik: boolean) => string;
     /** Dokunmatikte aynı satır düğme oluyor; "I ·" öneki anlamsız kalıyor. */
     detayDokunma: (acik: boolean) => string;
@@ -208,6 +219,14 @@ export interface Metinler {
       yukBagli: (k: KumandaAdi) => string;
       /** Hedef, teleskop uzatılmadan erişilemiyor. */
       uzat: (k: KumandaAdi) => string;
+      /**
+       * Aynısı, ama halat bitmiş: gelişmiş kipte teleskop kilitli.
+       *
+       * Ayrı bir satır olması şart. "Bomu uzat" deyip uzatmayı kilitli
+       * bırakmak, oyuncunun 140 saniye boyunca tek satıra bakıp takıldığı
+       * kusurun aynısı — söylenen şey yapılamıyor ve sebebi yazmıyor.
+       */
+      uzatHalatYok: (k: KumandaAdi) => string;
       /** Yük hâlâ duvarın altında ve sokak tarafında. */
       duvariAs: string;
       uzak: (k: KumandaAdi) => string;
@@ -275,6 +294,12 @@ const TR: Metinler = {
   kod: 'tr',
   ad: 'Türkçe',
   secim: {
+    kipBaslik: 'KUMANDA',
+    kipTemel: 'Temel',
+    kipTemelAciklama: 'Bom uzayıp kısalırken vinç halatı kendi ayarlar.',
+    kipTam: 'Gelişmiş',
+    kipTamAciklama: 'Halatı sen yönetirsin — gerçek makinedeki gibi,'
+      + ' teleskobu açarken aynı anda salman gerekir.',
     baslik: 'YILMAZ VİNÇ',
     soru: 'Hangi makineyle çalışacaksın?',
     altBilgi: 'Her makinenin kendi bölümü, kendi yük tablosu ve kendi tehlikesi var.'
@@ -296,6 +321,7 @@ const TR: Metinler = {
   },
   ust: { puan: (n) => `${n} puan`, bolumTamam: 'bölüm tamamlandı' },
   panel: {
+    kip: 'kumanda',
     detayIpucu: (acik) => acik ? 'I · detayı kapat' : 'I · detaylı panel',
     detayDokunma: (acik) => acik ? 'detayı kapat' : 'detaylı panel',
     sinir: 'sınır', egim: 'araç eğimi', hiz: 'hız', hizBirimi: 'km/sa',
@@ -432,6 +458,8 @@ const TR: Metinler = {
       cepte: (k) => `PARK CEBİNDESİN · ayakları aç (${k.ayaklar})`,
       yukBagli: (k) => `yük bağlı · duvarı aş, sonra bırak (${k.kanca})`,
       uzat: () => 'hedef bu boyla erişilmiyor · TELESKOBU UZAT (⇧↑)',
+      uzatHalatYok: (k) => 'teleskobu uzatman gerek ama halat bitti'
+        + ` · önce halatı sal (${k.kanca})`,
       duvariAs: 'yük duvarın altında · ÖNCE KALDIR (W), sonra duvarı aş',
       uzak: (k) => `kancayı yükün üstüne indir (${k.ikisi} ve kanca)`,
     },
@@ -563,6 +591,13 @@ const EN: Metinler = {
     zorluk: 'difficulty', yakinda: 'soon', sonOynadigin: 'last played',
     enIyi: (puan, not_) => `best ${puan} pts · grade ${not_}`,
     klavyeGerek: 'keyboard needed',
+    kipBaslik: 'CONTROLS',
+    kipTemel: 'Basic',
+    kipTemelAciklama: 'The crane pays the rope in and out for you as the boom'
+      + ' telescopes.',
+    kipTam: 'Advanced',
+    kipTamAciklama: 'You work the rope yourself — like the real machine, you'
+      + ' pay out while you telescope.',
   },
   dokunma: {
     ileri: 'forward', geri: 'reverse', fren: 'brake',
@@ -577,6 +612,7 @@ const EN: Metinler = {
   },
   ust: { puan: (n) => `${n} pts`, bolumTamam: 'level complete' },
   panel: {
+    kip: 'controls',
     detayIpucu: (acik) => acik ? 'I · hide detail' : 'I · full panel',
     detayDokunma: (acik) => acik ? 'hide detail' : 'full panel',
     sinir: 'limit', egim: 'machine tilt', hiz: 'speed', hizBirimi: 'km/h',
@@ -717,6 +753,8 @@ const EN: Metinler = {
       cepte: (k) => `YOU ARE IN THE BAY · set the outriggers (${k.ayaklar})`,
       yukBagli: (k) => `load on the hook · clear the wall, then release (${k.kanca})`,
       uzat: () => 'the target is out of reach at this length · EXTEND THE BOOM (⇧↑)',
+      uzatHalatYok: (k) => 'you need to telescope out but the rope is spent'
+        + ` · pay out first (${k.kanca})`,
       duvariAs: 'the load is below the wall · RAISE IT FIRST (W), then clear the wall',
       uzak: (k) => `lower the hook onto the load (${k.ikisi} and hook)`,
     },

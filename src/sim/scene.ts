@@ -12,6 +12,7 @@ import { OutriggerState } from './loadChart';
 import type { Gosterge, OyunSahnesi, PanelSatiri, Uyari } from './sahne';
 import { imzaliDerece, almaSatiri, tasimaSatiri } from './sahne';
 import { Ret } from './ret';
+import type { SimKipi } from './kip';
 import { M, kumandaAdi } from '../ui/dil';
 
 /**
@@ -258,6 +259,10 @@ export class Scene implements OyunSahnesi {
       // Devrilmenin ÖLÇÜLEN yüzü — yük tablosunun söylediğinin yanındaki
       // ikinci tanık. Forkliftte aynı işi arka aks yapıyor.
       this.arkaPabucSatiri(d),
+      // Hangi kumanda kipindeyiz — detayda, çünkü oyuncu bunu seçim
+      // ekranında zaten okudu; burada sadece hatırlatma.
+      { detay: true, etiket: M.panel.kip,
+        deger: this.kipAdi },
       // Gerisi detay: makineyi zaten bilen için.
       { detay: true, etiket: d.satir.bom,
         deger: `${this.crane.lengthM.toFixed(1)} m · ${this.crane.angleDeg.toFixed(0)}°` },
@@ -417,6 +422,12 @@ export class Scene implements OyunSahnesi {
   /** Şasi eğimi, derece. Ekranda gördüğümüz işaretle aynı. */
   get tiltDeg(): number {
     return (-this.truck.chassis.getAngle() * 180) / Math.PI;
+  }
+
+  kipiSec(k: SimKipi): void { this.kip = k; this.crane.kipiSec(k); }
+  private kip: SimKipi = 'tam';
+  private get kipAdi(): string {
+    return this.kip === 'temel' ? M.secim.kipTemel : M.secim.kipTam;
   }
 
   step(input: SceneInput, dt: number): void {
