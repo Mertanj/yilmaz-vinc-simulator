@@ -47,19 +47,29 @@ const ANAHTAR = 'yv.ses';
  * çünkü tek eksende artan bir uyarı (sadece sıklık) gürültülü bir sahnede
  * fark edilmiyor. Sarı bilerek seyrek — sürekli bip çalan bir oyun
  * kapatılıyor, ki o zaman uyarı hiç yok demektir.
+ *
+ * **Perde bir oktav indi ve dalga yumuşadı.** İlk ayar 620/940 Hz ve kare
+ * dalgaydı; sahadan gelen tek cümle *"kaldırırken verilen uyarılar da çok
+ * tiz"* idi. Kare dalga tek sayılı harmoniklerin hepsini taşıyor ve 940'ta
+ * delici oluyor. Üçgen dalga aynı perdeyi çok daha az harmonikle veriyor;
+ * 330/495 ise makinenin kendi gürültüsünün üstünde, ama kulağı tırmalamadan.
  */
 const UYARI = {
-  amber: { hz: 620, sure: 0.10, arayis: 1.05, ses: 0.16 },
-  red: { hz: 940, sure: 0.09, arayis: 0.34, ses: 0.26 },
-} as const;
+  amber: { hz: 330, sure: 0.12, arayis: 1.05, ses: 0.15, tip: 'triangle' },
+  red: { hz: 495, sure: 0.10, arayis: 0.34, ses: 0.22, tip: 'triangle' },
+} as const satisfies Record<string, {
+  hz: number; sure: number; arayis: number; ses: number; tip: OscillatorType;
+}>;
 
 export class Ses {
   private ctx: AudioContext | null = null;
   private ana: GainNode | null = null;
   private gurultu: AudioBuffer | null = null;
 
-  private motorOsc: OscillatorNode | null = null;
-  private motorOsc2: OscillatorNode | null = null;
+  /** Ateşleme darbelerini üreten LFO — perdesi devri belirliyor. */
+  private pulsOsc: OscillatorNode | null = null;
+  /** Gövde uğultusu: darbelerin altındaki alçak sinüs. */
+  private govdeOsc: OscillatorNode | null = null;
   private motorGain: GainNode | null = null;
   private motorFiltre: BiquadFilterNode | null = null;
 
@@ -116,8 +126,10 @@ export class Ses {
     ana.connect(ctx.destination);
     this.ana = ana;
 
-    // Beyaz gürültü bir kez üretiliyor; darbe sesleri bunu kırpıp kullanıyor.
-    const n = Math.floor(ctx.sampleRate * 0.5);
+    // Beyaz gürültü bir kez üretiliyor; darbe sesleri bunu kırpıp kullanıyor,
+    // motor ise DÖNGÜLÜ çalıyor. İki saniye: yarım saniyelik bir döngünün
+    // 2 Hz'lik dikişi ateşleme darbelerinin arasından duyuluyordu.
+    const n = Math.floor(ctx.sampleRate * 2);
     const buf = ctx.createBuffer(1, n, ctx.sampleRate);
     const veri = buf.getChannelData(0);
     for (let i = 0; i < n; i++) veri[i] = Math.random() * 2 - 1;
@@ -129,28 +141,70 @@ export class Ses {
   }
 
   /**
-   * Dizel: iki hafifçe akortsuz testere dalgası, alçak geçiren süzgeçten.
+   * Dizel: ATEŞLEME DARBELERİ, sürekli bir ton değil.
    *
-   * Akortsuzluk şart — tek osilatör "motor" değil "sinyal jeneratörü" gibi
-   * duyuluyor; aradaki birkaç hertz, gerçek bir motorun düzensizliğini taklit
-   * eden yavaş bir vuru üretiyor.
+   * İlk hâli iki hafifçe akortsuz testere dalgasıydı ve sahadan gelen cümle
+   * *"araç sesi gibi gelmiyor"* idi. Haklı, ve sebebi yapısal: bir dizel
+   * sürekli bir perde çalmıyor, saniyede onlarca kez PATLIYOR. Kulağın
+   * "motor" diye tanıdığı şey o darbe treninin hızı — perde değil, RİTİM.
+   * Sabit bir testere dalgası ne kadar filtrelenirse filtrelensin vızıltı
+   * kalıyor.
+   *
+   * Şimdi: geniş bantlı gürültü alçak geçirenden geçip, ateşleme frekansında
+   * bir testere LFO'suyla kapıdan geçiriliyor — her çevrimde sert bir atak,
+   * sonra sönüm. Altında gövde uğultusu için alçak bir sinüs var. Gaz hem
+   * darbe hızını hem de süzgeci açıyor: rölantide yavaş ve boğuk, yüklenince
+   * hızlı ve parlak.
+   *
+   * Darbe hızı gerçek ateşleme sayısı değil, kulağın "büyük motor" dediği
+   * bant: rölantide 13 Hz, tam gazda 39. Gerçek bir 6 silindirli 700 d/d'da
+   * saniyede 35 kez ateşliyor ama o hız kulakta ayrı darbeler değil pürüzlü
+   * bir perde olarak duyuluyor; oyunda istediğimiz çalışan bir makinenin
+   * TANINMASI.
    */
   private motoruKur(ctx: AudioContext, ana: GainNode): void {
     const g = ctx.createGain();
     g.gain.value = 0;
+    g.connect(ana);
+    this.motorGain = g;
+
+    // Darbe kapısı: DC 0.55, LFO ±0.45 -> 0.10 ile 1.00 arasında salınıyor.
+    const kapi = ctx.createGain();
+    kapi.gain.value = 0.55;
+    kapi.connect(g);
+    const puls = ctx.createOscillator();
+    puls.type = 'sawtooth';
+    puls.frequency.value = 13;
+    const derinlik = ctx.createGain();
+    derinlik.gain.value = 0.45;
+    puls.connect(derinlik);
+    derinlik.connect(kapi.gain);
+    puls.start();
+    this.pulsOsc = puls;
+
+    // Yanma gürültüsü — döngülü beyaz gürültü, alçak geçirenden.
     const f = ctx.createBiquadFilter();
     f.type = 'lowpass';
-    f.frequency.value = 340;
-    f.Q.value = 3;
-    const o1 = ctx.createOscillator();
-    o1.type = 'sawtooth';
-    o1.frequency.value = 44;
-    const o2 = ctx.createOscillator();
-    o2.type = 'sawtooth';
-    o2.frequency.value = 47.5;
-    o1.connect(f); o2.connect(f); f.connect(g); g.connect(ana);
-    o1.start(); o2.start();
-    this.motorOsc = o1; this.motorOsc2 = o2; this.motorGain = g; this.motorFiltre = f;
+    f.frequency.value = 300;
+    f.Q.value = 1.2;
+    f.connect(kapi);
+    this.motorFiltre = f;
+    const kaynak = ctx.createBufferSource();
+    kaynak.buffer = this.gurultu;
+    kaynak.loop = true;
+    kaynak.connect(f);
+    kaynak.start();
+
+    // Gövde: darbelerin altındaki alçak uğultu. Kapının DIŞINDA, çünkü
+    // gövde titreşimi ateşlemeler arasında da sürüyor.
+    const gov = ctx.createOscillator();
+    gov.type = 'sine';
+    gov.frequency.value = 42;
+    const govG = ctx.createGain();
+    govG.gain.value = 0.5;
+    gov.connect(govG); govG.connect(g);
+    gov.start();
+    this.govdeOsc = gov;
   }
 
   /** Hidrolik: dar bantlı testere — pompanın uğultusu. */
@@ -159,8 +213,8 @@ export class Ses {
     g.gain.value = 0;
     const f = ctx.createBiquadFilter();
     f.type = 'bandpass';
-    f.frequency.value = 520;
-    f.Q.value = 6;
+    f.frequency.value = 380;
+    f.Q.value = 4.5;
     const o = ctx.createOscillator();
     o.type = 'sawtooth';
     o.frequency.value = 190;
@@ -182,16 +236,16 @@ export class Ses {
     // Motor: gazla hem devir hem ses yükseliyor. Rölantide de duyuluyor —
     // sessiz bir kamyon çalışmıyor demektir.
     const gaz = clamp01(d.gaz);
-    this.motorOsc?.frequency.setTargetAtTime(44 + gaz * 38, t, yumusat);
-    this.motorOsc2?.frequency.setTargetAtTime(47.5 + gaz * 40, t, yumusat);
-    this.motorFiltre?.frequency.setTargetAtTime(340 + gaz * 520, t, yumusat);
-    this.motorGain?.gain.setTargetAtTime(0.055 + gaz * 0.085, t, yumusat);
+    this.pulsOsc?.frequency.setTargetAtTime(13 + gaz * 26, t, yumusat);
+    this.govdeOsc?.frequency.setTargetAtTime(42 + gaz * 30, t, yumusat);
+    this.motorFiltre?.frequency.setTargetAtTime(300 + gaz * 620, t, yumusat);
+    this.motorGain?.gain.setTargetAtTime(0.10 + gaz * 0.13, t, yumusat);
 
     // Hidrolik: kol ne kadar açıksa o kadar yüksek ve tiz. Kol boştayken
     // tamamen susuyor, yoksa bütün bölüm boyunca bir uğultu kalıyor.
     const h = clamp01(d.hidrolik);
-    this.hidrolikOsc?.frequency.setTargetAtTime(190 + h * 150, t, yumusat);
-    this.hidrolikFiltre?.frequency.setTargetAtTime(520 + h * 380, t, yumusat);
+    this.hidrolikOsc?.frequency.setTargetAtTime(140 + h * 110, t, yumusat);
+    this.hidrolikFiltre?.frequency.setTargetAtTime(380 + h * 260, t, yumusat);
     this.hidrolikGain?.gain.setTargetAtTime(h < 0.02 ? 0 : 0.012 + h * 0.05, t, yumusat);
 
     // Uyarı bipi — raporun en çok istediği şey.
@@ -200,7 +254,7 @@ export class Ses {
     this.bipSayaci -= dt;
     if (this.bipSayaci <= 0) {
       this.bipSayaci = u.arayis;
-      this.ton(u.hz, u.sure, u.ses, 'square');
+      this.ton(u.hz, u.sure, u.ses, u.tip);
     }
   }
 
@@ -227,19 +281,19 @@ export class Ses {
     if (!this.ctx || this._kapali) return;
     switch (o) {
       // Kancanın çeliği: kısa, tiz, hemen sönen bir tık.
-      case 'bagla': this.ton(880, 0.07, 0.22, 'square'); this.darbe(0.05, 1400, 0.10); break;
-      case 'birak': this.ton(560, 0.09, 0.16, 'square'); break;
+      case 'bagla': this.ton(520, 0.07, 0.20, 'triangle'); this.darbe(0.05, 900, 0.12); break;
+      case 'birak': this.ton(390, 0.09, 0.15, 'triangle'); break;
       // Çarpma: geniş bantlı, alçak, sert. Oyuncunun içi gitsin.
       case 'carpma': this.darbe(0.20, 320, 0.55); this.ton(90, 0.16, 0.3, 'sine'); break;
       // Yerleştirme onayı: yükselen iki nota. Bölümün tek olumlu sesi.
       case 'kondu':
-        this.ton(660, 0.10, 0.20, 'sine');
-        window.setTimeout(() => { this.ton(990, 0.16, 0.20, 'sine'); }, 105);
+        this.ton(523, 0.10, 0.20, 'sine');
+        window.setTimeout(() => { this.ton(784, 0.16, 0.20, 'sine'); }, 105);
         break;
       // Ayak: hidrolik nefes.
       case 'ayak': this.darbe(0.35, 700, 0.14); break;
       // Ret: kısa, alçak, olumsuz.
-      case 'ret': this.ton(180, 0.13, 0.22, 'square'); break;
+      case 'ret': this.ton(165, 0.13, 0.20, 'triangle'); break;
     }
   }
 
