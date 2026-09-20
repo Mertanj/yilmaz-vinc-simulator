@@ -5,7 +5,7 @@ import { SIM } from '../sim/world';
 import { Scene, SCENE } from '../sim/scene';
 import { ForkliftSahnesi } from '../sim/forkliftSahne';
 import { DirsekliSahne } from '../sim/dirsekliSahne';
-import { DEPO_BATI, DEPO_DOGU, PALET_AYAK } from '../game/forkliftTasks';
+import { DEPO_BATI, DEPO_DOGU, GIRIS_X, PALET_AYAK } from '../game/forkliftTasks';
 import { TRUCK } from '../sim/truck';
 import { FORKLIFT } from '../sim/forklift';
 import { drawLoad, TargetMarker } from './missionView';
@@ -15,7 +15,7 @@ import { CableView, drawHookBlock } from './craneView';
 import { ForkliftView, drawForkliftWheel } from './forkliftView';
 import {
   drawRaf, drawDepoZemin, drawDepoIci, drawPalet, drawDepoArkaPlan, drawKonveyor,
-  derinlige, CepGostergesi, TozBulutu,
+  derinlige, drawSevkiyatAlani, CepGostergesi, TozBulutu,
 } from './depo';
 import {
   drawGround, drawFactory, drawFarSkyline, drawEntranceSign, drawPropBox,
@@ -292,7 +292,9 @@ export class ForkliftGorunumu extends SahneGorunumu {
 
   dekor(): Container[] {
     return [
-      drawDepoIci(DEPO_BATI, DEPO_DOGU), drawDepoZemin(DEPO_BATI, DEPO_DOGU),
+      drawDepoIci(DEPO_BATI, DEPO_DOGU),
+      drawSevkiyatAlani(DEPO_BATI, GIRIS_X - 2),
+      drawDepoZemin(DEPO_BATI, DEPO_DOGU),
       drawRaf(), drawKonveyor(),
     ];
   }

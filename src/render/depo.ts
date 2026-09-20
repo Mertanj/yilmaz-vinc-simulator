@@ -480,3 +480,86 @@ export class TozBulutu extends Container {
     }
   }
 }
+
+/**
+ * Deponun BATI yarısı — sevkiyat hazırlık alanı.
+ *
+ * Depo 56 metre uzunluğunda; bölüm bunun doğu yarısında geçiyor ve batı
+ * yarısı bomboş griydi. Sahadan gelen *"harita tam net değil"* cümlesinin
+ * üçüncü parçası buydu: bir mekânın ölçeği ancak İÇİ DOLUYSA okunuyor, boş
+ * bir koridor sadece uzun bir koridor.
+ *
+ * Hepsi dekor ve hepsi arka planda: koridorun gerisinde, duvarın önünde
+ * duruyorlar. Makine önlerinden geçiyor — `derinlige` ile aynı mantık,
+ * çünkü yan görünümde derinlik ancak böyle anlatılıyor.
+ */
+export function drawSevkiyatAlani(left: number, right: number): Container {
+  const c = new Container();
+  const g = new Graphics();
+
+  // --- Sevkiyata hazır istifler: yerde, streçlenmiş, adresli ---
+  const istifX = [left + 7.5, left + 11.2, left + 14.6, left + 18.4];
+  istifX.forEach((x, i) => {
+    if (x > right - 2) return;
+    const kat = 2 + (i % 2);
+    const en = 0.85 + (i % 3) * 0.12;
+    for (let k = 0; k < kat; k++) {
+      const y = k * 1.02;
+      // Palet
+      g.rect(x - en, y, en * 2, 0.18).fill(C.palletDark);
+      g.rect(x - en, y + 0.13, en * 2, 0.05).fill(C.pallet);
+      for (const px of [x - en + 0.05, x - 0.16, x + en - 0.37]) {
+        g.rect(px, y, 0.3, 0.13).fill(C.pallet);
+      }
+      // Streçlenmiş yük. Renkler istife göre değişiyor: dört istif de aynı
+      // griyken alan tek bir leke gibi okunuyor, oysa hazırlık alanının işi
+      // "burada AYRI AYRI siparişler duruyor" demek.
+      const govde = [0xB9A882, 0xA8A79C, 0xC2B490, 0x9FA6A0][i % 4] ?? 0xA8A79C;
+      g.rect(x - en + 0.04, y + 0.16, en * 2 - 0.08, 0.8)
+        .fill(k % 2 === 0 ? govde : karistir(govde, 0x3A3F44, 0.18));
+      g.rect(x - en + 0.04, y + 0.16, en * 2 - 0.08, 0.8)
+        .fill({ color: 0xE8EEF0, alpha: 0.14 });
+      // Streç kayışı ve sevkiyat etiketi
+      g.rect(x - en + 0.04, y + 0.62, en * 2 - 0.08, 0.05)
+        .fill({ color: 0x6E7B84, alpha: 0.55 });
+      g.rect(x - en * 0.5, y + 0.28, 0.4, 0.26)
+        .fill({ color: 0xF0F3F4, alpha: 0.85 });
+    }
+    // İstif adresi zemine boyalı
+    const et = worldText(`S${i + 1}`, 0.34, { fill: 0xD6E2EA });
+    et.position.set(x, kat * 1.02 + 0.34);
+    et.anchor.set(0.5, 0);
+    c.addChild(et);
+  });
+
+  // --- Akü şarj istasyonu: her deponun bir köşesinde vardır ---
+  const sarjX = left + 3.6;
+  g.rect(sarjX - 0.9, 0, 1.8, 1.9).fill(0x3A4046);
+  g.rect(sarjX - 0.9, 1.6, 1.8, 0.3).fill(0x4C545B);
+  for (let i = 0; i < 3; i++) {
+    g.rect(sarjX - 0.7, 0.25 + i * 0.45, 1.4, 0.3).fill({ color: 0x1E2226, alpha: 0.9 });
+    g.circle(sarjX + 0.5, 0.4 + i * 0.45, 0.06)
+      .fill({ color: i === 0 ? 0x39B36A : 0xE8A62C, alpha: 0.95 });
+  }
+  g.rect(sarjX - 0.06, 1.9, 0.12, 1.3).fill(C.roof);
+  const sarj = worldText('ŞARJ · CHARGING', 0.26, { fill: C.hazardY });
+  sarj.position.set(sarjX - 0.9, 2.05);
+  c.addChild(sarj);
+
+  // --- Streç sarma makinesi ---
+  const strecX = left + 22.4;
+  if (strecX < right - 2) {
+    g.rect(strecX - 1.1, 0, 2.2, 0.12).fill(0x4C545B);
+    g.circle(strecX, 0.35, 0.95).fill({ color: 0x565E65, alpha: 0.9 });
+    g.circle(strecX, 0.35, 0.95).stroke({ width: 0.05, color: 0x6E767D });
+    g.rect(strecX + 1.05, 0, 0.22, 2.6).fill(0x3A4046);
+    g.rect(strecX + 0.75, 1.1, 0.55, 0.5).fill({ color: 0x8B959B, alpha: 0.9 });
+    g.rect(strecX - 1.0, 0.5, 2.0, 1.1).fill({ color: 0xDCE4E8, alpha: 0.35 });
+  }
+
+  // Hepsi geride dursun: koridor önde, hazırlık alanı arkada.
+  g.alpha = 0.82;
+  c.addChildAt(g, 0);
+  c.alpha = 0.92;
+  return c;
+}
