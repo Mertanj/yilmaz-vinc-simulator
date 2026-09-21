@@ -77,8 +77,29 @@ export class Camera {
    * `tauZoom` zaten yumuşatıyor.
    */
   inceHizalama(acik: boolean): void {
-    this.padX = acik ? 1.8 : Camera.PAD_X;
-    this.padY = acik ? 1.4 : Camera.PAD_Y;
+    this.inceAcik = acik;
+    this.paylariYaz();
+  }
+
+  private inceAcik = false;
+  /** Ekranın en/boy oranı — dar ekranda yatay pay kısılıyor. */
+  private enBoy = 2;
+
+  /**
+   * Yatay pay EKRANIN BİÇİMİNE göre.
+   *
+   * Ölçüm: dikey telefonda (390×844) kadrajı bağlayan şey GENİŞLİK. Kutu
+   * makine + 2×5 metre pay = ~13 metre, 390 piksele sığdırınca ölçek 30
+   * piksel/metre oluyor ve makine ekranın küçük bir parçası kalıyor —
+   * oysa dikeyde bol bol yükseklik var. Dar ekranda yatay payı kısmak
+   * doğrudan makineyi büyütüyor; kaybedilen şey yanlardaki boşluk, ki
+   * dikeyde zaten kimsenin bakmadığı yer orası.
+   */
+  private paylariYaz(): void {
+    const dar = Math.min(1, Math.max(0.45, this.enBoy));
+    const olcek = this.inceAcik ? 1 : Math.min(1, 0.45 + dar * 0.55);
+    this.padX = (this.inceAcik ? 1.8 : Camera.PAD_X) * olcek;
+    this.padY = this.inceAcik ? 1.4 : Camera.PAD_Y;
   }
 
   /**
@@ -94,6 +115,13 @@ export class Camera {
   ): void {
     const first = points[0];
     if (!first) return;
+    if (screenW > 0 && screenH > 0) {
+      const oran = screenW / screenH;
+      if (Math.abs(oran - this.enBoy) > 0.01) {
+        this.enBoy = oran;
+        this.paylariYaz();
+      }
+    }
 
     let minX = first.x, maxX = first.x, minY = first.y, maxY = first.y;
     for (const p of points) {

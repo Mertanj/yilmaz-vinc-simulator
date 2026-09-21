@@ -4,7 +4,8 @@ import { C } from './palette';
 import { worldText, kapla } from './text';
 import {
   ADA_X, RAF_KATLARI, RAF_DERINLIK, GIRIS_X, PALET_AYAK, TESLIM_KOTU,
-  BEKLEME_CIZGISI, RAF_STOGU, adresIndeksi, adresKotu, adresX, katAdi,
+  BEKLEME_CIZGISI, RAF_STOGU, ZEMIN_BANDI, adresIndeksi, adresKotu, adresX,
+  katAdi,
 } from '../game/forkliftTasks';
 import { drawLoad } from './missionView';
 import { M } from '../ui/dil';
@@ -150,6 +151,18 @@ export function drawDepoZemin(left: number, right: number): Container {
   // Zeminin kendisi ve kenar pahı
   g.rect(left, -8, right - left, 8).fill(C.depoFloor);
   g.rect(left, -0.06, right - left, 0.06).fill(C.depoFloorD);
+  // **Boyalı bandın ALTI karartılıyor.** Telefonda ölçüldü: ekran kumandası
+  // için ayrılan alt pay (166 px) artı bandın sonu, dikey telefonda ekranın
+  // %28'ini düz gri bir alan yapıyordu — oyun alanı ortada ince bir şerit
+  // gibi duruyordu. Karartma o şeridi "bitmiş zemin" yerine kadrajın kenarı
+  // gibi okutuyor ve düğmelerin kontrastını da artırıyor.
+  const bant = 14;
+  for (let i = 0; i < bant; i++) {
+    const t = i / (bant - 1);
+    g.rect(left, ZEMIN_BANDI * -1 - (5.7 * (i + 1)) / bant,
+      right - left, 5.7 / bant + 0.02)
+      .fill(karistir(C.depoFloor, 0x0B0F12, t));
+  }
   // Beton derzleri — döküm kareleri
   for (let x = Math.ceil(left / 4) * 4; x < right; x += 4) {
     g.moveTo(x, 0).lineTo(x, -2.3).stroke({ width: 0.04, color: C.depoFloorD, alpha: 0.7 });
@@ -305,7 +318,9 @@ export function drawDepoIci(left: number, right: number): Container {
   }
 
   const tabela = worldText(M.dekor.sevkiyat, 0.5, { fill: C.liveryRed });
-  tabela.position.set(left + 6.4, 5.0);
+  // Tabela doğuya kaydırıldı: yatay telefonda kadrajın sol kenarından taşıp
+  // yarısı kesiliyordu (ölçüm: görünen alan x −4.7…13.7, tabela −5.6).
+  tabela.position.set(left + 9.5, 5.0);
   c.addChild(tabela);
 
   c.addChildAt(g, 0);

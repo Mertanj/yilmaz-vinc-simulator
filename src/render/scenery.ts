@@ -86,7 +86,27 @@ export function drawGround(left: number, right: number): Graphics {
   g.rect(34, -0.3, 0.18, 0.3).fill({ color: C.hazardY, alpha: 0.75 });
   g.rect(50, -0.3, 0.18, 0.3).fill({ color: C.hazardY, alpha: 0.75 });
   g.moveTo(left, 0).lineTo(right, 0).stroke({ width: 0.08, color: C.concreteD });
+  // **Zemin çizgisinin altı gölgeye iniyor.** Telefonda ölçüldü: kamera
+  // ekran kumandası için 166 piksel alt pay bırakıyor ve o pay dikeyde
+  // ekranın beşte birini DÜZ tek renk bir alan yapıyordu — sahne ortada
+  // ince bir şerit gibi duruyordu. Kademeli karartma o payı "biten zemin"
+  // yerine kadrajın kenarı gibi okutuyor, düğmelerin kontrastını da
+  // artırıyor. Depo zemininde de aynısı var.
+  const bant = 14;
+  for (let i = 0; i < bant; i++) {
+    const t = i / (bant - 1);
+    g.rect(left, -0.32 - (6.2 * (i + 1)) / bant, w, 6.2 / bant + 0.02)
+      .fill(karistirZemin(C.ground, 0x0B0F12, t * 0.92));
+  }
   return g;
+}
+
+function karistirZemin(a: number, b: number, t: number): number {
+  const ar = (a >> 16) & 255, ag = (a >> 8) & 255, ab = a & 255;
+  const br = (b >> 16) & 255, bg = (b >> 8) & 255, bb = b & 255;
+  return (Math.round(ar + (br - ar) * t) << 16)
+    | (Math.round(ag + (bg - ag) * t) << 8)
+    | Math.round(ab + (bb - ab) * t);
 }
 
 /**
