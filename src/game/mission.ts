@@ -240,6 +240,7 @@ export class Mission {
 
   private yerinde(t: Task, hedef: { x: number; y: number }): boolean {
     if (this.scene.hasLoad) return false;
+    if (this.scene.yerlesebilir?.(t) === false) return false;
     const p = this.scene.load.getPosition();
     const v = this.scene.load.getLinearVelocity();
     const tol = this.scene.yerlestirmeToleransi(t);

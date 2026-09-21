@@ -109,15 +109,20 @@ function tamTurSeridi(): string {
   // İki kategori yan yana: hızlı koşmak isabetten puan kaybettiriyor, temiz
   // koşmak süre kaybettiriyor. Tek satır oyuncuyu ikisinden birini seçmeye
   // zorlardı; ikisi de görünüyor ki ikisi de kovalanabilsin.
+  // **İki kategori İKİ SATIR.** Tek satırda birleştirilince puan rekorunun
+  // notu hiçbir yerde görünmüyordu ve satırın rengi hız rekorunun notuna
+  // göre çiziliyordu — yani iki ayrı turun rozeti tek bir renge karışıyordu.
+  const satir = (
+    k2: typeof r.hiz, metin: string,
+  ): string => (k2
+    ? `<span class="tur-rekor" data-not="${k2.not}">${metin}`
+      + `${k2.usta ? ' · ⨯' : ''}</span>`
+    : '');
   const rekorSatiri = r.hiz || r.puan
-    ? '<span class="tur-rekor"'
-      + `${r.hiz ? ` data-not="${r.hiz.not}"` : ''}>`
-      + [
-        r.hiz ? k.hizSatiri(sureyiYaz(r.hiz.sure)) : '',
-        r.puan ? k.puanSatiri(M.sonuc.puan(r.puan.puan)) : '',
-      ].filter(Boolean).join(' · ')
-      + `${r.hiz?.usta || r.puan?.usta ? ' · ⨯' : ''}</span>`
+    ? satir(r.hiz, r.hiz ? k.hizSatiri(sureyiYaz(r.hiz.sure)) : '')
+      + satir(r.puan, r.puan ? k.puanSatiri(M.sonuc.puan(r.puan.puan)) : '')
     : `<span class="tur-rekor bos">${k.rekorYok}</span>`;
+
   return `
     <div class="tam-tur-serit">
       <div class="tur-metin">

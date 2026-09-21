@@ -37,6 +37,13 @@ export interface OyunSahnesi {
   readonly sasiHizi: number;
   /** Kameranın en yakın ve en uzak ölçeği (piksel/metre). */
   readonly kameraOlcegi: { yakin: number; uzak: number };
+  /**
+   * Bölümün yatay sınırları (m) — kamera bunların dışını göstermiyor.
+   *
+   * Kapalı mekânlarda şart: duvarın arkası çizilmiyor ve oraya bakmak
+   * ekranın yarısını düz griye çeviriyor. Açık hava sahnelerinde `undefined`.
+   */
+  readonly kameraSiniri?: { sol: number; sag: number };
   /** Yük momenti okuması — iki makinede de aynı anlamda. */
   readonly olcum: LmiReading;
   /** Yükü tutan nokta: vinçte kanca, forkliftte çatal. */
@@ -66,6 +73,18 @@ export interface OyunSahnesi {
    * raf gözü ise paletten birkaç on santim büyük bir kutu.
    */
   yerlestirmeToleransi(t: Task): { x: number; y: number };
+  /**
+   * Bu yük gerçekten YERLEŞTİRİLDİ sayılabilir mi?
+   *
+   * Konum ve hız `Mission` tarafında zaten ölçülüyor; bu kanca makinenin
+   * "ama bu yük hiç kaldırılmadı ki" diyebilmesi için. Forklift bölümünde
+   * zemin gözünün kirişi yok ve oyun testi bunu buldu: bölümün başından
+   * itibaren SADECE gaza basmak paleti zeminde önüne katıp gözün içine
+   * itmeye yetiyordu — ilk görev, çatal hiç kullanılmadan 21 saniyede
+   * bitiyordu. "Yük alma tuşu yok, çatal paleti fiziken taşır" tasarımının
+   * karşılığı, taşınmış olma şartı.
+   */
+  yerlesebilir?(t: Task): boolean;
   /**
    * Hedef işaretinin ÇİZİLECEĞİ nokta; yoksa `hedefNoktasi` kullanılıyor.
    *

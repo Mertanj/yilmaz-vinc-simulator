@@ -23,6 +23,14 @@ import { M, kumandaAdi } from '../ui/dil';
  * level, eksik bir filtreyi telafi etmek için yalan söylüyordu. Şimdi kirişler
  * yükle ve çatalla çarpışıyor, gövdeyle değil; raf da olması gereken yerde.
  */
+/**
+ * Kaldırma kilidinin devreye girdiği bant (m): kirişin bu kadar altı.
+ *
+ * Temasın hemen öncesi olmalı — daha geniş bant meşru yerleştirmeyi de
+ * kilitliyor, daha dar bant krikoyu durdurmaya yetişmiyor.
+ */
+const KILIT_BANDI = 0.25;
+
 export function createRaf(world: World): Body {
   const body = world.createBody();
   const filtre = { filterCategoryBits: KATEGORI.raf, filterMaskBits: MASKE.raf };
@@ -178,6 +186,7 @@ export class ForkliftSahnesi implements OyunSahnesi {
       this.world.destroyBody(this.load);
     }
     this.loadSpec = spec;
+    this.tasindi = false;
     if (!spec) { this.grabbables = []; return; }
     // **Palet ancak makine yükleme karesinin BATISINDAYKEN iniyor.**
     // Forklift dönemediği için paleti alabilmek hep onun batısında olmak
@@ -261,6 +270,8 @@ export class ForkliftSahnesi implements OyunSahnesi {
   get sasiHizi(): number { return this.forklift.chassis.getLinearVelocity().x; }
   /** Küçük makine, dar koridor: vinçten belirgin biçimde daha yakın. */
   readonly kameraOlcegi = { yakin: 46, uzak: 24 };
+  /** Depo kapalı bir mekân: kamera duvarların dışını göstermiyor. */
+  readonly kameraSiniri = { sol: DEPO_BATI, sag: DEPO_DOGU };
   /**
    * Forklift için devrilme eşiği yüksek — ÇÜNKÜ burnunu çatalına dayamak
    * kaza değil, kurtarılabilir bir hata. Ölçümde aşırı yükte makine 2.1°
@@ -292,8 +303,10 @@ export class ForkliftSahnesi implements OyunSahnesi {
    * da bunu söylüyor. O yüzden uyarı değil, kilit: vinçteki iki-blok
    * kilidinin forklift karşılığı.
    *
-   * Kilit YALNIZCA temasın hemen öncesinde devrede (kirişin 40 cm altı),
-   * yoksa gözün önünde meşru kaldırmayı da engellerdi.
+   * Kilit YALNIZCA temasın hemen öncesinde devrede (kirişin 25 cm altı),
+   * yoksa gözün önünde meşru kaldırmayı da engellerdi. Bant 40 cm iken
+   * oyun testinde gözün tam önünde, doğru kotta, indirmeye hazır oyuncuya
+   * "önce gözden geri çık" diyordu — yani tam yaptığı şeyi yapmamasını.
    */
   get kirisAltinda(): number | null {
     const f = this.forklift;
@@ -315,7 +328,7 @@ export class ForkliftSahnesi implements OyunSahnesi {
         const alt = kot - 0.16;
         for (const a of adaylar) {
           if (a.x1 < on || a.x0 > arka) continue;
-          if (a.ust > alt - 0.4 && a.ust <= alt) return kot;
+          if (a.ust > alt - KILIT_BANDI && a.ust <= alt) return kot;
         }
       }
     }
@@ -394,6 +407,8 @@ export class ForkliftSahnesi implements OyunSahnesi {
     this.world.step(dt, SIM.velocityIterations, SIM.positionIterations);
     this.world.clearForces();
 
+    if (this.forklift.hasLoad) this.tasindi = true;
+
     // Ölçüm: çatalda ne varsa onun ağırlığı.
     const ham = this.forklift.yukTonu;
     this.olcumTon += (ham - this.olcumTon) * Math.min(1, dt / 0.2);
@@ -431,6 +446,19 @@ export class ForkliftSahnesi implements OyunSahnesi {
 
   /** Palet yere indi mi? HUD ve rig bunu soruyor. */
   get paletHazir(): boolean { return this.teslim === 'hazir'; }
+
+  /** Bu palet bir kez olsun çatala bindi mi? */
+  private tasindi = false;
+
+  /**
+   * Yerleştirme, paletin ÇATALA BİNMİŞ olmasını şart koşuyor.
+   *
+   * Zemin gözünün kirişi yok, dolayısıyla paleti önüne katıp itmek onu
+   * gözün içine sokmaya yetiyordu: oyun testinde bölümün ilk görevi, hiç
+   * `W`'ye basılmadan, sadece gaza basılarak 21 saniyede bitirildi. Tam
+   * Tur'un ilk görevi böylece bedavaydı.
+   */
+  yerlesebilir(): boolean { return this.tasindi; }
 
   gosterge(): Gosterge {
     const r = this.olcum;
@@ -555,8 +583,18 @@ export class ForkliftSahnesi implements OyunSahnesi {
       // doğu ucuna çıkan oyuncuya HUD 24 adım boyunca aynı cümleyi tekrarladı
       // ("gözün önüne gel, kaldır…"), hedefin arkada kaldığını söylemedi.
       // Vinç bölümü bunu zaten yapıyor; satırı aynı yerden alıyoruz.
+      // **Ölçülen şey YÜKÜN kendisi, çatalın ucu değil.**
+      //
+      // Oyun testi bunu tam sayıyla yakaladı: ipucu çatal ucunu, `Mission`
+      // ise yükün merkezini ölçüyordu. Bıçak dibine kadar girdiğinde yük
+      // merkezi çatal ucunun (1.35 − yarıEn) kadar gerisinde kalıyor,
+      // kabul penceresi ise (1.30 − yarıEn); aradaki fark HER GÖREVDE
+      // sabit 5 santim ve pencerenin DIŞINDA. Yani ipucuna harfiyen uyan
+      // oyuncu paleti hep gözün 5 santim batısına bırakıyordu — en dar
+      // toleranslı iki görevde (D3 0.42 m, D4 0.35 m) hiç yerleşmiyordu.
+      const yukYeri = this.load.getPosition();
       const yon = tasimaSatiri(
-        { x: this.forklift.forkTip.x, y: this.forklift.liftM },
+        { x: yukYeri.x, y: yukYeri.y - t.halfHeight },
         hedef, this.yerlestirmeToleransi(t),
       );
       if (yon) metin = `${metin} · ${yon}`;

@@ -253,9 +253,19 @@ function main(): number {
     // kalip geri yaslandiginda bicak kirisin ustune oturuyor, geri cekilirken
     // krikoya donusup makinenin burnunu kaldiriyordu (olculdu: bicak 4.77'de,
     // kiris ustu 4.75, makine dogu yonunde 1.7 m/s suruklendi).
-    r.runUntil(14, (x) => x.sahne.forklift.liftM <= kot + 0.22,
-      (x) => ({ ...x.kaldir(kot + 0.20), ...x.dur() }));
+    // Bicak cebin UST yarisinda cikiyor: yuku birakinca makine yuksuz kalip
+    // geriye yasliyor ve bicak birkac santim dusuyor; cebin ortasinda cikmaya
+    // calisinca kirisin USTUNE oturup krikoya donusuyordu (olculdu: bicak
+    // 4.81'de, kiris ustu 4.90 -> makine 145 dereceye devrildi).
+    r.runUntil(14, (x) => x.sahne.forklift.liftM <= kot + 0.28,
+      (x) => ({ ...x.kaldir(kot + 0.26), ...x.dur() }));
     r.asama = 'cekilme'; iz('birakildi');
+    // **Son gorevden sonra cekilme YOK.** Rig'in yapacak isi kalmiyor ve
+    // puanlanan tur zaten kapandi; buna ragmen cekilme fazi kosuyordu ve
+    // bicak goz kotundayken makine rafin onunde salinip kirise biniyor,
+    // 145 dereceye deviriliyordu (olculdu: t=258s, bicak 4.80, kiris
+    // 4.74-4.90). Sonuc satirlarini etkilemiyordu ama CI ciktisinda
+    // olmayan bir devrilme raporluyordu.
     // Bıçağı çek.
     // Bicak gozun BATISINA tamamen cikana kadar cek. Kot degistirmeden
     // once bunu dogrulamak sart: bicak gozun icindeyken asagi inince
@@ -265,9 +275,28 @@ function main(): number {
     // adadan sadece birincisini gösteriyor; C adasına koyduktan sonra rig
     // bıçağı 4.36 metrede tutarak 12 metre batıya sürüyor, B adasının
     // kirişine dayanıp makineyi 145 dereceye deviriyordu.
+    if (n === FORKLIFT_TASKS.length - 1) {
+      r.run(1.0, (x) => x.dur());
+      const ok0 = r.mission.sonTamamlanan?.sira === n + 1;
+      say(`${task.kod} KOY  yuk ${kondu.x.toFixed(2)},${kondu.y.toFixed(2)}`
+        + `  hedef ${hedef.x.toFixed(2)},${(hedef.y + task.halfHeight).toFixed(2)}`
+        + `  ${ok0 ? 'KONDU' : 'KONMADI'}`);
+      if (!ok0) break;
+      const t0 = r.mission.sonTamamlanan;
+      if (t0) {
+        say(`      +${t0.puan.toplam} puan · sapma ${t0.sapmaCm.toFixed(0)} cm`
+          + ` · sure ${t0.sure.toFixed(0)}s · maxLMI %${t0.maxLmi.toFixed(0)}`);
+      }
+      break;
+    }
     const gozBati = (adresX(task.hedef) ?? RAF_X) - 0.3;
-    r.runUntil(40, (x) => x.sahne.forklift.forkTip.x < gozBati,
-      (x) => x.suru(gozBati - FORKLIFT.forkLengthM - 0.3, 3.0));
+    // **Cikip DURANA kadar.** Sadece "cikti mi" diye bakmak yetmiyordu:
+    // makine hedefi asip geri donerken bicak (hala goz kotunda) kirisin
+    // ustune biniyor ve krikoya donusuyordu (olculdu: x=33.33, v=+2.02 m/s,
+    // bicak 4.81'de, kiris alti 4.74 -> makine 145 dereceye devrildi).
+    r.runUntil(40, (x) => x.sahne.forklift.forkTip.x < gozBati
+      && x.sahne.forklift.speedKmh < 0.4,
+      (x) => x.suru(gozBati - FORKLIFT.forkLengthM - 0.3, 1.2));
     r.run(0.8, (x) => x.dur());
     r.runUntil(14, (x) => x.sahne.forklift.liftM <= 0.4,
       (x) => ({ ...x.kaldir(0.35), ...x.dur() }));

@@ -311,6 +311,20 @@ export function drawDepoIci(left: number, right: number): Container {
     g.rect(x, 4.5, 2.2, 1.5).stroke({ width: 0.05, color: C.depoWallD, alpha: 0.7 });
   }
 
+  // **Koridorun iki ucundaki duvarlar.** Fizikte vardı (makine orada
+  // duruyor) ama çizilmiyordu: oyun testinde batı ucunda ekranın %43'ü
+  // bomboş gri kalıyor ve makine görünmeyen bir kenara dayanıp duruyordu.
+  for (const [x, yon] of [[left, 1], [right, -1]] as const) {
+    g.rect(x - (yon > 0 ? 0.55 : 0), 0, 0.55, tavan).fill(C.depoWallD);
+    g.rect(x + (yon > 0 ? 0 : -0.14), 0, 0.14, tavan)
+      .fill({ color: 0x6E767C, alpha: 0.9 });
+    // Çarpma bariyeri: her deponun duvar dibinde vardır, sarı-siyahtır.
+    for (let i = 0; i < 5; i++) {
+      g.rect(x + (yon > 0 ? 0.14 : -0.5), i * 0.22, 0.36, 0.11)
+        .fill({ color: i % 2 === 0 ? C.hazardY : 0x1D2226, alpha: 0.95 });
+    }
+  }
+
   // Sevkiyat kapısı — soldaki giriş
   g.rect(left + 1.4, 0, 3.6, 4.2).fill(C.depoWallD);
   for (let y = 0.2; y < 4.1; y += 0.42) {

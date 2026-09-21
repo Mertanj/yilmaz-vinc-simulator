@@ -54,6 +54,21 @@ export class Camera {
   private maxPpm = 30;
   private minPpm = 15;
 
+  /**
+   * Bölümün yatay sınırları (m) — kamera bunların dışını göstermiyor.
+   *
+   * Depoya iki uca duvar konunca ortaya yeni bir kusur çıktı: makine duvara
+   * dayanıyor ama kamera onun arkasını, yani çizilmemiş boşluğu gösteriyordu
+   * — ekranın yarısı düz gri. Sınırı kameraya söylemek bunu kökünden
+   * çözüyor ve dekoru duvarın arkasına uzatmaktan dürüst: orada gerçekten
+   * bir şey yok, o yüzden oraya bakmıyoruz.
+   *
+   * `null` = sınırsız (açık hava sahneleri).
+   */
+  private sinir: { sol: number; sag: number } | null = null;
+
+  sinirla(s: { sol: number; sag: number } | null): void { this.sinir = s; }
+
   /** Aracın kendi ölçek sınırlarını uygula. */
   olcekSiniri(yakin: number, uzak: number): void {
     this.maxPpm = yakin;
@@ -168,6 +183,14 @@ export class Camera {
 
     this.x = approach(this.x, hedefX + look, this.tauX, dt);
     this.x = clamp(this.x, hedefX - this.maxOffset, hedefX + this.maxOffset);
+    if (this.sinir) {
+      // Yarım ekran sığmıyorsa (çok dar bölüm) ortalamak en az kötü sonuç.
+      const yariM = screenW > 0 && this.ppm > 0 ? screenW / 2 / this.ppm : 0;
+      const sol = this.sinir.sol + yariM;
+      const sag = this.sinir.sag - yariM;
+      this.x = sol > sag ? (this.sinir.sol + this.sinir.sag) / 2
+        : clamp(this.x, sol, sag);
+    }
     this.y = approach(this.y, hedefY, this.tauY, dt);
 
     // Sarsıntı EN SONDA ve yumuşatmanın DIŞINDA ekleniyor: yumuşatmanın içine

@@ -617,12 +617,23 @@ export class Forklift {
       //
       // Sığ kaldırmak hâlâ MÜMKÜN — bölümün asıl dersi o. Değişen tek şey,
       // oyunun artık bunu tavsiye etmiyor olması.
-      const dibinde = t.x >= yakinYuz + item.halfWidth * 2 * 0.9;
-      if (altinda && dibinde) return 'hazir';
-      if (altinda && girdi) enIyi = 'sig';
-      if (girdi && h.y >= taban - 0.01) enIyi = 'yuksek';
-      else if (girdi) enIyi = 'alcak';
-      else if (altinda) enIyi = 'yanas';
+      // **Dip ölçüsü BIÇAK BOYUYLA sınırlı.** `%90 × palet derinliği` yazıyordu
+      // ve geniş paletlerde geometrik olarak ulaşılamıyordu: varil paleti
+      // 1.76 m derin, eşik 1.58 m, oysa bıçak 1.35 m — sırtlık paletin daha
+      // ileri girmesini engelliyor. Ölçüm: en dibine sokulduğunda ölçülen yük
+      // merkezi 0.93 m (yarı en 0.88), yani palet fiilen sırtlığa dayanmış.
+      // Buna rağmen HUD o iki görevde HİÇ "kaldır" demiyordu.
+      const derinlik = Math.min(FORKLIFT.forkLengthM, item.halfWidth * 2);
+      const dibinde = t.x >= yakinYuz + derinlik * 0.9;
+      if (altinda) {
+        // Kot doğru: geriye tek soru kalıyor, ne kadar derine girdi.
+        if (dibinde) return 'hazir';
+        if (girdi) { enIyi = 'sig'; continue; }
+        enIyi = 'yanas';
+        continue;
+      }
+      // Kot yanlış: bıçak cebin üstünde mi altında mı?
+      if (girdi) enIyi = h.y >= taban - 0.01 ? 'yuksek' : 'alcak';
       else enIyi = enIyi === 'uzak' ? 'kot' : enIyi;
     }
     return enIyi;
@@ -658,7 +669,7 @@ export class Forklift {
       // "dibine kadar girdi" demektir. Bıçak (1.35 m) çoğu paletten uzun,
       // o yüzden ölçüyü bıçağın boyuna göre vermek şeridi paletin dışına
       // taşırıyordu.
-      const tam = item.halfWidth * 2;
+      const tam = Math.min(FORKLIFT.forkLengthM, item.halfWidth * 2);
       const giren = Math.max(0, Math.min(tam, t.x - yakinYuz));
       const hizada = h.y < taban - 0.01 && h.y > taban - FORKLIFT.paletCebiM;
       const aday: CepOlcumu = {

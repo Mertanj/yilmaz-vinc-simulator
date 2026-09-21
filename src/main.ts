@@ -346,7 +346,7 @@ function temizle(stage: Stage): void {
   for (const katman of [stage.world, stage.far, stage.backdrop]) {
     for (const c of katman.removeChildren()) c.destroy({ children: true });
   }
-  for (const id of ['uyari', 'kondu', 'sonuc']) {
+  for (const id of ['uyari', 'kondu', 'sonuc', 'ayak']) {
     const el = document.getElementById(id);
     if (el) el.hidden = true;
   }
@@ -623,6 +623,7 @@ function oyna(
       sesiSur(frameDt);
 
       // Kadraja girmesi gerekenleri makine söylüyor; hedefi biz ekliyoruz.
+      camera.sinirla(scene.kameraSiniri ?? null);
       const bakilacak = scene.odakNoktalari();
       const hedefNoktasi = mission.target;
       if (hedefNoktasi && scene.hasLoad) bakilacak.push(hedefNoktasi);
@@ -889,6 +890,10 @@ function oyna(
     function elDegistir(r: Result, t: TurBaglami): void {
       kapat();
       ses.bosta();
+      // Son görevin "YERİNE KONDU" kartı 4 saniye ömürlü ve el değiştirme
+      // kartı onun üstüne biniyordu: iki başlık üst üste gelip ikisi de
+      // okunmuyordu.
+      if (hud.kondu) hud.kondu.hidden = true;
       const k = M.tur;
       const bitis = t.oncekiToplam + r.score.sure;
       const rekorBitis = t.rekorBitisler[t.sira - 1];
@@ -934,7 +939,12 @@ function oyna(
         // aynı ölçü. Yalnız `elDegistir` içinde yazılıyordu ve son makine
         // Tam Tur'da hiç rekor kıramıyordu.
         enIyiKaydet(arac.id, r);
-        if (tur.sira >= tur.toplam) {
+        // **Devrilen ayak "TAMAM" DEĞİL.** Oyun testinde makine burnunun
+        // üstünde yatarken önce el değiştirme kartı çıkıyor ve "bu ayak
+        // TAMAM · 0/5 görev · sıradaki dirsekli vinç · devam etmek için bir
+        // tuşa bas" diyordu; doğru ekran ancak 4.2 saniye sonra geliyordu.
+        // Devrilme turu bitiriyor, ara kart yok.
+        if (r.devrildi || tur.sira >= tur.toplam) {
           kapat(); ses.bosta(); cik({ r, gorevSayisi: mission.taskCount });
         }
         else elDegistir(r, tur);

@@ -52,16 +52,26 @@ export const ADA_ADI = ['A', 'B', 'C'] as const;
 /**
  * Kat kotları (m). **Sıfır bir kat DEĞİL, zemindir.**
  *
- * Üstteki iki kiriş arası 1.70 m: taban kirişin 0.36 m üstünde, palet en çok
- * 0.90 m boyunda, yerleştirirken 0.12 m pay, kiriş kalınlığı 0.16 — toplam
- * 1.54, yani 16 cm boşluk. Makine yük altında 1.4° öne yattığı için çatal
- * ucunda oluşan 6 santimlik düşüşü de bu pay karşılıyor.
+ * **Kotlar GÖZE GİRERKENKİ paya göre seçildi, oturduktan sonrakine göre
+ * değil.** İlk sürümde 3.00/4.70 vardı ve oturmuş palet için hesap doğruydu
+ * (28 cm boşluk) — ama palet göze AYAKLARIYLA oturuyor, yani girerken
+ * çatalın `PALET_AYAK` kadar yukarıda olması gerekiyor. Ölçüldü:
  *
- * Üst kat 4.70'te kalıyor ve bu bilerek: yükseklik cezası orada 0.865 ve
- * bölümün en ağır paleti (1.78 t) ibreyi %97'ye dayıyor. Kotu değiştirmek
- * beş görevin de ayarını bozardı.
+ *     görev  taşıma kotu  yük üstü  üstteki kiriş altı   pay
+ *     D2     3.30         4.42      4.54                 12 cm
+ *     D3     3.30         4.56      4.54                −2 cm
+ *
+ * Yani geniş varil paleti gözüne fiziken GİREMİYORDU: iki santim kirişin
+ * içinde. Oyun testinde makine gözün 1.4 metre önünde durdu, altmış saniye
+ * boyunca ilerleyemedi ve hiçbir uyarı çıkmadı — oyuncunun göremediği bir
+ * duvar. (Başsız rig geçebiliyordu, çünkü Box2D iki santimlik girişimi
+ * itiyor; oyuncu ise sıkışıyor.)
+ *
+ * 2.80/4.90 ile aynı hesap: D3 için 38 cm, D2 için 52 cm pay. Üst kat 20 cm
+ * yükseldi, yükseklik çarpanı 0.865'ten 0.846'ya indi ve bölümün en ağır
+ * paleti %92'den %94'e çıktı — sınırın altında ve zorluk eğrisi yerinde.
  */
-export const RAF_KATLARI = [0.00, 3.00, 4.70] as const;
+export const RAF_KATLARI = [0.00, 2.80, 4.90] as const;
 
 /** Bir raf adresi: hangi ada, hangi kat. */
 export interface RafAdresi { ada: number; kat: number; }
