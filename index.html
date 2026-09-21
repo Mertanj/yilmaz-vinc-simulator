@@ -58,6 +58,22 @@
     color: #C7D1D6; background: linear-gradient(#0E1417E0, #0E141700);
   }
   #ust b { color: #E8A62C; font-weight: 600; letter-spacing: 0.06em; }
+  /* Tam Tur'da kaçıncı ayakta olduğun — makine adının hemen yanında,
+     görevden önce: sıra makine > ayak > görev, genişten dara. */
+  #ayak {
+    color: #16191B; background: #E8A62C; border-radius: 3px;
+    padding: 1px 7px; font-weight: 600; letter-spacing: 0.06em; font-size: 11.5px;
+  }
+  #ayak[hidden] { display: none; }
+  /* El değiştirme kartındaki rekor farkı. */
+  #sonuc-ic .rekor-fark {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 15px; font-weight: 600; margin: 0 0 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  #sonuc-ic .rekor-fark[data-iyi="evet"] { color: #5FB07C; }
+  #sonuc-ic .rekor-fark[data-iyi="hayir"] { color: #E2645A; }
+  #sonuc-ic .rekor-fark[data-iyi="esit"] { color: #8E9BA2; }
   #gorev { color: #E4E9EB; white-space: nowrap; }
   #gorev-brif { color: #8E9BA2; }
   #sayac { margin-left: auto; color: #8E9BA2; white-space: nowrap; }
@@ -701,6 +717,39 @@
      Kartların altında, ayrı bir şerit. Dil düğmeleriyle aynı görsel dil
      (küçük, sakin, seçili olan amber dolu) ama kendi başlığı var, çünkü
      "Temel/Gelişmiş" tek başına ne olduğunu söylemiyor. */
+  /* --- Tam Tur şeridi ---
+     Kart değil şerit: Tam Tur dördüncü bir makine değil, üçünün birden
+     oynandığı bir kip. Kart yapmak "hangi makine" sorusunu bulandırırdı. */
+  #secim .tam-tur-serit {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    margin-top: 16px; padding: 14px 18px; border-radius: 10px;
+    background: linear-gradient(90deg, #1B2A22, #161D23 60%);
+    border: 1px solid #2C5A44;
+  }
+  #secim .tur-metin { flex: 1 1 16rem; min-width: 0; }
+  #secim .tur-ad {
+    font-family: "Barlow Condensed", system-ui, sans-serif; font-size: 21px;
+    letter-spacing: 0.1em; color: #5FB07C; font-weight: 700;
+  }
+  #secim .tam-tur-serit p {
+    margin: 2px 0 0; font-size: 12px; line-height: 1.5; color: #AEBAC1;
+  }
+  #secim .tur-rekor {
+    display: inline-block; margin-top: 7px; font-size: 11.5px;
+    letter-spacing: 0.02em; color: #5FB07C; font-variant-numeric: tabular-nums;
+  }
+  #secim .tur-rekor[data-not="B"] { color: #9FC46B; }
+  #secim .tur-rekor[data-not="C"] { color: #E8A62C; }
+  #secim .tur-rekor[data-not="D"] { color: #B08A6A; }
+  #secim .tur-rekor.bos { color: #6D777E; }
+  #secim button.tam-tur {
+    font: inherit; font-size: 13px; font-weight: 600; letter-spacing: 0.04em;
+    cursor: pointer; border: none; border-radius: 6px; padding: 12px 22px;
+    background: #2C7A52; color: #EAF5EE; white-space: nowrap;
+  }
+  #secim button.tam-tur:hover { background: #359160; }
+  #secim button.tam-tur:focus-visible { outline: 2px solid #5FB07C; outline-offset: 2px; }
+
   #secim .kipler {
     display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
     margin-top: 18px; padding-top: 14px; border-top: 1px solid #222B31;
@@ -748,6 +797,7 @@
   <div id="game"></div>
   <div id="ust">
     <b>YILMAZ VİNÇ</b>
+    <span id="ayak" hidden></span>
     <span id="gorev">T1/5 · yük hazırlanıyor</span>
     <span id="gorev-brif"></span>
     <span id="sayac"><span id="sure">0:00</span> · <span id="puan">0 puan</span></span>

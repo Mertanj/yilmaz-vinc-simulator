@@ -265,6 +265,29 @@ export interface Metinler {
 
   kondu: KonduMetni;
 
+  /**
+   * Tam Tur — üç makine arka arkaya, tek saat.
+   *
+   * Sahadan gelen cümle: *"oyunun güzelliği hepsini arka arkaya speed run
+   * şeklinde yapabilmek."*
+   */
+  tur: {
+    ad: string; aciklama: string;
+    basla: string;
+    /** Seçim ekranındaki rekor satırı. */
+    rekorSatiri: (sure: string, not: string) => string;
+    rekorYok: string;
+    /** HUD'daki ayak göstergesi: "1/3". */
+    ayakKisa: (n: number, toplam: number) => string;
+    ayakTamam: (makine: string) => string;
+    ayakSuresi: string; turToplami: string; sonraki: (makine: string) => string;
+    devam: string;
+    bitti: string; terkEdildi: string;
+    gorevler: string; toplamSure: string;
+    ayakDokumu: string;
+    rekor: string; oncekiRekor: (sure: string) => string; ilkTur: string;
+  };
+
   sonuc: {
     /**
      * Ara süreler tablosunun başlığı.
@@ -555,6 +578,28 @@ const TR: Metinler = {
       ? `sırada ${kalan} görev var · yeni yük malzeme alanında`
       : 'bölümdeki son yük — toparlayabilirsin',
   },
+  tur: {
+    ad: 'TAM TUR',
+    aciklama: 'Üç makine arka arkaya, tek saat. Saat ayaklar arasında durmuyor.',
+    basla: 'tam turu başlat',
+    rekorSatiri: (sure, not_) => `rekorun ${sure} · not ${not_}`,
+    rekorYok: 'henüz kaydedilmiş bir turun yok',
+    ayakKisa: (n, toplam) => `AYAK ${n}/${toplam}`,
+    ayakTamam: (makine) => `${makine} TAMAM`,
+    ayakSuresi: 'bu ayak',
+    turToplami: 'tur toplamı',
+    sonraki: (makine) => `sıradaki · ${makine}`,
+    devam: 'devam etmek için bir tuşa bas',
+    bitti: 'TAM TUR BİTTİ',
+    terkEdildi: 'TUR YARIDA KALDI',
+    gorevler: 'görev',
+    toplamSure: 'toplam süre',
+    ayakDokumu: 'AYAKLAR',
+    rekor: 'YENİ TUR REKORU',
+    oncekiRekor: (sure) => `önceki rekorun ${sure}`,
+    ilkTur: 'ilk turun — bundan sonrası buna karşı koşacak',
+  },
+
   sonuc: {
     araSureler: 'ARA SÜRELER',
     ilkTur: 'ilk tamamlanan tur — bundan sonrası buna karşı koşacak',
@@ -865,6 +910,28 @@ const EN: Metinler = {
       ? `${kalan} task${kalan === 1 ? '' : 's'} to go · next load is waiting`
       : 'last load of the level — pack up',
   },
+  tur: {
+    ad: 'FULL RUN',
+    aciklama: 'All three machines back to back, one clock. It never stops between legs.',
+    basla: 'start the full run',
+    rekorSatiri: (sure, not_) => `your best ${sure} · grade ${not_}`,
+    rekorYok: 'no recorded run yet',
+    ayakKisa: (n, toplam) => `LEG ${n}/${toplam}`,
+    ayakTamam: (makine) => `${makine} DONE`,
+    ayakSuresi: 'this leg',
+    turToplami: 'run total',
+    sonraki: (makine) => `up next · ${makine}`,
+    devam: 'press any key to continue',
+    bitti: 'FULL RUN COMPLETE',
+    terkEdildi: 'RUN ABANDONED',
+    gorevler: 'tasks',
+    toplamSure: 'total time',
+    ayakDokumu: 'LEGS',
+    rekor: 'NEW RUN RECORD',
+    oncekiRekor: (sure) => `previous best ${sure}`,
+    ilkTur: 'your first run — everything after this races it',
+  },
+
   sonuc: {
     araSureler: 'SPLITS',
     ilkTur: 'first completed run — from now on you race this one',

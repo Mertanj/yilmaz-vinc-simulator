@@ -1,5 +1,6 @@
 import { araclar, type AracTanimi } from '../game/araclar';
-import { enIyiOku } from '../game/enIyi';
+import { enIyiOku, turEnIyiOku } from '../game/enIyi';
+import { sureyiYaz } from './sure';
 import { DILLER, M, dilSec, sozluk, type Dil } from './dil';
 import { KIPLER, kipOku, kipYaz, type SimKipi } from '../sim/kip';
 import { oku, yaz } from './kayit';
@@ -31,8 +32,11 @@ export function secimiYaz(id: string): void {
   yaz(ANAHTAR, id);
 }
 
+/** Oyuncunun açılışta verdiği karar: bir makine ya da Tam Tur. */
+export type Secim = { tur: false; arac: AracTanimi } | { tur: true };
+
 /** Kartları basar ve oyuncu birine basana kadar bekler. */
-export function aracSec(host: HTMLElement): Promise<AracTanimi> {
+export function aracSec(host: HTMLElement): Promise<Secim> {
   host.hidden = false;
   return new Promise((cozumle) => {
     const ciz = (): void => {
@@ -59,9 +63,14 @@ export function aracSec(host: HTMLElement): Promise<AracTanimi> {
           if (!secilen?.hazir) return;
           secimiYaz(secilen.id);
           host.hidden = true;
-          cozumle(secilen);
+          cozumle({ tur: false, arac: secilen });
         });
       }
+      host.querySelector<HTMLButtonElement>('button.tam-tur')
+        ?.addEventListener('click', () => {
+          host.hidden = true;
+          cozumle({ tur: true });
+        });
     };
     ciz();
   });
@@ -77,8 +86,38 @@ function govde(): string {
         <p>${M.secim.soru}</p>
       </header>
       <div class="kartlar">${araclar().map((a) => kart(a, a.id === onceki)).join('')}</div>
+      ${tamTurSeridi()}
       ${kipSecimi()}
       <footer>${M.secim.altBilgi}</footer>
+    </div>`;
+}
+
+/**
+ * Tam Tur şeridi — kartların ALTINDA, makine kartlarının bir alternatifi.
+ *
+ * Kart olarak değil şerit olarak duruyor ve bu bilerek: Tam Tur dördüncü bir
+ * makine değil, üçünün birden oynandığı bir KİP. Kart yapmak onu makineyle
+ * aynı hizaya koyar ve "hangi makine" sorusunu bulandırırdı.
+ *
+ * Yeni oyuncunun önce tek bir makineyle tanışması gerekiyor, o yüzden şerit
+ * kartların altında; ama rekor satırı hep görünüyor, çünkü speedrun'ı
+ * kovalayan oyuncunun ilk baktığı yer orası.
+ */
+function tamTurSeridi(): string {
+  const r = turEnIyiOku();
+  const k = M.tur;
+  const rekorSatiri = r
+    ? `<span class="tur-rekor" data-not="${r.not}">${
+      k.rekorSatiri(sureyiYaz(r.sure), r.not)}${r.usta ? ' · ⨯' : ''}</span>`
+    : `<span class="tur-rekor bos">${k.rekorYok}</span>`;
+  return `
+    <div class="tam-tur-serit">
+      <div class="tur-metin">
+        <span class="tur-ad">${k.ad}</span>
+        <p>${k.aciklama}</p>
+        ${rekorSatiri}
+      </div>
+      <button type="button" class="tam-tur">${k.basla}</button>
     </div>`;
 }
 

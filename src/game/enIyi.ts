@@ -1,5 +1,6 @@
 import { okuJson, yazJson } from '../ui/kayit';
 import type { Result } from './mission';
+import type { TurSonucu } from './tamTur';
 
 /**
  * Araç başına en iyi derece.
@@ -72,5 +73,76 @@ export function enIyiKaydet(
   };
   const rekor = onceki === null || yeni.puan > onceki.puan;
   if (rekor) yazJson(ONEK + aracId, yeni);
+  return { rekor, onceki };
+}
+
+/**
+ * Tam Tur rekoru.
+ *
+ * Araç başına kayıttan AYRI tutuluyor ve sebebi ölçü: bölüm kaydı "bu makineyi
+ * ne kadar iyi kullanıyorum", tur kaydı "bu oyunu ne kadar hızlı bitiriyorum"
+ * diye soruyor. İkisini tek tabloya koymak ikisini de yanlış anlatırdı —
+ * aynı gerekçe vinçle forklifti ayrı tuttuğumuz gerekçe.
+ *
+ * **Karşılaştırma ölçüsü SÜRE, puan değil.** Bölüm kaydında puan doğruydu
+ * (aynı bölümü iki kez oynuyorsun, süre zaten puanın içinde), ama bir
+ * speedrun turunun tek anlamlı rekoru bitirme süresidir. Yine de tam kadro
+ * şartı var: 12/15 ile hızlı bitirmek 15/15'ten iyi sayılmaz.
+ */
+export interface TurEnIyi {
+  sure: number;
+  not: TurSonucu['not'];
+  puan: number;
+  tamamlanan: number;
+  gorevSayisi: number;
+  usta: boolean;
+  /** Bacakların kümülatif bitiş anları (s) — bir sonraki tur bunlara koşuyor. */
+  bitisler: number[];
+}
+
+const TUR_ANAHTARI = 'yv.enIyi.tamtur';
+
+export function turEnIyiOku(): TurEnIyi | null {
+  const k = okuJson<Partial<TurEnIyi>>(TUR_ANAHTARI);
+  if (!k || typeof k.sure !== 'number' || !Number.isFinite(k.sure) || k.sure <= 0) {
+    return null;
+  }
+  return {
+    sure: k.sure,
+    not: k.not ?? 'D',
+    puan: typeof k.puan === 'number' ? k.puan : 0,
+    tamamlanan: typeof k.tamamlanan === 'number' ? k.tamamlanan : 0,
+    gorevSayisi: typeof k.gorevSayisi === 'number' ? k.gorevSayisi : 0,
+    usta: k.usta === true,
+    bitisler: Array.isArray(k.bitisler) ? k.bitisler.filter(
+      (x): x is number => typeof x === 'number' && Number.isFinite(x)) : [],
+  };
+}
+
+/**
+ * Tur sonucunu kaydeder ve rekor kırılıp kırılmadığını söyler.
+ *
+ * Sıralama: önce TAM KADRO, sonra süre. Yarım bırakılmış hızlı bir tur rekor
+ * değildir — aynı sebeple bölüm kaydında devrilen tur kayda girmiyor.
+ */
+export function turEnIyiKaydet(
+  s: TurSonucu,
+): { rekor: boolean; onceki: TurEnIyi | null } {
+  const onceki = turEnIyiOku();
+  const tamKadro = s.gorevSayisi > 0 && s.tamamlanan === s.gorevSayisi;
+  const oncekiTam = onceki !== null && onceki.gorevSayisi > 0
+    && onceki.tamamlanan === onceki.gorevSayisi;
+  // Hiç görev bitirilmemiş bir tur hiçbir koşulda rekor değil.
+  if (s.tamamlanan === 0) return { rekor: false, onceki };
+  const rekor = onceki === null
+    || (tamKadro && !oncekiTam)
+    || (tamKadro === oncekiTam && s.sure < onceki.sure);
+  if (rekor) {
+    yazJson(TUR_ANAHTARI, {
+      sure: s.sure, not: s.not, puan: s.puan,
+      tamamlanan: s.tamamlanan, gorevSayisi: s.gorevSayisi, usta: s.usta,
+      bitisler: s.bacaklar.map((b) => b.bitis),
+    });
+  }
   return { rekor, onceki };
 }

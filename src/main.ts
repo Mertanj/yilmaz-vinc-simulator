@@ -2,10 +2,11 @@ import { createStage, type Stage } from './render/stage';
 import { FixedLoop } from './core/loop';
 import { Camera } from './core/camera';
 import { Kumanda } from './input/kumanda';
-import { Mission } from './game/mission';
+import { Mission, type Result } from './game/mission';
+import { TUR_SIRASI, bacakYap, turuDegerlendir, type Bacak } from './game/tamTur';
 import { aracSec } from './ui/secim';
-import { enIyiKaydet, enIyiOku } from './game/enIyi';
-import type { AracTanimi } from './game/araclar';
+import { enIyiKaydet, enIyiOku, turEnIyiKaydet, turEnIyiOku } from './game/enIyi';
+import { aracBul, type AracTanimi } from './game/araclar';
 import {
   M, baslangicDili, dilSec, gorevAdi, gorevBrifi, kumandaModunuSec,
 } from './ui/dil';
@@ -95,7 +96,7 @@ async function boot(): Promise<void> {
   const keys = new Kumanda();
 
   for (;;) {
-    const arac = await aracSec(secimHost);
+    const secim = await aracSec(secimHost);
     // **Ses bağlamı TAM BURADA açılıyor.** Tarayıcı `AudioContext`in ancak bir
     // kullanıcı hareketinden sonra çalışmasına izin veriyor; karta basmak
     // oyuna girmenin zaten tek yolu, yani başka bir "sesi başlat" düğmesi
@@ -108,6 +109,11 @@ async function boot(): Promise<void> {
     // İLK ekran İngilizceydi. Düğmeler her seferinde yeniden yazıldığı için
     // dinleyiciler eskileriyle birlikte gidiyor, birikmiyorlar.
     yatayCagrisiniKur();
+    if (secim.tur) {
+      await tamTuruOyna(stage, keys, ses);
+      continue;
+    }
+    const arac = secim.arac;
     // Hazır olmayan kart zaten `disabled`; yine de oyunu düşürmüyoruz.
     if (!arac.kur) continue;
     keys.sifirla();
@@ -116,6 +122,139 @@ async function boot(): Promise<void> {
     ses.bosta();
     temizle(stage);
   }
+}
+
+/**
+ * **Tam Tur** — üç makine arka arkaya, tek saat.
+ *
+ * Bölümün kendisi hiç değişmiyor: aynı `oyna()`, aynı `Mission`, aynı
+ * puanlama. Değişen tek şey bağlam — saat önceki ayakların toplamından
+ * devam ediyor ve bölüm bitince seçim ekranı yerine bir sonraki makine
+ * geliyor. Tur mantığını bölümün içine gömmek yerine dışarıda tutmak
+ * bilerek: bölüm tek başına da oynanabilir kalıyor ve iki kip arasında
+ * kopyalanmış bir puanlama olmuyor.
+ */
+async function tamTuruOyna(stage: Stage, keys: Kumanda, ses: Ses): Promise<void> {
+  const rekor = turEnIyiOku();
+  const bacaklar: Bacak[] = [];
+  let toplam = 0;
+
+  for (let i = 0; i < TUR_SIRASI.length; i++) {
+    const arac = aracBul(TUR_SIRASI[i] ?? null);
+    if (!arac.kur) continue;
+    const sonrakiId = TUR_SIRASI[i + 1];
+    keys.sifirla();
+    const r = await oyna(stage, keys, arac, {
+      sira: i + 1,
+      toplam: TUR_SIRASI.length,
+      oncekiToplam: toplam,
+      rekorBitisler: rekor?.bitisler ?? [],
+      sonraki: sonrakiId ? aracBul(sonrakiId).ad : '',
+    });
+    ses.bosta();
+    temizle(stage);
+    // Esc: tur terk edildi. Yarım turu kaydetmiyoruz — yarıda bırakılan
+    // bölümün de kayda girmemesiyle aynı gerekçe.
+    if (!r) return;
+    bacaklar.push(bacakYap(arac.id, r.r, r.gorevSayisi, toplam));
+    toplam += r.r.score.sure;
+  }
+  if (bacaklar.length) await turSonucuGoster(bacaklar);
+}
+
+/**
+ * Tam Tur sonuç ekranı.
+ *
+ * Bölüm sonucundan farklı olarak SÜRE başrolde: bir speedrun turunun tek
+ * anlamlı ölçüsü bitirme süresi. Not ve görev sayısı onun altında duruyor,
+ * ayak dökümü ise rekor tura karşı nerede kazanıp nerede kaybettiğini
+ * gösteriyor — bölüm içindeki ara süre tablosunun bir üst katmanı.
+ */
+function turSonucuGoster(bacaklar: Bacak[]): Promise<void> {
+  const s = turuDegerlendir(bacaklar);
+  const { rekor, onceki } = turEnIyiKaydet(s);
+  const k = M.tur;
+  const n = M.sonuc;
+  const hedef = onceki ?? (rekor ? null : turEnIyiOku());
+  const el = document.getElementById('sonuc');
+  const ic = document.getElementById('sonuc-ic');
+  const tamKadro = s.tamamlanan === s.gorevSayisi;
+
+  const satirlar = s.bacaklar.map((b, i) => {
+    const arac = aracBul(b.aracId);
+    const rekorBitis = hedef?.bitisler[i];
+    const fark = rekorBitis === undefined ? '<td></td>' : (() => {
+      const f = farkiYaz(b.bitis - rekorBitis);
+      return `<td data-iyi="${f.iyi === null ? 'esit' : f.iyi ? 'evet' : 'hayir'}">`
+        + `${f.metin}</td>`;
+    })();
+    return `<tr><td>${arac.ad}</td><td>${sureyiYaz(b.sure)}</td>`
+      + `<td>${sureyiYaz(b.bitis)}</td>${fark}</tr>`;
+  }).join('');
+
+  if (ic) {
+    ic.innerHTML = [
+      `<div class="not" data-not="${s.not}">${s.not}</div>`,
+      `<h2>${tamKadro ? k.bitti : k.terkEdildi}</h2>`,
+      s.usta ? `<p class="rozet">${n.usta}</p>` : '',
+      `<p class="toplam">${sureyiYaz(s.sure)}</p>`,
+      rekor ? `<p class="rekor">${k.rekor}</p>` : '',
+      !rekor && onceki ? `<p class="onceki">${k.oncekiRekor(sureyiYaz(onceki.sure))}</p>` : '',
+      '<table>',
+      `<tr><td>${k.gorevler}</td><td>${s.tamamlanan} / ${s.gorevSayisi}</td></tr>`,
+      `<tr><td>${k.toplamSure}</td><td>${sureyiYaz(s.sure)}</td></tr>`,
+      '</table>',
+      `<div class="ara-sureler"><h3>${k.ayakDokumu}</h3><table>${satirlar}</table>`
+        + (hedef ? '' : `<p class="ilk">${k.ilkTur}</p>`) + '</div>',
+      `<p class="puan">${n.puan(s.puan)} · ${n.basari(s.basari.toFixed(0))}</p>`,
+      `<p class="note">${k.devam}</p>`,
+    ].join('');
+  }
+  if (el) el.hidden = false;
+  document.body.classList.add('bitti');
+
+  // Sonuç ekranı kendiliğinden KAPANMIYOR (otomatik süre 0): ayaklar arası
+  // kart ilerliyordu çünkü orada saat akıyor; burada tur bitti, oyuncu
+  // rakamlara istediği kadar baksın.
+  return birTusBekle(700, 0).then(() => {
+    if (el) el.hidden = true;
+    document.body.classList.remove('bitti');
+  });
+}
+
+/**
+ * "Bir tuşa bas" ekranlarının bekleyicisi.
+ *
+ * **Önce bir bekleme payı var ve bu şart.** Bölüm biterken oyuncunun parmağı
+ * hâlâ tuşta: son paleti indirirken `S` basılı ve `keydown` basılı tuşta
+ * TEKRARLIYOR. Pay olmadan el değiştirme kartı milisaniyeler içinde kapanıyor
+ * ve oyuncu hiç görmüyor.
+ *
+ * @param payMs bu süre boyunca tuş yok sayılıyor
+ * @param otomatikMs bu süre sonunda kendiliğinden devam ediyor; 0 ise beklemez
+ */
+function birTusBekle(payMs: number, otomatikMs: number): Promise<void> {
+  return new Promise<void>((cozumle) => {
+    let gitti = false;
+    let zamanlayici = 0;
+    const bit = (): void => {
+      if (gitti) return;
+      gitti = true;
+      window.clearTimeout(zamanlayici);
+      for (const olay of ['keydown', 'pointerdown'] as const) {
+        window.removeEventListener(olay, bit);
+      }
+      cozumle();
+    };
+    const dinlemeyeBasla = (): void => {
+      if (gitti) return;
+      for (const olay of ['keydown', 'pointerdown'] as const) {
+        window.addEventListener(olay, bit);
+      }
+      if (otomatikMs > 0) zamanlayici = window.setTimeout(bit, otomatikMs);
+    };
+    window.setTimeout(dinlemeyeBasla, payMs);
+  });
 }
 
 /** Araç değişiminde sahneyi boşalt — GPU kaynakları görünümle birlikte gitsin. */
@@ -130,8 +269,38 @@ function temizle(stage: Stage): void {
   bolumSiniflariniTemizle();
 }
 
-/** Bir makineyle bir bölüm. Oyuncu seçime dönmek isteyince çözülür. */
-function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
+/**
+ * Tam Tur bağlamı — bu bölüm turun kaçıncı ayağı ve öncekiler ne kadar sürdü.
+ *
+ * `null` ise tek bölüm oynanıyor ve hiçbir şey değişmiyor: saat sıfırdan
+ * sayıyor, bölüm bitince kendi sonuç paneli açılıyor. Tam Tur'da ise saat
+ * durmuyor ve bölüm bitince panel yerine el değiştirme kartı çıkıyor.
+ */
+/** Bir ayağın sonucu: bölümün kendi sonucu + kaç görevlik bir bölüm olduğu. */
+interface AyakSonucu { r: Result; gorevSayisi: number }
+
+interface TurBaglami {
+  /** Kaçıncı ayak (1'den başlıyor) ve toplam kaç ayak var. */
+  sira: number;
+  toplam: number;
+  /** Önceki ayakların toplam süresi (s) — saat buradan devam ediyor. */
+  oncekiToplam: number;
+  /** Rekor turun kümülatif ayak bitişleri (s); yoksa boş. */
+  rekorBitisler: number[];
+  /** Bir sonraki makinenin adı; son ayakta boş. */
+  sonraki: string;
+}
+
+/**
+ * Bir makineyle bir bölüm.
+ *
+ * Tek bölümde oyuncu seçime dönmek isteyince `null` ile çözülüyor. Tam Tur'da
+ * bölüm BİTİNCE o ayağın sonucuyla çözülüyor; Esc yine `null` veriyor ve bu
+ * turun terk edildiği anlamına geliyor.
+ */
+function oyna(
+  stage: Stage, keys: Kumanda, arac: AracTanimi, tur: TurBaglami | null = null,
+): Promise<AyakSonucu | null> {
   const { sahne: scene, gorunum, pad: padKaynagi } = arac.kur!();
   const mission = new Mission(scene);
 
@@ -140,6 +309,12 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
   if (ustBaslik) ustBaslik.textContent = arac.ad.toLocaleUpperCase(M.kod);
   const tuslar = document.getElementById('tuslar');
   if (tuslar) tuslar.innerHTML = arac.tuslar;
+  // Tam Tur'da üst şeritte kaçıncı ayakta olduğun yazıyor; tek bölümde yok.
+  const ayakEl = document.getElementById('ayak');
+  if (ayakEl) {
+    ayakEl.textContent = tur ? M.tur.ayakKisa(tur.sira, tur.toplam) : '';
+    ayakEl.hidden = !tur;
+  }
 
   // --- sabit dekor ---
   // NOT: burada cacheAsTexture DENENDİ ve geri alındı. Dekor metre biriminde
@@ -300,7 +475,15 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
   let oncekiUyari = '';
   let inceMod = false;
 
-  return new Promise<void>((cik) => {
+  return new Promise<AyakSonucu | null>((cik) => {
+    /** Bölümü kapat: döngü, olay dinleyicileri ve kumanda katmanı gitsin. */
+    const kapat = (): void => {
+      loop.stop();
+      stage.app.renderer.off('resize', yenidenBoyutlandi);
+      padiSok();
+      detayDugmesiniSok();
+    };
+
     const step = (dt: number): void => {
       if (keys.consumeSesToggle()) ses.degistir();
       if (keys.consumeDetayToggle()) {
@@ -334,11 +517,8 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
       // Çıkış en sonda: bu karenin fiziği zaten işledi, yarım kalan bir adım
       // bırakmıyoruz.
       if (keys.consumeCikis()) {
-        loop.stop();
-        stage.app.renderer.off('resize', yenidenBoyutlandi);
-        padiSok();
-        detayDugmesiniSok();
-        cik();
+        kapat();
+        cik(null);
       }
     };
 
@@ -441,7 +621,11 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
       if (hud.gorevBrif) {
         hud.gorevBrif.textContent = gorev ? `— ${gorevBrifi(gorev.kod, gorev.brif)}` : '';
       }
-      if (hud.sure) hud.sure.textContent = sureyiYaz(mission.score.sure);
+      // **Tam Tur'da saat durmuyor.** Ayak süresine önceki ayakların toplamı
+      // ekleniyor; oyuncunun gördüğü sayı turun başından beri geçen süre.
+      if (hud.sure) {
+        hud.sure.textContent = sureyiYaz(mission.score.sure + (tur?.oncekiToplam ?? 0));
+      }
       if (hud.puan) hud.puan.textContent = M.ust.puan(mission.score.puan);
 
       // --- gösterge bloğu ---
@@ -601,10 +785,66 @@ function oyna(stage: Stage, keys: Kumanda, arac: AracTanimi): Promise<void> {
         + '</div>';
     }
 
+    /**
+     * Tam Tur'da ayak bitti: el değiştirme kartını yaz ve turu devam ettir.
+     *
+     * Bölüm kaydı burada da yazılıyor — aynı bölüm, aynı ölçü; turda iyi
+     * oynanmış bir ayak makine rekorunu hak ediyor.
+     */
+    function elDegistir(r: Result, t: TurBaglami): void {
+      kapat();
+      ses.bosta();
+      const k = M.tur;
+      const bitis = t.oncekiToplam + r.score.sure;
+      const rekorBitis = t.rekorBitisler[t.sira - 1];
+      const fark = rekorBitis === undefined ? null : farkiYaz(bitis - rekorBitis);
+      if (hud.sonuc && hud.sonucIc) {
+        hud.sonucIc.innerHTML = [
+          `<div class="not" data-not="${r.not}">${r.not}</div>`,
+          `<h2>${k.ayakTamam(arac.ad.toLocaleUpperCase(M.kod))}</h2>`,
+          `<p class="toplam">${sureyiYaz(bitis)}</p>`,
+          fark
+            ? `<p class="rekor-fark" data-iyi="${
+              fark.iyi === null ? 'esit' : fark.iyi ? 'evet' : 'hayir'
+            }">${fark.metin}</p>`
+            : '',
+          '<table>',
+          `<tr><td>${k.ayakSuresi}</td><td>${sureyiYaz(r.score.sure)}</td></tr>`,
+          `<tr><td>${M.sonuc.gorev}</td>`
+            + `<td>${r.score.sapmalar.length} / ${mission.taskCount}</td></tr>`,
+          '</table>',
+          `<p class="puan">${M.sonuc.puan(r.score.puan)} · ${k.sonraki(t.sonraki)}</p>`,
+          `<p class="note">${k.devam}</p>`,
+        ].join('');
+        hud.sonuc.hidden = false;
+      }
+      document.body.classList.add('bitti');
+      // **Otomatik ilerliyor ama beklemeyi de bırakıyor.** Speedrun'da her
+      // saniye sayılıyor; kartı okumak isteyen okusun, istemeyen bir tuşa
+      // bassın. Saat bu kartta DURUYOR — ayak süresi zaten kapandı.
+      void birTusBekle(700, 4200).then(() => {
+        cik({ r, gorevSayisi: mission.taskCount });
+      });
+    }
+
     /** Bölüm bitince ya da devrilince sonuç panelini bir kez yaz. */
     let sonucYazildi = false;
     function sonucGoster(): void {
       const r = mission.result;
+      // Tam Tur'un SON ayağında da kart yok: tur sonucunu `basla()` yazıyor,
+      // çünkü üç ayağın tamamını ancak o biliyor.
+      if (tur && r && !sonucYazildi) {
+        sonucYazildi = true;
+        // **Bölüm kaydı her ayakta yazılıyor**, sonuncusunda da: aynı bölüm,
+        // aynı ölçü. Yalnız `elDegistir` içinde yazılıyordu ve son makine
+        // Tam Tur'da hiç rekor kıramıyordu.
+        enIyiKaydet(arac.id, r);
+        if (tur.sira >= tur.toplam) {
+          kapat(); ses.bosta(); cik({ r, gorevSayisi: mission.taskCount });
+        }
+        else elDegistir(r, tur);
+        return;
+      }
       if (!r) {
         if (sonucYazildi && hud.sonuc) {
           hud.sonuc.hidden = true;

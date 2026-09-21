@@ -104,7 +104,14 @@ export const PUAN = {
 } as const;
 
 /** Bir görevden alınabilecek en yüksek puan — not bunun oranından çıkıyor. */
-const GOREV_MAX = PUAN.temel + PUAN.isabetTam + PUAN.hizTam;
+/**
+ * Bir görevden alınabilecek en yüksek puan.
+ *
+ * Tam Tur notu da bunu kullanıyor: iki notun aynı ölçekte olması şart, yoksa
+ * oyuncu "bölümde A, turda C" gördüğünde sebebin kendi oyunu mu yoksa iki
+ * ayrı ölçek mi olduğunu bilemez.
+ */
+export const GOREV_MAX = PUAN.temel + PUAN.isabetTam + PUAN.hizTam;
 
 
 export class Mission {

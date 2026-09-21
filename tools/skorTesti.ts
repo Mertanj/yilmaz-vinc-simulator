@@ -7,7 +7,8 @@
  * kaydını ezmesi, ve elle kurcalanmış/eski bir `localStorage` kaydının oyunu
  * açılışta düşürmesi. Üçü de sessizce olur, üçü de burada yakalanıyor.
  */
-import { enIyiOku, enIyiKaydet } from '../src/game/enIyi';
+import { enIyiOku, enIyiKaydet, turEnIyiOku, turEnIyiKaydet } from '../src/game/enIyi';
+import { turuDegerlendir, type Bacak } from '../src/game/tamTur';
 import { farkiYaz, sureyiYaz } from '../src/ui/sure';
 import type { Result } from '../src/game/mission';
 
@@ -129,3 +130,70 @@ esit('yarim saniyenin alti esit sayiliyor', farkiYaz(0.3), { metin: '±0:00', iy
 esit('esitligin isareti yok', farkiYaz(-0.4), { metin: '±0:00', iyi: null });
 esit('bir dakikadan buyuk fark', farkiYaz(-95), { metin: '−1:35', iyi: true });
 esit('NaN esit sayiliyor', farkiYaz(NaN), { metin: '±0:00', iyi: null });
+
+// --- TAM TUR ---
+//
+// Turun kendi mantigi bolumunkinden AYRI ve ikisinin ayrismasi sessiz olur:
+// not ayni olcekten geliyor (bolumde A, turda C gorulurse sebep oyuncunun
+// oyunu olmali, iki ayri olcek degil), rekor olcusu ise SURE.
+const bacak = (
+  aracId: string, sure: number, puan: number, tamamlanan: number,
+  bitis: number, ek: Partial<Bacak> = {},
+): Bacak => ({
+  aracId, sure, bitis, puan, tamamlanan, gorevSayisi: 5,
+  devrildi: false, carpma: 0, kirmiziSn: 0, ...ek,
+});
+
+// GOREV_MAX = 1000 + 600 + 400 = 2000; 15 gorev -> tavan 30000.
+const tamTur = turuDegerlendir([
+  bacak('forklift', 220, 9300, 5, 220),
+  bacak('dirsekli', 900, 9100, 5, 1120),
+  bacak('vinc', 720, 8800, 5, 1840),
+]);
+esit('tur suresi bacaklarin toplami', tamTur.sure, 1840);
+esit('tur puani bacaklarin toplami', tamTur.puan, 27200);
+esit('tur gorev sayisi', `${tamTur.tamamlanan}/${tamTur.gorevSayisi}`, '15/15');
+esit('tur notu bolum notuyla AYNI olcekte', tamTur.not, 'A');
+esit('temiz tam kadro usta', tamTur.usta, true);
+
+const kirli = turuDegerlendir([
+  bacak('forklift', 220, 9300, 5, 220),
+  bacak('dirsekli', 900, 9100, 5, 1120, { carpma: 1 }),
+  bacak('vinc', 720, 8800, 5, 1840),
+]);
+esit('tek carpma ustayi dusuruyor', kirli.usta, false);
+
+const yarim = turuDegerlendir([
+  bacak('forklift', 220, 9300, 5, 220),
+  bacak('dirsekli', 300, 1200, 1, 520, { devrildi: true }),
+  bacak('vinc', 720, 8800, 5, 1240),
+]);
+esit('devrilen bacak turu BITIRMIYOR', yarim.bacaklar.length, 3);
+esit('yarim turda gorev sayisi eksik', `${yarim.tamamlanan}/${yarim.gorevSayisi}`, '11/15');
+esit('yarim tur notu dusuyor', yarim.not, 'C');
+esit('yarim tur usta DEGIL', yarim.usta, false);
+
+// --- tur rekoru: once TAM KADRO, sonra SURE ---
+esit('hic tur oynanmamis -> null', turEnIyiOku(), null);
+const ilkTur = turEnIyiKaydet(yarim);
+esit('ilk tur rekor', ilkTur.rekor, true);
+esit('ilk turda onceki yok', ilkTur.onceki, null);
+// Yarim turdan YAVAS ama TAM bir tur yine de rekor: kadro sureden once gelir.
+const yavasAmaTam = turuDegerlendir([
+  bacak('forklift', 400, 8000, 5, 400),
+  bacak('dirsekli', 1200, 8000, 5, 1600),
+  bacak('vinc', 1000, 8000, 5, 2600),
+]);
+esit('tam kadro, yarim turdan yavas olsa da rekor',
+  turEnIyiKaydet(yavasAmaTam).rekor, true);
+esit('rekor sureyi sakliyor', turEnIyiOku()?.sure, 2600);
+esit('rekor ayak bitislerini sakliyor', turEnIyiOku()?.bitisler, [400, 1600, 2600]);
+// Tam kadrodan sonra yarim bir tur, ne kadar hizli olursa olsun rekor DEGIL.
+esit('tam kadrodan sonra yarim tur rekor DEGIL', turEnIyiKaydet(yarim).rekor, false);
+esit('rekor ezilmedi', turEnIyiOku()?.sure, 2600);
+esit('tam kadroda daha hizli tur rekor', turEnIyiKaydet(tamTur).rekor, true);
+esit('yeni rekor suresi', turEnIyiOku()?.sure, 1840);
+esit('esit sure rekor SAYILMAZ', turEnIyiKaydet(tamTur).rekor, false);
+// Hic gorev bitirmeden terk edilen tur hicbir kosulda rekor degil.
+const bos = turuDegerlendir([bacak('forklift', 30, 0, 0, 30)]);
+esit('hic gorev bitmemis tur rekor DEGIL', turEnIyiKaydet(bos).rekor, false);
