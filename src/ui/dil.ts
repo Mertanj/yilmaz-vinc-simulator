@@ -285,7 +285,15 @@ export interface Metinler {
     bitti: string; terkEdildi: string;
     gorevler: string; toplamSure: string;
     ayakDokumu: string;
-    rekor: string; oncekiRekor: (sure: string) => string; ilkTur: string;
+    /** İki rekor kategorisi: en hızlı tur ve en yüksek puanlı tur. */
+    hizRekoru: string; puanRekoru: string;
+    hizSatiri: (sure: string) => string; puanSatiri: (puan: string) => string;
+    oncekiHiz: (sure: string) => string; oncekiPuan: (puan: string) => string;
+    ilkTur: string;
+    /** Devrilme: tur baştan başlıyor. */
+    devrildiBas: string;
+    devrildiGovde: (makine: string, ayak: number, toplam: number) => string;
+    yenidenBasla: string;
   };
 
   sonuc: {
@@ -584,6 +592,17 @@ const TR: Metinler = {
     basla: 'tam turu başlat',
     rekorSatiri: (sure, not_) => `rekorun ${sure} · not ${not_}`,
     rekorYok: 'henüz kaydedilmiş bir turun yok',
+    hizRekoru: 'YENİ HIZ REKORU',
+    puanRekoru: 'YENİ PUAN REKORU',
+    hizSatiri: (sure) => `en hızlı ${sure}`,
+    puanSatiri: (puan) => `en yüksek ${puan}`,
+    oncekiHiz: (sure) => `hız rekorun ${sure}`,
+    oncekiPuan: (puan) => `puan rekorun ${puan}`,
+    devrildiBas: 'TUR BİTTİ · DEVRİLDİN',
+    devrildiGovde: (makine, ayak, toplam) =>
+      `${makine} · ${ayak}/${toplam}. ayak. Devrilen tur kaydedilmiyor; `
+      + 'speedrun baştan başlar.',
+    yenidenBasla: 'yeniden başlamak için bir tuşa bas · Esc ile çık',
     ayakKisa: (n, toplam) => `AYAK ${n}/${toplam}`,
     ayakTamam: (makine) => `${makine} TAMAM`,
     ayakSuresi: 'bu ayak',
@@ -595,8 +614,6 @@ const TR: Metinler = {
     gorevler: 'görev',
     toplamSure: 'toplam süre',
     ayakDokumu: 'AYAKLAR',
-    rekor: 'YENİ TUR REKORU',
-    oncekiRekor: (sure) => `önceki rekorun ${sure}`,
     ilkTur: 'ilk turun — bundan sonrası buna karşı koşacak',
   },
 
@@ -916,6 +933,17 @@ const EN: Metinler = {
     basla: 'start the full run',
     rekorSatiri: (sure, not_) => `your best ${sure} · grade ${not_}`,
     rekorYok: 'no recorded run yet',
+    hizRekoru: 'NEW TIME RECORD',
+    puanRekoru: 'NEW SCORE RECORD',
+    hizSatiri: (sure) => `fastest ${sure}`,
+    puanSatiri: (puan) => `highest ${puan}`,
+    oncekiHiz: (sure) => `your time record ${sure}`,
+    oncekiPuan: (puan) => `your score record ${puan}`,
+    devrildiBas: 'RUN OVER · YOU TIPPED',
+    devrildiGovde: (makine, ayak, toplam) =>
+      `${makine} · leg ${ayak}/${toplam}. A tipped run is not recorded; `
+      + 'a speedrun starts over.',
+    yenidenBasla: 'press any key to start over · Esc to quit',
     ayakKisa: (n, toplam) => `LEG ${n}/${toplam}`,
     ayakTamam: (makine) => `${makine} DONE`,
     ayakSuresi: 'this leg',
@@ -927,8 +955,6 @@ const EN: Metinler = {
     gorevler: 'tasks',
     toplamSure: 'total time',
     ayakDokumu: 'LEGS',
-    rekor: 'NEW RUN RECORD',
-    oncekiRekor: (sure) => `previous best ${sure}`,
     ilkTur: 'your first run — everything after this races it',
   },
 

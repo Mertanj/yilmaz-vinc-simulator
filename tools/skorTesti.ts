@@ -173,27 +173,51 @@ esit('yarim turda gorev sayisi eksik', `${yarim.tamamlanan}/${yarim.gorevSayisi}
 esit('yarim tur notu dusuyor', yarim.not, 'C');
 esit('yarim tur usta DEGIL', yarim.usta, false);
 
-// --- tur rekoru: once TAM KADRO, sonra SURE ---
-esit('hic tur oynanmamis -> null', turEnIyiOku(), null);
-const ilkTur = turEnIyiKaydet(yarim);
-esit('ilk tur rekor', ilkTur.rekor, true);
-esit('ilk turda onceki yok', ilkTur.onceki, null);
-// Yarim turdan YAVAS ama TAM bir tur yine de rekor: kadro sureden once gelir.
-const yavasAmaTam = turuDegerlendir([
-  bacak('forklift', 400, 8000, 5, 400),
-  bacak('dirsekli', 1200, 8000, 5, 1600),
-  bacak('vinc', 1000, 8000, 5, 2600),
+// --- tur rekoru: IKI KATEGORI, ikisi de TAM tur ---
+//
+// Hizli kosmak isabetten ve kirmizidan puan kaybettiriyor, temiz kosmak sure
+// kaybettiriyor: ikisi ayni oyunu odullendirmiyor, o yuzden ayri kategoriler.
+esit('hic tur oynanmamis -> iki kategori de null',
+  turEnIyiOku(), { hiz: null, puan: null });
+
+// Yarim tur (devrilmis bacak) HICBIR kategoriye girmiyor.
+const yarimKayit = turEnIyiKaydet(yarim);
+esit('yarim tur hiz rekoru DEGIL', yarimKayit.hizRekoru, false);
+esit('yarim tur puan rekoru DEGIL', yarimKayit.puanRekoru, false);
+esit('yarim tur hicbir sey yazmiyor', turEnIyiOku(), { hiz: null, puan: null });
+
+const ilkTam = turEnIyiKaydet(tamTur);
+esit('ilk tam tur iki kategoriyi de aliyor',
+  [ilkTam.hizRekoru, ilkTam.puanRekoru], [true, true]);
+esit('hiz rekoru sureyi sakliyor', turEnIyiOku().hiz?.sure, 1840);
+esit('hiz rekoru ayak bitislerini sakliyor',
+  turEnIyiOku().hiz?.bitisler, [220, 1120, 1840]);
+esit('puan rekoru puani sakliyor', turEnIyiOku().puan?.puan, 27200);
+
+// Daha HIZLI ama daha DUSUK puanli tur: yalniz hiz rekorunu kiriyor.
+const hizliAmaKirli = turuDegerlendir([
+  bacak('forklift', 150, 7000, 5, 150),
+  bacak('dirsekli', 700, 7000, 5, 850),
+  bacak('vinc', 600, 7000, 5, 1450),
 ]);
-esit('tam kadro, yarim turdan yavas olsa da rekor',
-  turEnIyiKaydet(yavasAmaTam).rekor, true);
-esit('rekor sureyi sakliyor', turEnIyiOku()?.sure, 2600);
-esit('rekor ayak bitislerini sakliyor', turEnIyiOku()?.bitisler, [400, 1600, 2600]);
-// Tam kadrodan sonra yarim bir tur, ne kadar hizli olursa olsun rekor DEGIL.
-esit('tam kadrodan sonra yarim tur rekor DEGIL', turEnIyiKaydet(yarim).rekor, false);
-esit('rekor ezilmedi', turEnIyiOku()?.sure, 2600);
-esit('tam kadroda daha hizli tur rekor', turEnIyiKaydet(tamTur).rekor, true);
-esit('yeni rekor suresi', turEnIyiOku()?.sure, 1840);
-esit('esit sure rekor SAYILMAZ', turEnIyiKaydet(tamTur).rekor, false);
-// Hic gorev bitirmeden terk edilen tur hicbir kosulda rekor degil.
-const bos = turuDegerlendir([bacak('forklift', 30, 0, 0, 30)]);
-esit('hic gorev bitmemis tur rekor DEGIL', turEnIyiKaydet(bos).rekor, false);
+const h = turEnIyiKaydet(hizliAmaKirli);
+esit('hizli ama dusuk puanli tur: yalniz HIZ rekoru',
+  [h.hizRekoru, h.puanRekoru], [true, false]);
+esit('hiz rekoru guncellendi', turEnIyiOku().hiz?.sure, 1450);
+esit('puan rekoru KORUNDU', turEnIyiOku().puan?.puan, 27200);
+
+// Daha YAVAS ama daha YUKSEK puanli tur: yalniz puan rekorunu kiriyor.
+const yavasAmaTemiz = turuDegerlendir([
+  bacak('forklift', 300, 9800, 5, 300),
+  bacak('dirsekli', 1100, 9800, 5, 1400),
+  bacak('vinc', 900, 9800, 5, 2300),
+]);
+const y = turEnIyiKaydet(yavasAmaTemiz);
+esit('yavas ama temiz tur: yalniz PUAN rekoru',
+  [y.hizRekoru, y.puanRekoru], [false, true]);
+esit('puan rekoru guncellendi', turEnIyiOku().puan?.puan, 29400);
+esit('hiz rekoru KORUNDU', turEnIyiOku().hiz?.sure, 1450);
+
+esit('esit sure ve esit puan hicbir rekor DEGIL',
+  [turEnIyiKaydet(hizliAmaKirli).hizRekoru,
+    turEnIyiKaydet(yavasAmaTemiz).puanRekoru], [false, false]);

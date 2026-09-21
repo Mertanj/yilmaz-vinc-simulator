@@ -80,14 +80,17 @@ export function enIyiKaydet(
  * Tam Tur rekoru.
  *
  * Araç başına kayıttan AYRI tutuluyor ve sebebi ölçü: bölüm kaydı "bu makineyi
- * ne kadar iyi kullanıyorum", tur kaydı "bu oyunu ne kadar hızlı bitiriyorum"
- * diye soruyor. İkisini tek tabloya koymak ikisini de yanlış anlatırdı —
- * aynı gerekçe vinçle forklifti ayrı tuttuğumuz gerekçe.
+ * ne kadar iyi kullanıyorum", tur kaydı "bu oyunu ne kadar hızlı ve ne kadar
+ * temiz bitiriyorum" diye soruyor.
  *
- * **Karşılaştırma ölçüsü SÜRE, puan değil.** Bölüm kaydında puan doğruydu
- * (aynı bölümü iki kez oynuyorsun, süre zaten puanın içinde), ama bir
- * speedrun turunun tek anlamlı rekoru bitirme süresidir. Yine de tam kadro
- * şartı var: 12/15 ile hızlı bitirmek 15/15'ten iyi sayılmaz.
+ * **İKİ rekor var ve ikisi de tam bir tur.** Sahadan gelen istek buydu:
+ * *"tur rekorunun ölçütü hem süre hem skor olsun."* Haklı, çünkü ikisi aynı
+ * oyunu ödüllendirmiyor — hızlı koşmak isabetten ve kırmızıdan puan
+ * kaybettiriyor, temiz koşmak süre kaybettiriyor. Tek bir rekor tutmak
+ * oyuncunun iki hedeften birini seçmesini zorunlu kılardı; speedrun
+ * tablolarında da bu yüzden birden fazla kategori olur.
+ *
+ * Ara süreler HIZ rekoruna karşı koşuyor: ara süre zaten bir zaman ölçüsü.
  */
 export interface TurEnIyi {
   sure: number;
@@ -100,10 +103,19 @@ export interface TurEnIyi {
   bitisler: number[];
 }
 
-const TUR_ANAHTARI = 'yv.enIyi.tamtur';
+/** İki kategori: en hızlı tur ve en yüksek puanlı tur. */
+export interface TurRekorlari {
+  hiz: TurEnIyi | null;
+  puan: TurEnIyi | null;
+}
 
-export function turEnIyiOku(): TurEnIyi | null {
-  const k = okuJson<Partial<TurEnIyi>>(TUR_ANAHTARI);
+const TUR_HIZ = 'yv.enIyi.tamtur.hiz';
+const TUR_PUAN = 'yv.enIyi.tamtur.puan';
+/** Tek rekorlu ilk sürümün anahtarı — bir kez okunup ikisine de taşınıyor. */
+const TUR_ESKI = 'yv.enIyi.tamtur';
+
+function turOku(anahtar: string): TurEnIyi | null {
+  const k = okuJson<Partial<TurEnIyi>>(anahtar);
   if (!k || typeof k.sure !== 'number' || !Number.isFinite(k.sure) || k.sure <= 0) {
     return null;
   }
@@ -119,30 +131,40 @@ export function turEnIyiOku(): TurEnIyi | null {
   };
 }
 
+export function turEnIyiOku(): TurRekorlari {
+  const eski = turOku(TUR_ESKI);
+  // Tek rekorlu sürümden kalan kayıt iki kategoriye de tohum oluyor: oyuncunun
+  // koştuğu turu silmek, kaydı şekil değiştirdi diye cezalandırmak olurdu.
+  return {
+    hiz: turOku(TUR_HIZ) ?? eski,
+    puan: turOku(TUR_PUAN) ?? eski,
+  };
+}
+
+function yaz1(anahtar: string, s: TurSonucu): void {
+  yazJson(anahtar, {
+    sure: s.sure, not: s.not, puan: s.puan,
+    tamamlanan: s.tamamlanan, gorevSayisi: s.gorevSayisi, usta: s.usta,
+    bitisler: s.bacaklar.map((b) => b.bitis),
+  });
+}
+
 /**
- * Tur sonucunu kaydeder ve rekor kırılıp kırılmadığını söyler.
+ * Tur sonucunu kaydeder ve hangi rekorların kırıldığını söyler.
  *
- * Sıralama: önce TAM KADRO, sonra süre. Yarım bırakılmış hızlı bir tur rekor
- * değildir — aynı sebeple bölüm kaydında devrilen tur kayda girmiyor.
+ * **Yalnız TAM turlar kaydediliyor.** Devrilen tur zaten baştan başlıyor
+ * (speedrun kuralı), terk edilen tur ise hiç bitmedi — ikisi de kayda
+ * girmemeli, aynı gerekçeyle yarıda bırakılan bölüm de girmiyor.
  */
 export function turEnIyiKaydet(
   s: TurSonucu,
-): { rekor: boolean; onceki: TurEnIyi | null } {
+): { hizRekoru: boolean; puanRekoru: boolean; onceki: TurRekorlari } {
   const onceki = turEnIyiOku();
   const tamKadro = s.gorevSayisi > 0 && s.tamamlanan === s.gorevSayisi;
-  const oncekiTam = onceki !== null && onceki.gorevSayisi > 0
-    && onceki.tamamlanan === onceki.gorevSayisi;
-  // Hiç görev bitirilmemiş bir tur hiçbir koşulda rekor değil.
-  if (s.tamamlanan === 0) return { rekor: false, onceki };
-  const rekor = onceki === null
-    || (tamKadro && !oncekiTam)
-    || (tamKadro === oncekiTam && s.sure < onceki.sure);
-  if (rekor) {
-    yazJson(TUR_ANAHTARI, {
-      sure: s.sure, not: s.not, puan: s.puan,
-      tamamlanan: s.tamamlanan, gorevSayisi: s.gorevSayisi, usta: s.usta,
-      bitisler: s.bacaklar.map((b) => b.bitis),
-    });
-  }
-  return { rekor, onceki };
+  if (!tamKadro) return { hizRekoru: false, puanRekoru: false, onceki };
+  const hizRekoru = onceki.hiz === null || s.sure < onceki.hiz.sure;
+  const puanRekoru = onceki.puan === null || s.puan > onceki.puan.puan;
+  if (hizRekoru) yaz1(TUR_HIZ, s);
+  if (puanRekoru) yaz1(TUR_PUAN, s);
+  return { hizRekoru, puanRekoru, onceki };
 }

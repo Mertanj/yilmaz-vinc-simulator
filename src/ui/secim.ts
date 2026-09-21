@@ -106,9 +106,17 @@ function govde(): string {
 function tamTurSeridi(): string {
   const r = turEnIyiOku();
   const k = M.tur;
-  const rekorSatiri = r
-    ? `<span class="tur-rekor" data-not="${r.not}">${
-      k.rekorSatiri(sureyiYaz(r.sure), r.not)}${r.usta ? ' · ⨯' : ''}</span>`
+  // İki kategori yan yana: hızlı koşmak isabetten puan kaybettiriyor, temiz
+  // koşmak süre kaybettiriyor. Tek satır oyuncuyu ikisinden birini seçmeye
+  // zorlardı; ikisi de görünüyor ki ikisi de kovalanabilsin.
+  const rekorSatiri = r.hiz || r.puan
+    ? '<span class="tur-rekor"'
+      + `${r.hiz ? ` data-not="${r.hiz.not}"` : ''}>`
+      + [
+        r.hiz ? k.hizSatiri(sureyiYaz(r.hiz.sure)) : '',
+        r.puan ? k.puanSatiri(M.sonuc.puan(r.puan.puan)) : '',
+      ].filter(Boolean).join(' · ')
+      + `${r.hiz?.usta || r.puan?.usta ? ' · ⨯' : ''}</span>`
     : `<span class="tur-rekor bos">${k.rekorYok}</span>`;
   return `
     <div class="tam-tur-serit">

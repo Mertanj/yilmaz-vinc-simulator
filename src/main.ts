@@ -135,6 +135,23 @@ async function boot(): Promise<void> {
  * kopyalanmış bir puanlama olmuyor.
  */
 async function tamTuruOyna(stage: Stage, keys: Kumanda, ses: Ses): Promise<void> {
+  // **Devrilme turu baştan aldırıyor.** Sahadan gelen kural: *"devrilince tüm
+  // olay yeniden başlamalı, speed run olayı bu."* Doğru — bir speedrun'da
+  // ölüm reset demek, yarısı kaybedilmiş bir turu sürüklemek değil. Aynı
+  // döngü `R` ile elle sıfırlamayı da karşılıyor.
+  for (;;) {
+    const sonuc = await birTur(stage, keys, ses);
+    if (sonuc === 'cik') return;
+    if (sonuc === 'yeniden') continue;
+    await turSonucuGoster(sonuc);
+    return;
+  }
+}
+
+/** Bir Tam Tur denemesi: ya biter, ya devrilir (yeniden), ya terk edilir. */
+async function birTur(
+  stage: Stage, keys: Kumanda, ses: Ses,
+): Promise<Bacak[] | 'yeniden' | 'cik'> {
   const rekor = turEnIyiOku();
   const bacaklar: Bacak[] = [];
   let toplam = 0;
@@ -148,18 +165,79 @@ async function tamTuruOyna(stage: Stage, keys: Kumanda, ses: Ses): Promise<void>
       sira: i + 1,
       toplam: TUR_SIRASI.length,
       oncekiToplam: toplam,
-      rekorBitisler: rekor?.bitisler ?? [],
+      rekorBitisler: rekor.hiz?.bitisler ?? [],
       sonraki: sonrakiId ? aracBul(sonrakiId).ad : '',
     });
     ses.bosta();
     temizle(stage);
     // Esc: tur terk edildi. Yarım turu kaydetmiyoruz — yarıda bırakılan
     // bölümün de kayda girmemesiyle aynı gerekçe.
-    if (!r) return;
+    if (r === null) return 'cik';
+    if (r === YENIDEN) return 'yeniden';
+    if (r.r.devrildi) {
+      return await turDevrildiEkrani(arac, i + 1, toplam + r.r.score.sure);
+    }
     bacaklar.push(bacakYap(arac.id, r.r, r.gorevSayisi, toplam));
     toplam += r.r.score.sure;
   }
-  if (bacaklar.length) await turSonucuGoster(bacaklar);
+  return bacaklar;
+}
+
+/**
+ * Tur devrildi ekranı — bir tuş yeniden başlatır, Esc çıkar.
+ *
+ * Sonuç ekranı DEĞİL, çünkü ortada bir sonuç yok: devrilen tur kayda
+ * girmiyor. Ekranın tek işi ne olduğunu ve nereye kadar gelindiğini söylemek.
+ */
+async function turDevrildiEkrani(
+  arac: AracTanimi, ayak: number, sure: number,
+): Promise<'yeniden' | 'cik'> {
+  const k = M.tur;
+  const ic = document.getElementById('sonuc-ic');
+  const el = document.getElementById('sonuc');
+  if (ic) {
+    ic.innerHTML = [
+      `<div class="not" data-not="D">✕</div>`,
+      `<h2>${k.devrildiBas}</h2>`,
+      `<p class="toplam">${sureyiYaz(sure)}</p>`,
+      `<p class="onceki">${k.devrildiGovde(arac.ad, ayak, TUR_SIRASI.length)}</p>`,
+      `<p class="note">${k.yenidenBasla}</p>`,
+    ].join('');
+  }
+  if (el) el.hidden = false;
+  document.body.classList.add('bitti');
+  const secim = await escVeyaTus(700);
+  if (el) el.hidden = true;
+  document.body.classList.remove('bitti');
+  return secim;
+}
+
+/**
+ * "Bir tuşa bas, Esc çık" — devrilme ekranının bekleyicisi.
+ *
+ * `birTusBekle` ile aynı bekleme payı gerekçesi: bölüm devrilirken oyuncunun
+ * parmağı hâlâ tuşta.
+ */
+function escVeyaTus(payMs: number): Promise<'yeniden' | 'cik'> {
+  return new Promise((cozumle) => {
+    let gitti = false;
+    const bit = (secim: 'yeniden' | 'cik') => (): void => {
+      if (gitti) return;
+      gitti = true;
+      window.removeEventListener('keydown', tus);
+      window.removeEventListener('pointerdown', dokun);
+      cozumle(secim);
+    };
+    const tus = (e: KeyboardEvent): void => {
+      bit(e.key === 'Escape' ? 'cik' : 'yeniden')();
+    };
+    const dokun = (): void => { bit('yeniden')(); };
+    window.setTimeout(() => {
+      if (gitti) return;
+      window.addEventListener('keydown', tus);
+      window.addEventListener('pointerdown', dokun);
+    }, payMs);
+  });
 }
 
 /**
@@ -172,10 +250,12 @@ async function tamTuruOyna(stage: Stage, keys: Kumanda, ses: Ses): Promise<void>
  */
 function turSonucuGoster(bacaklar: Bacak[]): Promise<void> {
   const s = turuDegerlendir(bacaklar);
-  const { rekor, onceki } = turEnIyiKaydet(s);
+  const { hizRekoru, puanRekoru, onceki } = turEnIyiKaydet(s);
   const k = M.tur;
   const n = M.sonuc;
-  const hedef = onceki ?? (rekor ? null : turEnIyiOku());
+  // Ara süreler HIZ rekoruna karşı koşuyor: ara süre zaten bir zaman ölçüsü.
+  // Kendi turuna karşı koşmasın diye kayıttan ÖNCEKİ hâli kullanılıyor.
+  const hedef = onceki.hiz;
   const el = document.getElementById('sonuc');
   const ic = document.getElementById('sonuc-ic');
   const tamKadro = s.tamamlanan === s.gorevSayisi;
@@ -198,8 +278,12 @@ function turSonucuGoster(bacaklar: Bacak[]): Promise<void> {
       `<h2>${tamKadro ? k.bitti : k.terkEdildi}</h2>`,
       s.usta ? `<p class="rozet">${n.usta}</p>` : '',
       `<p class="toplam">${sureyiYaz(s.sure)}</p>`,
-      rekor ? `<p class="rekor">${k.rekor}</p>` : '',
-      !rekor && onceki ? `<p class="onceki">${k.oncekiRekor(sureyiYaz(onceki.sure))}</p>` : '',
+      hizRekoru ? `<p class="rekor">${k.hizRekoru}</p>` : '',
+      puanRekoru ? `<p class="rekor">${k.puanRekoru}</p>` : '',
+      !hizRekoru && onceki.hiz
+        ? `<p class="onceki">${k.oncekiHiz(sureyiYaz(onceki.hiz.sure))}</p>` : '',
+      !puanRekoru && onceki.puan
+        ? `<p class="onceki">${k.oncekiPuan(n.puan(onceki.puan.puan))}</p>` : '',
       '<table>',
       `<tr><td>${k.gorevler}</td><td>${s.tamamlanan} / ${s.gorevSayisi}</td></tr>`,
       `<tr><td>${k.toplamSure}</td><td>${sureyiYaz(s.sure)}</td></tr>`,
@@ -279,6 +363,15 @@ function temizle(stage: Stage): void {
 /** Bir ayağın sonucu: bölümün kendi sonucu + kaç görevlik bir bölüm olduğu. */
 interface AyakSonucu { r: Result; gorevSayisi: number }
 
+/**
+ * Tam Tur'da `R` bölümü değil TURU baştan alıyor.
+ *
+ * Bölüm sıfırlamak turun saatini bozardı: ayak süresi sıfırlanıyor ama önceki
+ * ayakların toplamı duruyor, yani oyuncu istediği ayağı sıfırlayarak turu
+ * kısaltabilirdi. Speedrun geleneği de zaten bu — reset tur resetidir.
+ */
+const YENIDEN = Symbol('tur-yeniden');
+
 interface TurBaglami {
   /** Kaçıncı ayak (1'den başlıyor) ve toplam kaç ayak var. */
   sira: number;
@@ -300,7 +393,7 @@ interface TurBaglami {
  */
 function oyna(
   stage: Stage, keys: Kumanda, arac: AracTanimi, tur: TurBaglami | null = null,
-): Promise<AyakSonucu | null> {
+): Promise<AyakSonucu | typeof YENIDEN | null> {
   const { sahne: scene, gorunum, pad: padKaynagi } = arac.kur!();
   const mission = new Mission(scene);
 
@@ -475,7 +568,7 @@ function oyna(
   let oncekiUyari = '';
   let inceMod = false;
 
-  return new Promise<AyakSonucu | null>((cik) => {
+  return new Promise<AyakSonucu | typeof YENIDEN | null>((cik) => {
     /** Bölümü kapat: döngü, olay dinleyicileri ve kumanda katmanı gitsin. */
     const kapat = (): void => {
       loop.stop();
@@ -491,6 +584,8 @@ function oyna(
         yaz(DETAY_ANAHTARI, detay ? '1' : '0');
       }
       const reset = keys.consumeReset();
+      // Tam Tur'da `R` bölümü değil TURU baştan alıyor (bkz. `YENIDEN`).
+      if (reset && tur) { kapat(); cik(YENIDEN); return; }
       // **Tur bitince kumanda kapanıyor.** Oyun testinde sonuç paneli ekranda
       // dururken `W` hâlâ çatalı kaldırıyordu; devrilen makine kendini
       // toparlayıp sürülebilir hale geliyor, ama süre donmuş ve tur "bitmiş"
