@@ -2,11 +2,10 @@ import { Container, Graphics } from 'pixi.js';
 import type { CepOlcumu } from '../sim/forklift';
 import { C } from './palette';
 import { worldText, kapla } from './text';
+import { RAF_DERINLIK, PALET_AYAK, ZEMIN_BANDI } from '../game/forkliftTasks';
 import {
-  ADA_X, RAF_KATLARI, RAF_DERINLIK, GIRIS_X, PALET_AYAK, TESLIM_KOTU,
-  BEKLEME_CIZGISI, RAF_STOGU, ZEMIN_BANDI, adresIndeksi, adresKotu, adresX,
-  katAdi,
-} from '../game/forkliftTasks';
+  adresIndeksi, adresKotu, adresX, katAdi, type ForkliftBolum,
+} from '../game/forkliftBolum';
 import { drawLoad } from './missionView';
 import { M } from '../ui/dil';
 
@@ -22,17 +21,17 @@ import { M } from '../ui/dil';
 /**
  * Rafların çizimi — üç ada, fizikteki kirişlerle aynı kotlarda.
  *
- * Kotlar `RAF_KATLARI`'ndan okunuyor, burada tekrar yazılmıyor: bu depoda
+ * Kotlar `b.katlar`'ndan okunuyor, burada tekrar yazılmıyor: bu depoda
  * aynı sınıftan bir hata bir kez oldu (görev metni iki yerde durup sessizce
  * ayrıştı), ve rafın çizimi ile rafın fiziği ayrışırsa oyuncu var olmayan
  * bir kirişin üstüne palet koymaya çalışır.
  */
-export function drawRaf(): Container {
+export function drawRaf(b: ForkliftBolum): Container {
   const c = new Container();
   const g = new Graphics();
-  const ust = (RAF_KATLARI[RAF_KATLARI.length - 1] ?? 4.8) + 1.1;
+  const ust = (b.katlar[b.katlar.length - 1] ?? 4.8) + 1.1;
 
-  ADA_X.forEach((on, ada) => {
+  b.adaX.forEach((on, ada) => {
     const arka = on + RAF_DERINLIK;
 
     // Dikmeler — delikli çelik profil, önde ve arkada
@@ -55,8 +54,8 @@ export function drawRaf(): Container {
         .stroke({ width: 0.055, color: C.rackDark, alpha: 0.28 });
     }
 
-    RAF_KATLARI.forEach((kot, kat) => {
-      const i = adresIndeksi(ada, kat);
+    b.katlar.forEach((kot, kat) => {
+      const i = adresIndeksi(b, ada, kat);
       if (kot > 0.001) {
         g.rect(on, kot - 0.16, RAF_DERINLIK, 0.16).fill(C.rack);
         g.rect(on, kot - 0.16, RAF_DERINLIK, 0.05).fill({ color: C.rackLight, alpha: 0.9 });
@@ -74,7 +73,7 @@ export function drawRaf(): Container {
       //
       // Yeri gözün ARKA ucu: en geniş palet (yarı en 0.95) ön yüzden
       // 2.00 metreye kadar uzanıyor, etiket 2.25'te başlıyor.
-      const et = worldText(katAdi(i), 0.3, { fill: 0xD6E2EA });
+      const et = worldText(katAdi(b, i), 0.3, { fill: 0xD6E2EA });
       et.anchor.set(0.5, 0);
       et.scale.y = -Math.abs(et.scale.y);
       et.position.set(on + RAF_DERINLIK - 0.35, Math.max(kot, 0.02) + 0.1);
@@ -82,7 +81,7 @@ export function drawRaf(): Container {
     });
 
     // Ada harfi — dikmenin üstünde, uzaktan okunacak kadar büyük.
-    const harf = worldText(katAdi(adresIndeksi(ada, 1)).slice(0, 1), 0.62,
+    const harf = worldText(katAdi(b, adresIndeksi(b, ada, 1)).slice(0, 1), 0.62,
       { fill: C.hazardY });
     harf.position.set(on + RAF_DERINLIK / 2 - 0.2, ust + 0.25);
     c.addChild(harf);
@@ -90,7 +89,7 @@ export function drawRaf(): Container {
 
   c.addChildAt(g, 0);
   // Önceden konmuş stok EN ARKADA: gözün derinliğinde duruyor.
-  c.addChildAt(drawStok(), 0);
+  c.addChildAt(drawStok(b), 0);
   return c;
 }
 
@@ -111,11 +110,11 @@ export function derinlige(c: Container): Container {
 }
 
 /** Bölüm başlamadan önce raflarda duran mal. Tamamen dekor. */
-function drawStok(): Container {
+function drawStok(b: ForkliftBolum): Container {
   const c = new Container();
-  for (const s of RAF_STOGU) {
-    const kot = adresKotu(s.hedef);
-    const on = adresX(s.hedef);
+  for (const s of b.stok) {
+    const kot = adresKotu(b, s.hedef);
+    const on = adresX(b, s.hedef);
     if (kot === undefined || on === undefined) continue;
     const kutu = new Container();
     const yuk = drawLoad({
@@ -145,9 +144,11 @@ function drawStok(): Container {
  * da o bandın içinde, uzaklaştıkça incelerek duruyor — yani bant bir
  * perspektif şeridi gibi okunuyor.
  */
-export function drawDepoZemin(left: number, right: number): Container {
+export function drawDepoZemin(b: ForkliftBolum): Container {
   const g = new Graphics();
   const yazilar: Container[] = [];
+  const left = b.bati;
+  const right = b.dogu;
   // Zeminin kendisi ve kenar pahı
   g.rect(left, -8, right - left, 8).fill(C.depoFloor);
   g.rect(left, -0.06, right - left, 0.06).fill(C.depoFloorD);
@@ -190,10 +191,10 @@ export function drawDepoZemin(left: number, right: number): Container {
 
   // --- 4. Adaların önündeki taralı çalışma alanı ---
   // Sarı-siyah tarama "burada durma, burası makinenin çalışma alanı" demek.
-  ADA_X.forEach((on, ada) => {
+  b.adaX.forEach((on, ada) => {
     taraliAlan(g, on - 2.9, on - 0.2, -0.22, -0.62);
     // Zemin gözünün ayak izi: paletin konacağı dikdörtgen.
-    const zeminAdres = adresIndeksi(ada, 0);
+    const zeminAdres = adresIndeksi(b, ada, 0);
     g.rect(on, -0.16, RAF_DERINLIK, 0.07).fill({ color: C.hazardY, alpha: 0.9 });
     for (const x of [on, on + RAF_DERINLIK - 0.07]) {
       g.rect(x, -1.05, 0.07, 0.95).fill({ color: C.hazardY, alpha: 0.9 });
@@ -204,7 +205,7 @@ export function drawDepoZemin(left: number, right: number): Container {
     // denk geliyordu ve çizgiyle kesişince okunmuyordu.
     g.roundRect(on + RAF_DERINLIK / 2 - 0.55, -0.86, 1.1, 0.46, 0.05)
       .fill({ color: 0x141A1E, alpha: 0.55 });
-    const et = worldText(katAdi(zeminAdres), 0.42, { fill: 0xEBD79A });
+    const et = worldText(katAdi(b, zeminAdres), 0.42, { fill: 0xEBD79A });
     et.position.set(on + RAF_DERINLIK / 2, -0.62);
     et.anchor.set(0.5, 0.5);
     et.scale.y = Math.abs(et.scale.y) * -0.55;
@@ -213,24 +214,24 @@ export function drawDepoZemin(left: number, right: number): Container {
   });
 
   // --- 5. Yükleme karesi: paletler buraya iniyor ---
-  g.rect(GIRIS_X - 1.6, -0.16, 3.2, 0.08).fill({ color: C.hazardY, alpha: 0.95 });
-  g.rect(GIRIS_X - 1.6, -1.15, 3.2, 0.08).fill({ color: C.hazardY, alpha: 0.95 });
-  for (const x of [GIRIS_X - 1.6, GIRIS_X + 1.52]) {
+  g.rect(b.girisX - 1.6, -0.16, 3.2, 0.08).fill({ color: C.hazardY, alpha: 0.95 });
+  g.rect(b.girisX - 1.6, -1.15, 3.2, 0.08).fill({ color: C.hazardY, alpha: 0.95 });
+  for (const x of [b.girisX - 1.6, b.girisX + 1.52]) {
     g.rect(x, -1.15, 0.08, 1.07).fill({ color: C.hazardY, alpha: 0.95 });
   }
-  taraliAlan(g, GIRIS_X - 1.52, GIRIS_X + 1.52, -0.24, -1.07, 0.3);
+  taraliAlan(g, b.girisX - 1.52, b.girisX + 1.52, -0.24, -1.07, 0.3);
 
   // --- 6. Bekleme çizgisi: paletin inmesi için buranın batısında dur ---
   // Kural zaten vardı ama GÖRÜNMÜYORDU: oyuncuya "yükleme karesinin
   // batısına geç" deniyor, nereye kadar olduğu söylenmiyordu.
-  g.rect(BEKLEME_CIZGISI - 0.07, -2.3, 0.14, 2.3)
+  g.rect(b.beklemeCizgisi - 0.07, -2.3, 0.14, 2.3)
     .fill({ color: 0xE8EEF0, alpha: 0.9 });
   for (let y = -2.25; y < -0.1; y += 0.34) {
-    g.rect(BEKLEME_CIZGISI - 0.07, y, 0.14, 0.17)
+    g.rect(b.beklemeCizgisi - 0.07, y, 0.14, 0.17)
       .fill({ color: C.liveryRed, alpha: 0.95 });
   }
   const bekle = worldText('DUR', 0.36, { fill: 0xE8EEF0 });
-  bekle.position.set(BEKLEME_CIZGISI - 0.95, -0.52);
+  bekle.position.set(b.beklemeCizgisi - 0.95, -0.52);
   bekle.anchor.set(0.5, 0.5);
   bekle.scale.y = Math.abs(bekle.scale.y) * -0.55;
   bekle.scale.x = Math.abs(bekle.scale.x);
@@ -348,26 +349,26 @@ export function drawDepoIci(left: number, right: number): Container {
  * makine yükleme karesinin batısına geçince iniyor; ağzın altındaki sarı kare
  * de nereye ineceğini söylüyor.
  */
-export function drawKonveyor(): Container {
+export function drawKonveyor(b: ForkliftBolum): Container {
   const c = new Container();
   const g = new Graphics();
-  const y = TESLIM_KOTU + 0.5;
+  const y = b.teslimKotu + 0.5;
   // Tavandan sarkan askılar
-  for (const x of [GIRIS_X - 1.5, GIRIS_X + 1.5]) {
+  for (const x of [b.girisX - 1.5, b.girisX + 1.5]) {
     g.rect(x - 0.05, y + 0.3, 0.1, 2.6).fill(C.roof);
   }
   // Konveyör gövdesi ve rulolar
-  g.rect(GIRIS_X - 1.7, y, 3.4, 0.34).fill(C.mast);
-  g.rect(GIRIS_X - 1.7, y + 0.28, 3.4, 0.06).fill(C.mastLight);
-  for (let x = GIRIS_X - 1.5; x < GIRIS_X + 1.5; x += 0.34) {
+  g.rect(b.girisX - 1.7, y, 3.4, 0.34).fill(C.mast);
+  g.rect(b.girisX - 1.7, y + 0.28, 3.4, 0.06).fill(C.mastLight);
+  for (let x = b.girisX - 1.5; x < b.girisX + 1.5; x += 0.34) {
     g.circle(x, y + 0.14, 0.1).fill(C.mastLight);
     g.circle(x, y + 0.14, 0.04).fill(C.mast);
   }
   // Ağız: paletin çıktığı boşluk
-  g.rect(GIRIS_X - 0.75, y - 0.12, 1.5, 0.12).fill(C.rackDark);
+  g.rect(b.girisX - 0.75, y - 0.12, 1.5, 0.12).fill(C.rackDark);
 
   const et = worldText(M.dekor.malKabul, 0.3, { fill: C.hazardY });
-  et.position.set(GIRIS_X - 1.55, y + 0.45);
+  et.position.set(b.girisX - 1.55, y + 0.45);
   c.addChild(et);
   c.addChildAt(g, 0);
   return c;

@@ -4,10 +4,9 @@ import { Forklift, forkliftKapasitesi, FORKLIFT, FORKLIFT_NEUTRAL } from './fork
 import type { Grabbable } from './crane';
 import { LmiZone, type LmiReading } from './loadChart';
 import {
-  ADA_X, BEKLEME_CIZGISI, DEPO_BATI, DEPO_DOGU, FORKLIFT_TASKS, GIRIS_X,
-  PALET_AYAK, RAF_DERINLIK, RAF_KATLARI, RAF_X, TESLIM_HIZI, TESLIM_KOTU,
-  ZEMIN_BANDI, adresKotu, adresX,
+  PALET_AYAK, RAF_DERINLIK, SEVKIYAT_KORIDORU, TESLIM_HIZI, ZEMIN_BANDI,
 } from '../game/forkliftTasks';
+import { adresKotu, adresX, type ForkliftBolum } from '../game/forkliftBolum';
 import type { Task } from '../game/tasks';
 import type { SceneInput } from './scene';
 import type { Gosterge, OyunSahnesi, PanelSatiri, Uyari } from './sahne';
@@ -31,12 +30,12 @@ import { M, kumandaAdi } from '../ui/dil';
  */
 const KILIT_BANDI = 0.25;
 
-export function createRaf(world: World): Body {
+export function createRaf(world: World, b: ForkliftBolum): Body {
   const body = world.createBody();
   const filtre = { filterCategoryBits: KATEGORI.raf, filterMaskBits: MASKE.raf };
-  for (const on of ADA_X) {
+  for (const on of b.adaX) {
     const arka = on + RAF_DERINLIK;
-    for (const kot of RAF_KATLARI) {
+    for (const kot of b.katlar) {
       // **Zemin gözünün kirişi yok.** Kot sıfırsa palet doğrudan betona
       // oturuyor; gerçek rafta da en alt palet zemindedir. Bu bir estetik
       // tercih değil, level'ın çalışma şartı: 1.30 metredeki bir kiriş,
@@ -102,10 +101,10 @@ export function createRaf(world: World): Body {
  * zaten çiziliyordu; eksik olan yalnızca iki uçtaki sınırdı. Makineyle,
  * yükle ve çatalla çarpışıyor.
  */
-export function createDepoDuvarlari(world: World): Body {
+export function createDepoDuvarlari(world: World, b: ForkliftBolum): Body {
   const body = world.createBody();
   const yukseklik = 9;
-  for (const x of [DEPO_BATI, DEPO_DOGU]) {
+  for (const x of [b.bati, b.dogu]) {
     body.createFixture(
       new Box(0.4, yukseklik, new Vec2(x + (x < 0 ? -0.4 : 0.4), yukseklik), 0),
       { friction: 0.4, restitution: 0 },
@@ -134,12 +133,12 @@ export class ForkliftSahnesi implements OyunSahnesi {
   /** Palet konveyörde mi, iniyor mu, yerde mi? */
   private teslim: 'bekliyor' | 'iniyor' | 'hazir' = 'hazir';
 
-  constructor() {
+  constructor(readonly bolum: ForkliftBolum = SEVKIYAT_KORIDORU) {
     createGround(this.world);
-    createRaf(this.world);
-    createDepoDuvarlari(this.world);
+    createRaf(this.world, bolum);
+    createDepoDuvarlari(this.world, bolum);
     this.forklift = new Forklift(this.world, this.snaps);
-    this.spawnLoad(FORKLIFT_TASKS[0] ?? null);
+    this.spawnLoad(bolum.gorevler[0] ?? null);
 
     this.world.on('post-solve', (contact: Contact, impulse: { normalImpulses: number[] }) => {
       const a = contact.getFixtureA().getBody();
@@ -173,7 +172,7 @@ export class ForkliftSahnesi implements OyunSahnesi {
   spawnLoad(spec: Task | null): void {
     // `gorevler[0]` ile çağrılmak bölümün BAŞI demek: ya ilk açılış ya da
     // yeniden başlatma. İkisinde de depo boş sayfadan başlamalı.
-    const bolumBasi = spec !== null && spec === FORKLIFT_TASKS[0];
+    const bolumBasi = spec !== null && spec === this.bolum.gorevler[0];
     if (bolumBasi) this.stok.length = 0;
     if (this.load) {
       // Bölüm ortasında yeni görev geliyorsa öncekini oyuncu YERİNE KOYDU;
@@ -198,7 +197,7 @@ export class ForkliftSahnesi implements OyunSahnesi {
     const acik = this.forklift.forkTip.x < this.teslimKapisi();
     this.teslim = acik ? 'hazir' : 'bekliyor';
     const body = this.world.createDynamicBody({
-      x: GIRIS_X, y: acik ? yerKotu : TESLIM_KOTU + spec.halfHeight,
+      x: this.bolum.girisX, y: acik ? yerKotu : this.bolum.teslimKotu + spec.halfHeight,
     });
     if (!acik) body.setType('kinematic');
     // Yükün kendisi: her şeye değiyor.
@@ -229,7 +228,7 @@ export class ForkliftSahnesi implements OyunSahnesi {
   }
 
   /** Forklift bölümü — depo. Hedefler raf katları. */
-  readonly gorevler = FORKLIFT_TASKS;
+  get gorevler(): readonly Task[] { return this.bolum.gorevler; }
   /**
    * Ölçülen tur: görev başına 25–90 s.
    *
@@ -239,10 +238,10 @@ export class ForkliftSahnesi implements OyunSahnesi {
    * başsız rig iki görevde sıfır hız bonusu alıyordu — yani puan artık
    * sürüşün kalitesini değil, sadece mesafeyi ölçüyordu.
    */
-  readonly hizEsikleri = { tam: 30, sifir: 95 };
+  get hizEsikleri(): { tam: number; sifir: number } { return this.bolum.hizEsikleri; }
   hedefNoktasi(t: Task): { x: number; y: number } | null {
-    const kot = adresKotu(t.hedef);
-    const on = adresX(t.hedef);
+    const kot = adresKotu(this.bolum, t.hedef);
+    const on = adresX(this.bolum, t.hedef);
     if (kot === undefined || on === undefined) return null;
     // **Adanın ORTASI değil, ÖN KENARI.** Paleti dibine kadar sokmak çatalı
     // bir buçuk metre rafın içine sokmak demek; geri çekilirken bıçak kirişe
@@ -254,8 +253,8 @@ export class ForkliftSahnesi implements OyunSahnesi {
   }
   /** Hedef işareti kirişin ÜSTÜNDE dursun, paletin tabanında değil. */
   isaretNoktasi(t: Task): { x: number; y: number } | null {
-    const kot = adresKotu(t.hedef);
-    const on = adresX(t.hedef);
+    const kot = adresKotu(this.bolum, t.hedef);
+    const on = adresX(this.bolum, t.hedef);
     return kot === undefined || on === undefined
       ? null : { x: on + t.halfWidth + 0.06, y: kot };
   }
@@ -269,9 +268,11 @@ export class ForkliftSahnesi implements OyunSahnesi {
   }
   get sasiHizi(): number { return this.forklift.chassis.getLinearVelocity().x; }
   /** Küçük makine, dar koridor: vinçten belirgin biçimde daha yakın. */
-  readonly kameraOlcegi = { yakin: 46, uzak: 24 };
+  get kameraOlcegi(): { yakin: number; uzak: number } { return this.bolum.kameraOlcegi; }
   /** Depo kapalı bir mekân: kamera duvarların dışını göstermiyor. */
-  readonly kameraSiniri = { sol: DEPO_BATI, sag: DEPO_DOGU };
+  get kameraSiniri(): { sol: number; sag: number } {
+    return { sol: this.bolum.bati, sag: this.bolum.dogu };
+  }
   /**
    * Forklift için devrilme eşiği yüksek — ÇÜNKÜ burnunu çatalına dayamak
    * kaza değil, kurtarılabilir bir hata. Ölçümde aşırı yükte makine 2.1°
@@ -321,9 +322,9 @@ export class ForkliftSahnesi implements OyunSahnesi {
             ust: f.liftM + PALET_AYAK + yuk.halfHeight * 2 }
         : { x0: topuk, x1: f.forkTip.x, ust: f.liftM + FORKLIFT.bicakKalinligiM },
     ];
-    for (const on of ADA_X) {
+    for (const on of this.bolum.adaX) {
       const arka = on + RAF_DERINLIK;
-      for (const kot of RAF_KATLARI) {
+      for (const kot of this.bolum.katlar) {
         if (kot <= 0.001) continue;
         const alt = kot - 0.16;
         for (const a of adaylar) {
@@ -428,7 +429,7 @@ export class ForkliftSahnesi implements OyunSahnesi {
     if (this.load.getPosition().y > yerKotu) return;
     // Yere değdi: artık normal dinamik gövde. setType kütleyi sıfırladığı
     // için kütle verisi yeniden yazılıyor — vinçteki kanca hatasının aynısı.
-    this.load.setTransform({ x: GIRIS_X, y: yerKotu }, 0);
+    this.load.setTransform({ x: this.bolum.girisX, y: yerKotu }, 0);
     this.load.setType('dynamic');
     this.load.setLinearVelocity({ x: 0, y: 0 });
     this.load.setAngularVelocity(0);
@@ -440,9 +441,9 @@ export class ForkliftSahnesi implements OyunSahnesi {
    * Paletin inebilmesi için çatal ucunun batısında kalması gereken çizgi.
    *
    * Artık yüke göre değişmiyor: zeminde boyalı duran çizgiyle aynı yerde
-   * (bkz. `BEKLEME_CIZGISI`). Oyuncunun göremediği bir kural, kural değil.
+   * (bkz. `this.bolum.beklemeCizgisi`). Oyuncunun göremediği bir kural, kural değil.
    */
-  private teslimKapisi(): number { return BEKLEME_CIZGISI; }
+  private teslimKapisi(): number { return this.bolum.beklemeCizgisi; }
 
   /** Palet yere indi mi? HUD ve rig bunu soruyor. */
   get paletHazir(): boolean { return this.teslim === 'hazir'; }
@@ -620,7 +621,7 @@ export class ForkliftSahnesi implements OyunSahnesi {
   private kacirildi(t: Task, hedef: { x: number; y: number }): boolean {
     if (this.hasLoad || !this.paletHazir) return false;
     const p = this.load.getPosition();
-    if (p.x < GIRIS_X + 1.5) return false;
+    if (p.x < this.bolum.girisX + 1.5) return false;
     const tol = this.yerlestirmeToleransi(t);
     return Math.abs(p.x - hedef.x) > tol.x
       || Math.abs(p.y - (hedef.y + t.halfHeight)) > tol.y;
@@ -629,4 +630,4 @@ export class ForkliftSahnesi implements OyunSahnesi {
   reset(): void { this.forklift.reset(); }
 }
 
-export { FORKLIFT_NEUTRAL, FORKLIFT_TASKS, RAF_KATLARI, RAF_X, RAF_DERINLIK };
+export { FORKLIFT_NEUTRAL, RAF_DERINLIK };

@@ -5,7 +5,7 @@ import { SIM } from '../sim/world';
 import { Scene, SCENE } from '../sim/scene';
 import { ForkliftSahnesi } from '../sim/forkliftSahne';
 import { DirsekliSahne } from '../sim/dirsekliSahne';
-import { DEPO_BATI, DEPO_DOGU, GIRIS_X, PALET_AYAK } from '../game/forkliftTasks';
+import { PALET_AYAK } from '../game/forkliftTasks';
 import { TRUCK } from '../sim/truck';
 import { FORKLIFT } from '../sim/forklift';
 import { drawLoad, TargetMarker } from './missionView';
@@ -291,11 +291,12 @@ export class ForkliftGorunumu extends SahneGorunumu {
   private oncekiDusus = 0;
 
   dekor(): Container[] {
+    const b = this.s.bolum;
     return [
-      drawDepoIci(DEPO_BATI, DEPO_DOGU),
-      drawSevkiyatAlani(DEPO_BATI, GIRIS_X - 2),
-      drawDepoZemin(DEPO_BATI, DEPO_DOGU),
-      drawRaf(), drawKonveyor(),
+      drawDepoIci(b.bati, b.dogu),
+      drawSevkiyatAlani(b.bati, b.girisX - 2),
+      drawDepoZemin(b),
+      drawRaf(b), drawKonveyor(b),
     ];
   }
 

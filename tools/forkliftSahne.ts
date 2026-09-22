@@ -13,9 +13,12 @@
 import { ForkliftSahnesi } from '../src/sim/forkliftSahne';
 import { FORKLIFT, forkliftKapasitesi } from '../src/sim/forklift';
 import {
-  BEKLEME_CIZGISI, FORKLIFT_TASKS, GIRIS_X, PALET_AYAK, RAF_DERINLIK, RAF_X,
-  adresX, katAdi, katKotu,
+  PALET_AYAK, RAF_DERINLIK, SEVKIYAT_KORIDORU,
 } from '../src/game/forkliftTasks';
+import { adresKotu, adresX, katAdi } from '../src/game/forkliftBolum';
+
+/** Rig tek bir bolumu olcuyor: varsayilan depo. */
+const B = SEVKIYAT_KORIDORU;
 import { Mission } from '../src/game/mission';
 import { IDLE, type SceneInput } from '../src/sim/scene';
 import { SIM } from '../src/sim/world';
@@ -113,20 +116,20 @@ function main(): number {
 
   say('=== FORKLIFT: Depo, sevkiyat koridoru ===');
   say('--- calisma zarfi: hangi yuk hangi gozde ne okuyor? ---');
-  for (const g of FORKLIFT_TASKS) {
-    const kot = katKotu(g.hedef);
+  for (const g of B.gorevler) {
+    const kot = adresKotu(B, g.hedef);
     if (kot === undefined) continue;
     // Yuk merkezi olculuyor; catal tam dibe girerse halfWidth kadar olur.
     const alcak = forkliftKapasitesi(g.halfWidth, 0);
     const rafta = forkliftKapasitesi(g.halfWidth, kot + PALET_AYAK);
     say(`  ${g.kod}  ${g.ad.padEnd(16)} ${g.tonnes.toFixed(2)}t`
-      + `  merkez ${g.halfWidth.toFixed(2)}m  kat ${katAdi(g.hedef)} (${kot.toFixed(2)}m)`
+      + `  merkez ${g.halfWidth.toFixed(2)}m  kat ${katAdi(B, g.hedef)} (${kot.toFixed(2)}m)`
       + `  alcakta %${((g.tonnes / alcak) * 100).toFixed(0)}`
       + `  rafta %${((g.tonnes / rafta) * 100).toFixed(0)}`
       + `  pay ${((RAF_DERINLIK - g.halfWidth * 2) / 2).toFixed(2)}m`);
   }
 
-  for (let n = 0; n < FORKLIFT_TASKS.length; n++) {
+  for (let n = 0; n < B.gorevler.length; n++) {
     const task = r.mission.task;
     const hedef = r.mission.target;
     if (!task || !hedef) break;
@@ -154,7 +157,7 @@ function main(): number {
     // ve gorev "alinamadi" sayildi. Gercek operator de mal kabulun onunu
     // acar, sonra yanasir.
     if (!r.sahne.paletHazir) {
-      const bekle = BEKLEME_CIZGISI - FORKLIFT.forkLengthM - 0.25;
+      const bekle = B.beklemeCizgisi - FORKLIFT.forkLengthM - 0.25;
       r.runUntil(130, (x) => x.sahne.paletHazir, (x) => x.suru(bekle, 3.0));
       r.runUntil(12, (x) => x.sahne.paletHazir, (x) => x.dur());
     }
@@ -208,7 +211,7 @@ function main(): number {
       + `  (palet yarisi ${task.halfWidth.toFixed(2)}m)`);
 
     // --- 4) Gozun onune goturup kaldır ---
-    const kot = katKotu(task.hedef) ?? 0;
+    const kot = adresKotu(B, task.hedef) ?? 0;
     const merkez = r.sahne.forklift.loadCentreM;
     // Yükü gözün ortasına koyacak çatal konumu.
     const konumX = hedef.x - merkez;
@@ -271,11 +274,11 @@ function main(): number {
     // once bunu dogrulamak sart: bicak gozun icindeyken asagi inince
     // kirisin altina giriyor, makinenin burnunu kaldiriyor ve araba 45
     // derece sahlaniyordu (olculdu: t=120.2s, cekilme asamasi).
-    // **Bu GÖREVİN adasının batısı**, ilk adanın değil. `RAF_X` sabiti üç
+    // **Bu GÖREVİN adasının batısı**, ilk adanın değil. Eskiden sabit üç
     // adadan sadece birincisini gösteriyor; C adasına koyduktan sonra rig
     // bıçağı 4.36 metrede tutarak 12 metre batıya sürüyor, B adasının
     // kirişine dayanıp makineyi 145 dereceye deviriyordu.
-    if (n === FORKLIFT_TASKS.length - 1) {
+    if (n === B.gorevler.length - 1) {
       r.run(1.0, (x) => x.dur());
       const ok0 = r.mission.sonTamamlanan?.sira === n + 1;
       say(`${task.kod} KOY  yuk ${kondu.x.toFixed(2)},${kondu.y.toFixed(2)}`
@@ -289,7 +292,7 @@ function main(): number {
       }
       break;
     }
-    const gozBati = (adresX(task.hedef) ?? RAF_X) - 0.3;
+    const gozBati = (adresX(B, task.hedef) ?? (B.adaX[0] ?? 0)) - 0.3;
     // **Cikip DURANA kadar.** Sadece "cikti mi" diye bakmak yetmiyordu:
     // makine hedefi asip geri donerken bicak (hala goz kotunda) kirisin
     // ustune biniyor ve krikoya donusuyordu (olculdu: x=33.33, v=+2.02 m/s,
@@ -319,7 +322,7 @@ function main(): number {
   const s = r.mission.score;
   const res = r.mission.result;
   say('--- sonuc ---');
-  say(`  tamamlanan ${s.sapmalar.length}/${FORKLIFT_TASKS.length}`
+  say(`  tamamlanan ${s.sapmalar.length}/${B.gorevler.length}`
     + `  sure ${s.sure.toFixed(0)}s  puan ${s.puan}`
     + `  maxLMI %${s.maxLmi.toFixed(0)}  kirmizi ${s.kirmiziSn.toFixed(1)}s`
     + `  carpma ${s.carpma}`);
@@ -337,10 +340,10 @@ function main(): number {
   say(`  not ${res.not} (${res.puan.toFixed(0)})  usta ${res.usta ? 'E' : 'H'}`
       + `  devrildi ${res.devrildi ? 'E' : 'H'}`);
   }
-  void GIRIS_X; void FORKLIFT;
+  void B.girisX; void FORKLIFT;
 
   console.log(out.join('\n'));
-  return s.sapmalar.length === FORKLIFT_TASKS.length ? 0 : 1;
+  return s.sapmalar.length === B.gorevler.length ? 0 : 1;
 }
 
 const kod = main();
