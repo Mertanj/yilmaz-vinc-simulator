@@ -14,6 +14,7 @@ import { dokunmatikKur, dokunmatikVar } from './ui/dokunmatik';
 import type { DokunmatikDuzeni } from './ui/dokunmatik';
 import { oku, yaz } from './ui/kayit';
 import { farkiYaz, sureyiYaz } from './ui/sure';
+import { turSonucuHtml } from './ui/turSonucHtml';
 import { Ses } from './ses/ses';
 import { kipOku } from './sim/kip';
 
@@ -250,49 +251,12 @@ function escVeyaTus(payMs: number): Promise<'yeniden' | 'cik'> {
  */
 function turSonucuGoster(bacaklar: Bacak[]): Promise<void> {
   const s = turuDegerlendir(bacaklar);
-  const { hizRekoru, puanRekoru, onceki } = turEnIyiKaydet(s);
-  const k = M.tur;
-  const n = M.sonuc;
-  // Ara süreler HIZ rekoruna karşı koşuyor: ara süre zaten bir zaman ölçüsü.
-  // Kendi turuna karşı koşmasın diye kayıttan ÖNCEKİ hâli kullanılıyor.
-  const hedef = onceki.hiz;
+  const kirilan = turEnIyiKaydet(s);
   const el = document.getElementById('sonuc');
   const ic = document.getElementById('sonuc-ic');
-  const tamKadro = s.tamamlanan === s.gorevSayisi;
-
-  const satirlar = s.bacaklar.map((b, i) => {
-    const arac = aracBul(b.aracId);
-    const rekorBitis = hedef?.bitisler[i];
-    const fark = rekorBitis === undefined ? '<td></td>' : (() => {
-      const f = farkiYaz(b.bitis - rekorBitis);
-      return `<td data-iyi="${f.iyi === null ? 'esit' : f.iyi ? 'evet' : 'hayir'}">`
-        + `${f.metin}</td>`;
-    })();
-    return `<tr><td>${arac.ad}</td><td>${sureyiYaz(b.sure)}</td>`
-      + `<td>${sureyiYaz(b.bitis)}</td>${fark}</tr>`;
-  }).join('');
-
   if (ic) {
-    ic.innerHTML = [
-      `<div class="not" data-not="${s.not}">${s.not}</div>`,
-      `<h2>${tamKadro ? k.bitti : k.terkEdildi}</h2>`,
-      s.usta ? `<p class="rozet">${n.usta}</p>` : '',
-      `<p class="toplam">${sureyiYaz(s.sure)}</p>`,
-      hizRekoru ? `<p class="rekor">${k.hizRekoru}</p>` : '',
-      puanRekoru ? `<p class="rekor">${k.puanRekoru}</p>` : '',
-      !hizRekoru && onceki.hiz
-        ? `<p class="onceki">${k.oncekiHiz(sureyiYaz(onceki.hiz.sure))}</p>` : '',
-      !puanRekoru && onceki.puan
-        ? `<p class="onceki">${k.oncekiPuan(n.puan(onceki.puan.puan))}</p>` : '',
-      '<table>',
-      `<tr><td>${k.gorevler}</td><td>${s.tamamlanan} / ${s.gorevSayisi}</td></tr>`,
-      `<tr><td>${k.toplamSure}</td><td>${sureyiYaz(s.sure)}</td></tr>`,
-      '</table>',
-      `<div class="ara-sureler"><h3>${k.ayakDokumu}</h3><table>${satirlar}</table>`
-        + (hedef ? '' : `<p class="ilk">${k.ilkTur}</p>`) + '</div>',
-      `<p class="puan">${n.puan(s.puan)} · ${n.basari(s.basari.toFixed(0))}</p>`,
-      `<p class="note">${k.devam}</p>`,
-    ].join('');
+    ic.innerHTML = turSonucuHtml(s, kirilan, kirilan.onceki,
+      (id: string) => aracBul(id).ad);
   }
   if (el) el.hidden = false;
   document.body.classList.add('bitti');

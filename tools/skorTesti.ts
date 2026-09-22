@@ -9,6 +9,8 @@
  */
 import { enIyiOku, enIyiKaydet, turEnIyiOku, turEnIyiKaydet } from '../src/game/enIyi';
 import { turuDegerlendir, type Bacak } from '../src/game/tamTur';
+import { turSonucuHtml } from '../src/ui/turSonucHtml';
+import { M } from '../src/ui/dil';
 import { farkiYaz, sureyiYaz } from '../src/ui/sure';
 import type { Result } from '../src/game/mission';
 
@@ -221,3 +223,62 @@ esit('hiz rekoru KORUNDU', turEnIyiOku().hiz?.sure, 1450);
 esit('esit sure ve esit puan hicbir rekor DEGIL',
   [turEnIyiKaydet(hizliAmaKirli).hizRekoru,
     turEnIyiKaydet(yavasAmaTemiz).puanRekoru], [false, false]);
+
+// --- TAM TUR SONUC EKRANI ---
+//
+// Bu ekrani oyun testinde KIMSE goremedi: forklift ayagi iki kez bitirildi,
+// el degistirme karti dogrulandi, ama uc ayagi birden bitirecek bir otopilot
+// yazilamadi. Ekran DOM'a degil VERIYE bagli oldugu icin buradan sinaniyor.
+const icerir = (ad: string, metin: string, parca: string): void => {
+  const ok = metin.includes(parca);
+  console.log(`${ok ? 'GECTI ' : 'KALDI '} ${ad}${ok ? '' : `  "${parca}" yok`}`);
+  if (!ok) process.exitCode = 1;
+};
+const icermez = (ad: string, metin: string, parca: string): void => {
+  const ok = !metin.includes(parca);
+  console.log(`${ok ? 'GECTI ' : 'KALDI '} ${ad}${ok ? '' : `  "${parca}" VAR`}`);
+  if (!ok) process.exitCode = 1;
+};
+const ad = (id: string): string => ({ forklift: 'YF-25 Forklift',
+  dirsekli: 'YV-9 Dirsekli Vinç', vinc: 'YV-25 Teleskopik Vinç' }[id] ?? id);
+
+// 1) Ilk tur: rekor yok, ayak dokumunde fark sutunu bos, "ilk turun" notu var.
+const ilkHtml = turSonucuHtml(tamTur, { hizRekoru: true, puanRekoru: true },
+  { hiz: null, puan: null }, ad);
+icerir('tur sonucu: not', ilkHtml, 'data-not="A"');
+icerir('tur sonucu: toplam sure', ilkHtml, '>30:40<');           // 1840 sn
+icerir('tur sonucu: gorev sayisi', ilkHtml, '>15 / 15<');
+icerir('tur sonucu: puan ve basari', ilkHtml, '27200 puan');
+icerir('tur sonucu: uc ayagin adi da var', ilkHtml, 'YV-25 Teleskopik Vinç');
+icerir('tur sonucu: ayak suresi', ilkHtml, '>3:40<');            // forklift 220 sn
+icerir('tur sonucu: kumulatif bitis', ilkHtml, '>18:40<');       // dirsekli 1120
+icerir('ilk turda "ilk turun" notu', ilkHtml, M.tur.ilkTur);
+icerir('ilk turda iki rekor da kirildi', ilkHtml, M.tur.hizRekoru);
+icerir('ilk turda puan rekoru da kirildi', ilkHtml, M.tur.puanRekoru);
+icermez('ilk turda "onceki rekor" YOK', ilkHtml, 'class="onceki"');
+
+// 2) Rekorlu tur: fark sutunu dolu, kirilmayan rekor "oncekin" olarak yaziyor.
+const eskiRekor = {
+  hiz: { sure: 1900, not: 'B' as const, puan: 25000, tamamlanan: 15,
+    gorevSayisi: 15, usta: false, bitisler: [240, 1150, 1900] },
+  puan: { sure: 2400, not: 'A' as const, puan: 29000, tamamlanan: 15,
+    gorevSayisi: 15, usta: true, bitisler: [300, 1400, 2400] },
+};
+const ikinciHtml = turSonucuHtml(tamTur, { hizRekoru: true, puanRekoru: false },
+  eskiRekor, ad);
+icerir('rekor varken ayak farki yaziliyor', ikinciHtml, 'data-iyi=');
+icerir('ondeyken fark EKSI ve iyi', ikinciHtml, 'data-iyi="evet"');
+icermez('rekor varken "ilk turun" notu YOK', ikinciHtml, M.tur.ilkTur);
+icerir('kirilmayan puan rekoru "oncekin" olarak yaziyor', ikinciHtml,
+  M.tur.oncekiPuan('29000 puan'));
+icermez('kirilan hiz rekoru "oncekin" olarak YAZILMIYOR', ikinciHtml,
+  M.tur.oncekiHiz('31:40'));
+
+// 3) Yarim tur: baslik "bitti" degil "terk edildi".
+const yarimHtml = turSonucuHtml(yarim, { hizRekoru: false, puanRekoru: false },
+  { hiz: null, puan: null }, ad);
+icerir('yarim turun basligi TERK EDILDI', yarimHtml, M.tur.terkEdildi);
+icermez('yarim turda TAM TUR BITTI YOK', yarimHtml, M.tur.bitti);
+icerir('yarim turda gorev sayisi eksik', yarimHtml, '>11 / 15<');
+icermez('yarim turda usta rozeti YOK', yarimHtml, 'class="rozet"');
+icerir('temiz tam kadroda usta rozeti VAR', ilkHtml, 'class="rozet"');
