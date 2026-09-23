@@ -23,6 +23,9 @@ import {
 } from './scenery';
 import { drawAnaBom, drawKolon, KirmaBomView } from './dirsekliView';
 import {
+  drawSantiyeArka, drawStokSahasi, drawCit, drawTeslimatKamyonu,
+} from './santiyeView';
+import {
   drawBahceDuvari, drawParkCebi, drawSokakSirasi, drawYarimEv,
 } from './avluView';
 import { RIG } from './truckView';
@@ -107,11 +110,19 @@ export class VincGorunumu extends SahneGorunumu {
   private readonly cableView = new CableView();
   private readonly hookView = drawHookBlock();
 
+  /**
+   * Güncel yük dışındaki yükler: kasada bekleyenler ve sahaya konanlar.
+   * Birinci bölümde boş; şantiyede görev değişince yeniden çiziliyor —
+   * gövdeleri statik, yerleri de değişmiyor.
+   */
+  private readonly digerKatman = new Container();
+  private digerGorevi: Task | null | undefined = undefined;
+
   constructor(private readonly s: Scene) {
     super(s);
     this.wheelViews = s.truck.wheels.map(() => drawWheel(TRUCK.wheelRadius));
     this.propViews = s.props.map((p) => drawPropBox(p.hw, p.hh));
-    this.aktorler.addChild(this.shadow, ...this.propViews);
+    this.aktorler.addChild(this.shadow, ...this.propViews, this.digerKatman);
     this.yukuKur();
     this.aktorler.addChild(
       ...this.wheelViews, this.outriggerView, this.truckView,
@@ -120,13 +131,45 @@ export class VincGorunumu extends SahneGorunumu {
   }
 
   dekor(): Container[] {
+    const b = this.s.bolum;
+    const ortak = [
+      drawSetupZone(b.setupX, b.setupYariEn), drawKerb(b.kerbX), drawEntranceSign(-14),
+    ];
+    if (b.id === 'santiye') {
+      return [
+        drawGround(SIM.groundLeft, SIM.groundRight),
+        drawSantiyeArka(), ...ortak,
+        drawStokSahasi(), drawCit(), drawTeslimatKamyonu(),
+      ];
+    }
     return [
       drawGround(SIM.groundLeft, SIM.groundRight),
-      drawFactory(SCENE.factoryX),
-      drawSetupZone(SCENE.setupX, SCENE.setupYariEn),
-      drawKerb(SCENE.kerbX),
-      drawEntranceSign(-14),
+      drawFactory(SCENE.factoryX), ...ortak,
     ];
+  }
+
+  override ciz(alpha: number, hedef: { x: number; y: number } | null,
+               hedefHw: number, frameDt = 1 / 60): void {
+    // Şantiyede işaret önce kasadaki yükü gösteriyor: ok yükün ÜSTÜNDE
+    // olmalı, yoksa yükün arkasında kalıyor (forklift rampasındaki ders).
+    const t = this.s.loadTask;
+    this.isaretBoyu = this.s.isaretKaynakta && t ? t.halfHeight * 2 + 0.4 : 1.15;
+    super.ciz(alpha, hedef, hedefHw, frameDt);
+    this.digerleriGuncelle();
+  }
+
+  private digerleriGuncelle(): void {
+    const t = this.s.loadTask;
+    if (t === this.digerGorevi) return;
+    this.digerGorevi = t;
+    for (const c of this.digerKatman.removeChildren()) c.destroy({ children: true });
+    for (const { task, body } of this.s.digerYukler) {
+      const v = this.yukCiz(task, false);
+      const p = body.getPosition();
+      v.position.set(p.x, p.y);
+      v.rotation = body.getAngle();
+      this.digerKatman.addChild(v);
+    }
   }
 
   override uzak(): Container[] { return [drawFarSkyline()]; }

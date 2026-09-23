@@ -35,6 +35,12 @@ export interface KumandaAdi {
   ikisi: string;
   ayaklar: string;
   kanca: string;
+  /**
+   * Halat katı tuşu — YALNIZ klavyede. Telefon kumandasında bu düğme yok
+   * (sahadan: *"o butona gerek yok"*), dolayısıyla ona işaret eden ipucu da
+   * orada gösterilmiyor.
+   */
+  kat?: string;
 }
 
 /** Yerleştirme onay panelinin satırları — sayılar çağıran tarafta. */
@@ -151,6 +157,11 @@ export interface Metinler {
       asiriBas: string; asiriGovde: (yuk: string, r: string, sinir: string) => string;
       asiriCozumKilitli: string; asiriCozum: string;
       yakinBas: string; yakinGovde: (yuk: string, sinir: string, r: string) => string;
+      /**
+       * Tek kat halatla kanca bloğu hafifler ve ibre düşer — yalnız klavyede,
+       * yalnız fark anlamlıysa. Önce yük bırakılmalı, kanca yere inmeli.
+       */
+      katOnerisi: (kg: string, yuzde: string, tus: string) => string;
       /** Halat katı değiştirilemeyince — düğme sessizce reddediyordu. */
       katBas: string;
       katGovde: (neden: 'suruyor' | 'yuklu' | 'yuksek') => string;
@@ -197,7 +208,11 @@ export interface Metinler {
       hedefeIndir: (m: string) => string;
       yukBagli: (k: KumandaAdi) => string;
       hazir: (k: KumandaAdi) => string;
+      /** Şantiye: yük çitin hizasında ve tabanı çitin tepesinden alçak. */
+      citiAs: string;
     };
+    /** "Yerine kondu" kartında yeni yükün yeri (şantiye). */
+    yer: { kasa: string };
   };
 
   /**
@@ -350,7 +365,9 @@ export interface Metinler {
   cevir: { bas: string; govde: string; yineOyna: string; yatayOyna: string };
 
   dekor: { sanayi: string; kurulum: string; sevkiyat: string; malKabul: string;
-    park: string; avlu: string; rampa: string };
+    park: string; avlu: string; rampa: string;
+    /** Şantiye stok sahasının zemin etiketleri ve çit levhası. */
+    istif: string; kaide: string; kulube: string; baret: string };
 
   gorev: Record<string, { ad: string; brif: string }>;
 
@@ -389,6 +406,7 @@ const TR: Metinler = {
     'depo': 'Sevkiyat koridoru',
     'rampa': 'Sevkiyat rampası',
     'sanayi': 'Sanayi sitesi',
+    'santiye': 'Şantiye teslimatı',
     'dirsekli-dar-sokak': 'Dar sokak',
   },
   dokunma: {
@@ -457,6 +475,8 @@ const TR: Metinler = {
       yakinBas: 'SINIRA YAKLAŞIYORSUN',
       yakinGovde: (yuk, sinir, r) => `${yuk} t / ${sinir} t · yarıçap ${r} m.`
         + ' Yarıçapı büyütürsen kollar kilitlenir.',
+      katOnerisi: (kg, yuzde, tus) => `Tek kat halatla kanca bloğu ${kg} kg hafifler,`
+        + ` ibre %${yuzde}'e iner: yükü bırak, kancayı yere indir, ${tus} ile kat değiştir.`,
       katBas: 'HALAT KATI DEĞİŞTİRİLEMEDİ',
       katGovde: (neden) => neden === 'yuklu'
         ? 'Kancada yük var. Sapancı halatı ancak kanca boşken yeniden geçirebilir.'
@@ -493,12 +513,14 @@ const TR: Metinler = {
       hedefeIndir: (m) => `hedefin üstündesin · ${m} m indir`,
       yukBagli: (k) => `yük bağlı · bırak (${k.kanca})`,
       hazir: (k) => `KANCA MENZİLDE · bağla (${k.kanca})`,
+      citiAs: 'çit önünde · yükü önce çitin üstüne kaldır, sonra sahaya al',
       sallaniyor: 'kanca sallanıyor · dursun, sonra bağla',
       yanCekme: 'halat eğik · yan çekme olur, bomu yükün üstüne getir',
       ortala: 'kancayı yükün TAM ORTASINA getir',
       yukseklik: 'kancayı biraz daha indir',
       uzak: 'kancayı yükün üstüne indir',
     },
+    yer: { kasa: 'kamyon kasasında' },
   },
   dirsekli: {
     ad: 'YV-9 Dirsekli Vinç',
@@ -684,6 +706,7 @@ const TR: Metinler = {
     sanayi: 'SANAYİ SİTESİ · C BLOK', kurulum: 'KURULUM ALANI',
     sevkiyat: 'YILMAZ LOJİSTİK · SEVKİYAT', malKabul: 'MAL KABUL',
     park: 'PARK CEBİ', avlu: 'AVLU · İNŞAAT', rampa: 'RAMPA 1',
+    istif: 'İSTİF', kaide: 'JENERATÖR', kulube: 'KULÜBE', baret: 'BARETSİZ GİRİLMEZ',
   },
   gorev: {
     /* Dirsekli bomun gorevleri BURADA DEGIL. `gorevAdi`/`gorevBrifi` sozlukte
@@ -741,6 +764,7 @@ const EN: Metinler = {
     'depo': 'Despatch aisle',
     'rampa': 'Loading dock',
     'sanayi': 'Industrial estate',
+    'santiye': 'Site delivery',
     'dirsekli-dar-sokak': 'Narrow street',
   },
   dokunma: {
@@ -807,6 +831,9 @@ const EN: Metinler = {
         + ' or retract with ⇧S — the radius shortens and the limit rises.',
       asiriCozum: 'Raise the boom with W: the radius shortens and the limit rises.',
       yakinBas: 'APPROACHING THE LIMIT',
+      katOnerisi: (kg, yuzde, tus) => `On single-part reeving the hook block is ${kg} kg`
+        + ` lighter and the needle drops to ${yuzde}%: set the load down, lower the hook,`
+        + ` change reeving with ${tus}.`,
       yakinGovde: (yuk, sinir, r) => `${yuk} t / ${sinir} t · radius ${r} m.`
         + ' Go out any further and the levers lock.',
       katBas: 'CANNOT RE-REEVE',
@@ -852,7 +879,9 @@ const EN: Metinler = {
       ortala: 'centre the hook over the load',
       yukseklik: 'lower the hook a little more',
       uzak: 'lower the hook onto the load',
+      citiAs: 'at the fence · lift the load over the fence first, then bring it in',
     },
+    yer: { kasa: 'on the truck bed' },
   },
   dirsekli: {
     ad: 'YV-9 Knuckle Boom Crane',
@@ -1041,6 +1070,7 @@ const EN: Metinler = {
     sanayi: 'INDUSTRIAL ESTATE · BLOCK C', kurulum: 'SET-UP ZONE',
     sevkiyat: 'YILMAZ LOGISTICS · DESPATCH', malKabul: 'GOODS IN',
     park: 'PARKING BAY', avlu: 'COURTYARD · BUILD', rampa: 'DOCK 1',
+    istif: 'STACK', kaide: 'GENERATOR', kulube: 'CABIN', baret: 'HARD HATS ONLY',
   },
   gorev: {
     S1: { ad: 'Block pallet',
@@ -1059,6 +1089,17 @@ const EN: Metinler = {
     T3: { ad: 'Generator', brif: '125 kVA canopied generator — second-floor terrace' },
     T4: { ad: 'Screw compressor', brif: 'Screw compressor — third floor, 19 m radius' },
     T5: { ad: 'Air handling unit', brif: 'AHU — top terrace, end of the boom, 92% on the gauge' },
+    /* Şantiye teslimatının Türkçesi veri dosyasında (`SANTIYE_GOREVLERI`). */
+    K1: { ad: 'Generator',
+      brif: 'Back of the truck → the pad: the heaviest load, but the closest to the crane' },
+    K2: { ad: 'Rebar bundle',
+      brif: 'Base of the stack — onto the two bearers, heaviest at the bottom' },
+    K3: { ad: 'Formwork pack',
+      brif: 'On top of the rebar: sit it the way the one below landed' },
+    K4: { ad: 'Scaffold pack',
+      brif: 'Top of the stack — fourth on the truck, 23 metres out' },
+    K5: { ad: 'Guard cabin',
+      brif: 'Front of the bed, 25 metres: two-part reeving will not lift it — go single' },
     D1: { ad: 'Cement pallet',
       brif: 'A-Z, floor bay — warm-up: get the blades right into the pocket' },
     D2: { ad: 'Tile pallet',
@@ -1131,7 +1172,7 @@ export function kumandaAdi(): KumandaAdi {
   if (!dokunmatikKumanda) {
     return {
       kaldir: 'W', indir: 'S', ikisi: 'W/S',
-      ayaklar: 'Q', kanca: M.kod === 'tr' ? 'boşluk' : 'space',
+      ayaklar: 'Q', kanca: M.kod === 'tr' ? 'boşluk' : 'space', kat: 'K',
     };
   }
   return {

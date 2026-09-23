@@ -1,5 +1,8 @@
 import type { OyunSahnesi } from '../sim/sahne';
 import { Scene } from '../sim/scene';
+import { SANAYI_SITESI } from '../sim/sanayi';
+import { SANTIYE_TESLIMATI } from '../sim/santiye';
+import type { VincBolum } from '../sim/vincBolum';
 import { ForkliftSahnesi } from '../sim/forkliftSahne';
 import {
   SahneGorunumu, VincGorunumu, ForkliftGorunumu, DirsekliGorunumu,
@@ -93,6 +96,24 @@ function forkliftBolumu(b: ForkliftBolum): BolumTanimi {
         // Forklift fazsız ve düğmeleri sabit: sabit anahtar, hiç yeniden
         // çizilmiyor.
         pad: { anahtar: () => 'sabit', duzen: forkliftPadi },
+      };
+    },
+  };
+}
+
+/** Vinç bölümü → seçim ekranının bölüm tanımı. Makine ve pad ortak. */
+function vincBolumu(b: VincBolum): BolumTanimi {
+  return {
+    id: b.id,
+    kur: () => {
+      const sahne = new Scene(b);
+      return {
+        sahne,
+        gorunum: new VincGorunumu(sahne),
+        pad: {
+          anahtar: () => `${sahne.calismaModunda}|${sahne.outriggers.state}`,
+          duzen: () => vincPadi(sahne),
+        },
       };
     },
   };
@@ -284,20 +305,7 @@ export function araclar(): readonly AracTanimi[] {
     tuslar: M.vinc.tuslar,
     dokunmatikVar: true,
     hazir: true,
-    bolumler: [{
-      id: 'sanayi',
-      kur: () => {
-        const sahne = new Scene();
-        return {
-          sahne,
-          gorunum: new VincGorunumu(sahne),
-          pad: {
-            anahtar: () => `${sahne.calismaModunda}|${sahne.outriggers.state}`,
-            duzen: () => vincPadi(sahne),
-          },
-        };
-      },
-    }],
+    bolumler: [SANAYI_SITESI, SANTIYE_TESLIMATI].map(vincBolumu),
   },
   {
     id: 'dirsekli',

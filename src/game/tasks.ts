@@ -40,7 +40,9 @@ export type LoadKind =
   // Dirsekli — kaba inşaat: şantiyeye çıkan malzeme.
   | 'briket' | 'donati' | 'kum' | 'kalip' | 'kova'
   // Forklift — depo: paletli ticari mal.
-  | 'cimento' | 'fayans' | 'varil' | 'balya' | 'profil';
+  | 'cimento' | 'fayans' | 'varil' | 'balya' | 'profil'
+  // Vinç — şantiye teslimatı (jeneratör, kalıp ve demir yukarıdakilerden).
+  | 'iskele' | 'kulube';
 
 export interface Task {
   kod: string;

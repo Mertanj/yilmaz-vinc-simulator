@@ -237,6 +237,44 @@ export function drawLoad(t: Task, secenek: { etiket?: boolean } = {}): Container
       g.rect(-hw, -hh * 0.1, hw * 2, 0.05).fill({ color: C.rust, alpha: 0.7 });
       break;
     }
+
+    // --- VİNÇ: şantiye teslimatı ---
+    case 'iskele': {
+      // İskele paketi: yan yatmış galvaniz borular, uçları görünüyor,
+      // iki yerden çember bağlı.
+      g.rect(-hw, -hh, hw * 2, hh * 2).fill(0x6F7A80);
+      const sira = Math.max(3, Math.round((hh * 2) / 0.12));
+      const h = (hh * 2) / sira;
+      for (let i = 0; i < sira; i++) {
+        const y = -hh + i * h;
+        g.rect(-hw, y + h * 0.12, hw * 2, h * 0.76).fill(i % 2 === 0 ? 0xB7C0C5 : 0xA3ADB3);
+        g.rect(-hw, y + h * 0.12, hw * 2, h * 0.16).fill({ color: 0xDCE3E6, alpha: 0.7 });
+        // Boru ağzı: sol uçta
+        g.circle(-hw + h * 0.5, y + h * 0.5, h * 0.36).fill(0x59636A);
+        g.circle(-hw + h * 0.5, y + h * 0.5, h * 0.2).fill(0x2E3438);
+      }
+      for (const x of [-hw * 0.5, hw * 0.5]) {
+        g.rect(x - 0.04, -hh, 0.08, hh * 2).fill({ color: C.hazardY, alpha: 0.9 });
+      }
+      break;
+    }
+    case 'kulube': {
+      // Bekçi kulübesi: panel duvar, saçaklı çatı, pencere ve kapı.
+      g.rect(-hw, -hh, hw * 2, hh * 2).fill(0xDCD6C4);
+      g.rect(-hw, -hh, hw * 2, 0.14).fill(0x8C8676);
+      g.rect(-hw - 0.08, hh - 0.16, hw * 2 + 0.16, 0.16).fill(0x4E565B);
+      // Pencere: üst yarıda, iki kanatlı
+      g.roundRect(-hw * 0.78, hh * 0.08, hw * 1.56, hh * 0.62, 0.04).fill(C.glass);
+      g.rect(-0.02, hh * 0.08, 0.04, hh * 0.62).fill(0xDCD6C4);
+      g.rect(-hw * 0.78, hh * 0.52, hw * 1.56, hh * 0.1).fill({ color: C.glassLight, alpha: 0.6 });
+      // Kapı ve kolu
+      g.roundRect(-hw * 0.55, -hh + 0.14, hw * 1.1, hh * 0.98, 0.03)
+        .stroke({ width: 0.04, color: 0x8C8676 });
+      g.rect(hw * 0.32, -hh * 0.4, 0.1, 0.04).fill(0x3A3F44);
+      // Güvenlik şeridi
+      g.rect(-hw, hh * -0.02, hw * 2, 0.07).fill({ color: C.liveryRed, alpha: 0.85 });
+      break;
+    }
     default: {
       // **Tüketicilik denetimi.** Bu satır yokken `LoadKind`e bir tür eklemek
       // sessizce "çizilmeyen yük" üretiyordu: dirseklinin beş malı switch'ten

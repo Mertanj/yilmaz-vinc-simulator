@@ -538,8 +538,12 @@ function oyna(
     // geçiyor, yani oyuncu asıl bakması gereken yeri göremiyordu. Pad ile
     // şerit aynı anda görünmüyor (`body.dokunmatik #tuslar` gizli), o
     // yüzden büyüğünü almak ikisini birden karşılıyor.
+    // Görünürlük `getClientRects` ile: şerit `position: fixed` ve sabit
+    // konumlu öğede `offsetParent` HER ZAMAN null — eskiden buna bakılıyordu
+    // ve şerit hiç hesaba girmiyordu, makine masaüstünde tuş listesinin
+    // arkasına düşüyordu (ölçüldü: şerit 127 px, pay 0).
     const tusSerit = document.getElementById('tuslar');
-    const seritYuk = tusSerit && tusSerit.offsetParent !== null
+    const seritYuk = tusSerit && tusSerit.getClientRects().length > 0
       ? tusSerit.offsetHeight : 0;
     const dolu = Math.max(yukseklik, seritYuk);
     camera.altPayi(dolu > 0 ? dolu + 22 : 0);

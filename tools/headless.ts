@@ -15,6 +15,10 @@ import { CRANE } from '../src/sim/crane';
 import { capacityAt, OutriggerState } from '../src/sim/loadChart';
 import { Mission } from '../src/game/mission';
 import { TASKS } from '../src/game/tasks';
+import type { VincBolum } from '../src/sim/vincBolum';
+import {
+  SANTIYE, SANTIYE_TESLIMATI, type SantiyeGorevi,
+} from '../src/sim/santiye';
 
 const DT = 1 / SIM.hz;
 
@@ -26,9 +30,13 @@ function toward(current: number, target: number, deadband: number): number {
 }
 
 class Rig {
-  readonly scene = new Scene();
-  readonly mission = new Mission(this.scene);
+  readonly scene: Scene;
+  readonly mission: Mission;
   t = 0;
+  constructor(bolum?: VincBolum) {
+    this.scene = new Scene(bolum);
+    this.mission = new Mission(this.scene);
+  }
 
   /** En yüksek LMI'nin nerede olduğunu da tutuyoruz — zirveyi bulmak için. */
   zirve = { lmi: 0, t: 0, etiket: '', R: 0, ton: 0, halat: 0 };
@@ -76,7 +84,7 @@ class Rig {
     }
   }
 
-  tap(key: 'toggleOutriggers' | 'toggleHook', settle: number): void {
+  tap(key: 'toggleOutriggers' | 'toggleHook' | 'toggleKat', settle: number): void {
     this.scene.step({ ...IDLE, [key]: true }, DT);
     this.mission.update(DT);
     this.t += DT;
@@ -142,7 +150,7 @@ function durum(r: Rig, tag: string): void {
     + `  egim ${r.scene.tiltDeg.toFixed(2)}°`);
 }
 
-function main(): void {
+function sanayiTuru(): boolean {
   const r = new Rig();
 
   // 1) Takoza dayanana kadar sür, sonra ayakları aç.
@@ -384,11 +392,216 @@ function main(): void {
     + `  sure ${s.sure.toFixed(0)}s  not ${res?.not ?? '-'} (${res?.puan.toFixed(0) ?? '-'})`
     + `  usta ${res?.usta ? 'E' : 'H'}`);
 
-  console.log(out.join('\n'));
-  if (s.sapmalar.length < TASKS.length) {
-    throw new Error(`bölüm tamamlanamadı: ${s.sapmalar.length}/${TASKS.length} görev`);
-  }
+  return s.sapmalar.length === TASKS.length;
 }
 
-// Hata olursa node zaten yığın izini basıp sıfırdan farklı kodla çıkar.
-main();
+/**
+ * İkinci bölüm: çitin ardındaki kamyonu boşalt.
+ *
+ * Birinci bölümün tersine KRİTİK AN ALMA: yük kasanın neresindeyse bom o
+ * kadar uzakta. Rig bu yüzden yükü önce DİKİNE kaldırıyor (bom uçta sabit,
+ * yalnız vinç), çitin üstüne çıkınca yatay taşıyor. İstif için salınımın
+ * sönmesini bekliyor: pencere 40 santim.
+ */
+function santiyeTuru(): boolean {
+  const b = SANTIYE_TESLIMATI;
+  const r = new Rig(b);
+  say('');
+  say('=== VINC: Santiye teslimati ===');
+
+  r.run(20, (rig) => ({ drive: { throttle: rig.scene.truck.speedKmh < 26 ? 1 : 0, handbrake: false } }));
+  r.run(3, () => ({ drive: { throttle: 0, handbrake: true } }));
+  r.tap('toggleOutriggers', 3);
+  r.tap('toggleOutriggers', 6);
+  const pivot = r.scene.truck.chassis.getWorldPoint(CRANE.pivot);
+  const R = (x: number): number => CRANE.pivotOffsetM + (x - pivot.x);
+  say(`PARK+AYAK  ayak %${(r.scene.outriggers.fraction * 100).toFixed(0)}`
+    + `  pivot ${pivot.x.toFixed(2)}  egim ${r.scene.tiltDeg.toFixed(2)}°`);
+  say('--- calisma zarfi: kasadan alirken ---');
+  for (const g of b.gorevler as readonly SantiyeGorevi[]) {
+    const cap = capacityAt(R(g.kasaX), OutriggerState.Full);
+    const iki = (g.tonnes + (CRANE.hookTonnesByKat[2] ?? 0.45)) / cap;
+    const tek = (g.tonnes + (CRANE.hookTonnesByKat[1] ?? 0.22)) / cap;
+    say(`  ${g.kod} ${g.ad.padEnd(15)} ${g.tonnes.toFixed(2)}t  R ${R(g.kasaX).toFixed(1)}m`
+      + `  kap ${cap.toFixed(2)}t  2kat %${(iki * 100).toFixed(0)}  1kat %${(tek * 100).toFixed(0)}`);
+  }
+
+  /** x0..x1 arasındaki en yüksek statik engelin tepesi (m). */
+  const engel = (x0: number, x1: number): number => {
+    let h = 0;
+    const kutu = (sol: number, sag: number, ust: number): void => {
+      if (sag >= x0 && sol <= x1) h = Math.max(h, ust);
+    };
+    kutu(SANTIYE.citX, SANTIYE.citX + SANTIYE.citKalinlik, SANTIYE.citY);
+    kutu(SANTIYE.kasaArka, SANTIYE.kasaOn, SANTIYE.kasaY);
+    kutu(SANTIYE.kabinSol, SANTIYE.kabinSag, SANTIYE.kabinY);
+    for (const { task, body } of r.scene.digerYukler) {
+      const p = body.getPosition();
+      kutu(p.x - task.halfWidth, p.x + task.halfWidth, p.y + task.halfHeight);
+    }
+    return h;
+  };
+  const halatKoru = (rig: Rig, hedefHalat: number): number =>
+    Math.max(-1, Math.min(1, (rig.scene.crane.ropeM - hedefHalat) / 1.0));
+  /** Kancanın bom ucuna göre yatay kaçıklığı — salınımın ölçüsü. */
+  const kayma = (rig: Rig): number =>
+    Math.abs(rig.scene.crane.hook.getPosition().x - rig.scene.crane.tipWorld.x);
+  const almaUcY = pivot.y + 5.5;
+
+  for (let n = 0; n < b.gorevler.length; n++) {
+    const task = r.mission.task as SantiyeGorevi | null;
+    if (!task) break;
+    const kaynakX = task.kasaX;
+    const yukUst = SANTIYE.kasaY + task.halfHeight * 2;
+    const iz = (etiket: string): void => {
+      if (!process.env['IZ']) return;
+      const c = r.scene.crane;
+      const l = r.scene.load.getPosition();
+      say(`   iz ${etiket.padEnd(10)} bom ${c.lengthM.toFixed(1)}/${c.angleDeg.toFixed(0)}°`
+        + ` uc ${c.tipWorld.x.toFixed(1)},${c.tipWorld.y.toFixed(1)} halat ${c.ropeM.toFixed(1)}`
+        + ` kanca ${c.hook.getPosition().x.toFixed(2)},${c.hook.getPosition().y.toFixed(2)}`
+        + ` yuk ${l.x.toFixed(2)},${l.y.toFixed(2)} bagli ${c.hasLoad ? 'E' : 'H'}`
+        + ` kat ${c.katSayisi} LMI %${Math.min(999, c.lmi.percent).toFixed(0)} t=${r.t.toFixed(0)}`);
+    };
+
+    // --- 0) Halat katı: bu yarıçapta iki kat kanca bloğu yükü tablo dışına
+    //        itiyorsa tek kata geç. Kanca yerde ve boş olmalı (sapancının
+    //        eli yetişsin): kulübe tabanının üstü henüz boş.
+    const cap = capacityAt(R(kaynakX), OutriggerState.Full);
+    const gerekenKat = (task.tonnes + (CRANE.hookTonnesByKat[2] ?? 0.45)) / cap > 0.97 ? 1 : 2;
+    if (r.scene.crane.katSayisi !== gerekenKat) {
+      r.etiket = `${task.kod}-kat`;
+      const yerX = (SANTIYE.kulubeSol + SANTIYE.kulubeSag) / 2;
+      r.run(12, () => ({ crane: { uzat: 0, luff: 0, telescope: 0, winch: 1 } }));
+      r.runUntil(60, (rig) => Math.abs(rig.scene.crane.tipWorld.x - yerX) < 0.15,
+        (rig) => ({ crane: { uzat: 0, ...rig.boomToDamped(yerX, almaUcY),
+          winch: halatKoru(rig, 3.0) } }));
+      r.runUntil(20, (rig) => kayma(rig) < 0.3, () => ({}));
+      r.runUntil(30, (rig) => rig.scene.crane.hook.getPosition().y < CRANE.reevingMaxHookY - 0.3,
+        () => ({ crane: { uzat: 0, luff: 0, telescope: 0, winch: -1 } }));
+      for (let deneme = 0; deneme < 4 && r.scene.crane.katSayisi !== gerekenKat; deneme++) {
+        r.tap('toggleKat', 0.2);
+        r.runUntil(40, (rig) => rig.scene.crane.reevingSuresi <= 0, () => ({}));
+      }
+      iz('kat-degisti');
+      say(`${task.kod} KAT   ${r.scene.crane.katSayisi} kat (kasada iki kat %`
+        + `${(((task.tonnes + (CRANE.hookTonnesByKat[2] ?? 0.45)) / cap) * 100).toFixed(0)})`);
+    }
+
+    // --- 1) Kancayı topla, bom ucunu yükün üstüne götür ---
+    r.etiket = `${task.kod}-alma`;
+    r.runUntil(20, (rig) => rig.scene.crane.ropeM < 3.2,
+      () => ({ crane: { uzat: 0, luff: 0, telescope: 0, winch: 1 } }));
+    r.runUntil(90, (rig) => Math.abs(rig.scene.crane.tipWorld.x - kaynakX) < 0.12
+      && Math.abs(rig.scene.crane.tipWorld.y - almaUcY) < 0.6,
+    (rig) => ({ crane: { uzat: 0, ...rig.boomToDamped(kaynakX, almaUcY),
+      winch: halatKoru(rig, 3.0) } }));
+    r.runUntil(30, (rig) => kayma(rig) < 0.25,
+      (rig) => ({ crane: { uzat: 0, ...rig.boomToDamped(kaynakX, almaUcY), winch: 0 } }));
+    iz('yukun-ustu');
+    // Kancayı yükün tepesinin 1.15 m üstüne indir, salınımı bekle.
+    const asili = yukUst + 1.15;
+    r.run(22, (rig) => ({ crane: { uzat: 0, ...rig.boomToDamped(kaynakX, almaUcY),
+      winch: toward(rig.scene.crane.hook.getPosition().y, asili, 0.05) } }));
+    r.run(10, () => ({}));
+    iz('kanca-indi');
+    const kapi = r.scene.crane.attachCheck(r.scene.grabbables).reason;
+    r.tap('toggleHook', 1.0);
+    say(`${task.kod} AL    kapi ${kapi}  bagli ${r.scene.crane.hasLoad ? 'E' : 'H'}`
+      + `  R ${r.scene.crane.radiusM.toFixed(1)}m  kat ${r.scene.crane.katSayisi}`);
+    if (!r.scene.crane.hasLoad) break;
+
+    // --- 2) DİKİNE kaldır: bom sabit, yalnız vinç — kasadan kopuş yavaş ---
+    const hedef0 = r.mission.target;
+    if (!hedef0) break;
+    const yolEngeli = engel(Math.min(hedef0.x, kaynakX) - task.halfWidth - 0.3,
+      kaynakX + task.halfWidth + 0.3);
+    const tasimaTaban = Math.max(yolEngeli, hedef0.y) + 0.9;
+    r.etiket = `${task.kod}-kalkis`;
+    r.runUntil(60, (rig) => rig.scene.load.getPosition().y - task.halfHeight >= tasimaTaban,
+      (rig) => {
+        const kalkti = rig.scene.load.getPosition().y - task.halfHeight
+          > SANTIYE.kasaY + 0.1;
+        return { crane: { uzat: 0, luff: 0, telescope: 0, winch: kalkti ? 0.6 : 0.25 } };
+      });
+    r.run(3, () => ({}));
+    iz('kalkti');
+
+    // --- 3) Yatay taşı: uç aynı yükseklikte hedefin üstüne ---
+    // **Halat boyu KORUNUYOR.** Teleskop toplanınca halat boşalıyor (gerçek
+    // vinçte de öyle): vinç boşta bırakılınca bom 17 metreden 12'ye inerken
+    // yük 4.4 metre düştü ve hedefin iki metre önünde kulübe tabanına oturdu.
+    r.etiket = `${task.kod}-tasima`;
+    const ucY = r.scene.crane.tipWorld.y;
+    const tasimaHalati = r.scene.crane.ropeM;
+    const vardi = r.runUntil(240,
+      (rig) => Math.abs(rig.scene.crane.tipWorld.x - hedef0.x) < 0.08
+        && Math.abs(rig.scene.crane.tipWorld.y - ucY) < 0.3,
+      (rig) => ({ crane: { uzat: 0, ...rig.boomToDamped(hedef0.x, ucY),
+        winch: halatKoru(rig, tasimaHalati) } }));
+    iz(vardi ? 'vardi' : 'VARAMADI');
+    // Salınım sönsün: istif penceresi 40 santim. **Hız da şart:** yalnız
+    // kaçıklığa bakınca sarkaç ortadan geçerken — yani EN HIZLI anında —
+    // "söndü" sayılıyordu ve yük inerken 30-40 santim kayıyordu.
+    let sakin = 0;
+    r.runUntil(60, (rig) => {
+      const v = Math.abs(rig.scene.crane.hook.getLinearVelocity().x);
+      sakin = kayma(rig) < 0.06 && v < 0.04 ? sakin + 1 : 0;
+      return sakin > 45;
+    },
+      (rig) => ({ crane: { uzat: 0, ...rig.boomToDamped(hedef0.x, ucY),
+        winch: halatKoru(rig, tasimaHalati) } }));
+    iz('sondu');
+
+    // --- 4) İndir ve bırak ---
+    r.etiket = `${task.kod}-koyma`;
+    const hedef = r.mission.target ?? hedef0;
+    const oturdu = r.runUntil(40, (rig) => rig.scene.crane.yukOturdu, (rig) => ({ crane: {
+      uzat: 0, ...rig.boomToDamped(hedef.x, ucY),
+      winch: Math.max(-0.5, Math.min(0.5,
+        (rig.scene.load.getPosition().y - (hedef.y + task.halfHeight - 0.04)) * -1.5)),
+    } }));
+    r.run(3, () => ({}));
+    iz(oturdu ? 'kondu' : 'OTURMADI');
+    r.tap('toggleHook', 3.0);
+    const ok = r.mission.sonTamamlanan;
+    const tamam = ok !== null && ok.sira === n + 1;
+    const l = r.scene.digerYukler.find((d) => d.task === task)?.body.getPosition()
+      ?? r.scene.load.getPosition();
+    say(`${task.kod} KOY   yuk ${l.x.toFixed(2)},${l.y.toFixed(2)}`
+      + `  hedef ${hedef.x.toFixed(2)},${(hedef.y + task.halfHeight).toFixed(2)}`
+      + `  ${tamam ? 'KONDU' : 'KONMADI'}`);
+    if (tamam && ok) {
+      say(`         +${ok.puan.toplam} puan · sapma ${ok.sapmaCm.toFixed(0)} cm`
+        + ` · maxLMI %${ok.maxLmi.toFixed(0)} · sure ${ok.sure.toFixed(0)}s`);
+    }
+    if (!tamam) break;
+  }
+
+  const res = r.mission.result;
+  const sc = r.mission.score;
+  say('--- sonuc ---');
+  say(`  LMI zirvesi %${r.zirve.lmi.toFixed(0)} · ${r.zirve.etiket} · t=${r.zirve.t.toFixed(0)}s`
+    + `  R ${r.zirve.R.toFixed(1)}m  kuvvet ${r.zirve.ton.toFixed(2)}t`);
+  say(`  kirmizi ${sc.kirmiziSn.toFixed(1)}s  carpma ${sc.carpma}  salinim ${sc.maxSalinim.toFixed(0)}°`);
+  {
+    const bit = sc.bitisler;
+    say(`  ara sureler ${bit.map((x, i) => `${(x - (bit[i - 1] ?? 0)).toFixed(0)}s`).join(' · ')}`);
+  }
+  say(`  faz ${r.mission.phase}  tamamlanan ${sc.sapmalar.length}/${b.gorevler.length}`
+    + `  sure ${sc.sure.toFixed(0)}s  puan ${sc.puan}  not ${res?.not ?? '-'}`
+    + ` (${res?.puan.toFixed(0) ?? '-'})  usta ${res?.usta ? 'E' : 'H'}`);
+  return sc.sapmalar.length === b.gorevler.length;
+}
+
+// Iki bolum de her seferinde kosuyor; biri bitemezse CI kirmizi.
+const sadece = process.env['BOLUM'];
+const sonuclar: Array<[string, boolean]> = [];
+if (!sadece || sadece === 'sanayi') sonuclar.push(['sanayi', sanayiTuru()]);
+if (!sadece || sadece === 'santiye') sonuclar.push(['santiye', santiyeTuru()]);
+console.log(out.join('\n'));
+const kalan = sonuclar.filter(([, ok]) => !ok).map(([id]) => id);
+if (kalan.length > 0) {
+  console.error(`\nVINC BOLUMU BITIRILEMEDI: ${kalan.join(', ')}`);
+  process.exit(1);
+}

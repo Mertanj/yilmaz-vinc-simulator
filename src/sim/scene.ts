@@ -1,14 +1,15 @@
 import { Box, type Body, type World, type Contact } from 'planck';
 import {
-  createWorld, createGround, createFactoryBody, createKerb, scatterProps,
-  factoryTerraces, Snapshotter, SIM,
+  createWorld, createGround, createKerb, scatterProps, Snapshotter, SIM,
 } from './world';
 import { Truck } from './truck';
 import { Outriggers } from './outriggers';
-import { Crane, NEUTRAL, type CraneInput, type Grabbable } from './crane';
+import { Crane, CRANE, NEUTRAL, type CraneInput, type Grabbable } from './crane';
 import type { DriveInput } from '../input/kumanda';
-import { TASKS, MALZEME_X, type Task } from '../game/tasks';
-import { OutriggerState } from './loadChart';
+import type { Task } from '../game/tasks';
+import { SANAYI, SANAYI_SITESI } from './sanayi';
+import type { KonanYuk, VincBolum } from './vincBolum';
+import { OutriggerState, capacityAt, halatKapasitesi } from './loadChart';
 import type { Gosterge, OyunSahnesi, PanelSatiri, Uyari } from './sahne';
 import { imzaliDerece, almaSatiri, tasimaSatiri } from './sahne';
 import { Ret } from './ret';
@@ -23,31 +24,10 @@ import { M, kumandaAdi } from '../ui/dil';
  * projede her fizik kararı ölçümle alındığı için o ayrışma en pahalı hata olurdu.
  */
 export const SCENE = {
-  factoryX: 62,
-  setupX: 52,
-  /**
-   * Kurulum alanının yarı eni (m) — çizim de, ipucu da BURADAN okuyor.
-   *
-   * Sayı çizimde tek başına duruyordu; oyuncuya yeşil "alandasın" işaretini
-   * verince iki yerde yaşamaya başlayacaktı. Bu projede ayrışan iki kopya
-   * (çizim ile fizik) daha önce teras kotunu kaydırdı; aynı hatayı işaretlerde
-   * tekrarlamanın anlamı yok.
-   */
-  setupYariEn: 5.2,
-  /**
-   * Takoz kamyonu burada durduruyor. 57.2'den öne alındı — kamyon yaklaştıkça
-   * bütün yarıçaplar kısalıyor ve üst katlar erişilebilir oluyor.
-   *
-   * 58.5 DENENDİ ve olmadı: takoz kutusu 58.15–58.85 arasını kaplıyor, yükün
-   * sol kenarı ise 58.35'te. İkisi doğuşta iç içe giriyor, planck da onları
-   * ayırmak için yükü 60 santim ileri fırlatıyordu. Sahne kurulurken çakışma
-   * denetimi (`overlaps`) artık bunu yakalıyor.
-   */
-  kerbX: 57.9,
+  /** Birinci bölümün yerleşimi (bkz. `SANAYI`) — eski okuyucular için. */
+  ...SANAYI,
   /** Bunun üstündeki normal impuls (N·s) çarpma sayılıyor. */
   carpmaEsigiNs: 9000,
-  /** Malzeme alanının merkezi — her görevin yükü buraya geliyor. */
-  malzemeX: MALZEME_X,
 } as const;
 
 /**
@@ -105,16 +85,16 @@ export class Scene implements OyunSahnesi {
    */
   carpma = 0;
 
-  constructor() {
+  constructor(readonly bolum: VincBolum = SANAYI_SITESI) {
     createGround(this.world);
-    createFactoryBody(this.world);
-    createKerb(this.world, SCENE.kerbX);
+    bolum.kur(this.world);
+    createKerb(this.world, bolum.kerbX);
     this.truck = new Truck(this.world, this.snaps);
     this.outriggers = new Outriggers(this.world, this.truck.chassis, this.snaps);
     this.crane = new Crane(this.world, this.truck.chassis, this.snaps);
     this.props = scatterProps(this.world, this.snaps);
 
-    this.spawnLoad(TASKS[0] ?? null);
+    this.spawnLoad(bolum.gorevler[0] ?? null);
 
     assertNoSpawnOverlap(this.world);
 
@@ -138,25 +118,15 @@ export class Scene implements OyunSahnesi {
    * kütlesi farklı; planck'te bir fikstürün şeklini sonradan değiştirmek yok.
    */
   spawnLoad(spec: Task | null): void {
-    if (this.load) this.world.destroyBody(this.load);
+    this.tasindi = false;
+    if (this.bolum.kalici) { this.kaliciYukle(spec); return; }
+    if (this.load) { this.world.destroyBody(this.load); this.snaps.birak(this.load); }
     this.loadSpec = spec;
     if (!spec) {
       this.grabbables = this.props.map((p) => ({ body: p.body, halfWidth: p.hw, halfHeight: p.hh }));
       return;
     }
-    const body = this.world.createDynamicBody({ x: SCENE.malzemeX, y: spec.halfHeight + 0.05 });
-    body.createFixture(new Box(spec.halfWidth, spec.halfHeight), {
-      density: 1, friction: 0.85, restitution: 0.02,
-    });
-    // Atalet momenti kütleyle ölçekleniyor: sabit bırakılınca ağır yük hafif
-    // yükten daha çabuk dönüyordu, ki bu tersine olmalı.
-    body.setMassData({
-      mass: spec.tonnes * 1000,
-      center: { x: 0, y: 0 },
-      I: (spec.tonnes * 1000 * (spec.halfWidth ** 2 + spec.halfHeight ** 2)) / 3,
-    });
-    body.setAngularDamping(0.5);
-    this.snaps.track(body);
+    const body = this.yukGovdesi(spec);
     this.load = body;
     this.grabbables = [
       { body, halfWidth: spec.halfWidth, halfHeight: spec.halfHeight },
@@ -164,19 +134,133 @@ export class Scene implements OyunSahnesi {
     ];
   }
 
-  /** Güncel yükün tanımı — boyutları puanlama ve çizim için gerekiyor. */
-  /** Bölüm 1 — sanayi sitesi. Hedefler binanın terasları. */
-  readonly gorevler = TASKS;
-  /** Vinçin ölçülmüş kalibrasyonu: başsız turda görev başına 139–215 s. */
-  readonly hizEsikleri = { tam: 90, sifir: 240 };
-  private readonly teraslar = factoryTerraces();
-  hedefNoktasi(t: Task): { x: number; y: number } | null {
-    return this.teraslar[t.hedef] ?? null;
+  /** Görevin yükünü doğduğu yerde, dinamik gövde olarak kurar. */
+  private yukGovdesi(t: Task): Body {
+    const body = this.world.createDynamicBody(this.bolum.yukYeri(t));
+    body.createFixture(new Box(t.halfWidth, t.halfHeight), {
+      density: 1, friction: 0.85, restitution: 0.02,
+    });
+    this.kutleyiYaz(body, t);
+    body.setAngularDamping(0.5);
+    this.snaps.track(body);
+    return body;
   }
-  /** Teras geniş: kör kaldırmada iki metrelik pencere adil. */
-  yerlestirmeToleransi(): { x: number; y: number } { return { x: 2.0, y: 0.4 }; }
+
+  /**
+   * Atalet momenti kütleyle ölçekleniyor: sabit bırakılınca ağır yük hafif
+   * yükten daha çabuk dönüyordu, ki bu tersine olmalı. `setType` kütleyi
+   * sıfırladığı için statikten dinamiğe dönen yükte yeniden yazılıyor.
+   */
+  private kutleyiYaz(body: Body, t: Task): void {
+    body.setMassData({
+      mass: t.tonnes * 1000,
+      center: { x: 0, y: 0 },
+      I: (t.tonnes * 1000 * (t.halfWidth ** 2 + t.halfHeight ** 2)) / 3,
+    });
+  }
+
+  /** Sırası gelmemiş, kasada bekleyen yükler — yalnız kalıcı bölümde. */
+  private readonly bekleyenler = new Map<Task, Body>();
+  /** Yerine konmuş yükler — görev kodu → gövde. Yalnız kalıcı bölümde. */
+  private readonly konanGovdeler = new Map<string, { task: Task; body: Body }>();
+
+  /**
+   * Kalıcı bölümde yük akışı: bütün yükler baştan sahnede.
+   *
+   * Bölüm başında her görevin yükü kendi yerinde STATİK olarak kuruluyor —
+   * kamyon beş yükle geliyor ve sırası gelmemiş yük kasada kıpırdamadan
+   * duruyor, ama katı: sallanan yük ona çarparsa çarpma yazıyor. Sırası
+   * gelen dinamiğe dönüyor; yerine konan yeniden statik oluyor ve orada
+   * kalıyor, bir sonraki onun üstüne istiflenebiliyor.
+   */
+  private kaliciYukle(spec: Task | null): void {
+    const bolumBasi = spec !== null && spec === this.bolum.gorevler[0];
+    if (bolumBasi) {
+      const yok = new Set<Body>([
+        ...this.bekleyenler.values(),
+        ...[...this.konanGovdeler.values()].map((k) => k.body),
+      ]);
+      if (this.load) yok.add(this.load);
+      for (const b of yok) { this.world.destroyBody(b); this.snaps.birak(b); }
+      this.bekleyenler.clear();
+      this.konanGovdeler.clear();
+      for (const t of this.bolum.gorevler) {
+        const b = this.yukGovdesi(t);
+        b.setType('static');
+        this.bekleyenler.set(t, b);
+      }
+    } else if (this.load && this.loadSpec) {
+      this.load.setType('static');
+      this.konanGovdeler.set(this.loadSpec.kod, { task: this.loadSpec, body: this.load });
+    }
+    this.loadSpec = spec;
+    const props = this.props.map((p) => ({ body: p.body, halfWidth: p.hw, halfHeight: p.hh }));
+    const body = spec ? this.bekleyenler.get(spec) : undefined;
+    if (!spec || !body) { this.grabbables = props; return; }
+    this.bekleyenler.delete(spec);
+    body.setType('dynamic');
+    this.kutleyiYaz(body, spec);
+    body.setAngularDamping(0.5);
+    this.load = body;
+    this.grabbables = [
+      { body, halfWidth: spec.halfWidth, halfHeight: spec.halfHeight }, ...props,
+    ];
+  }
+
+  /** Güncel yük bir kez olsun kancada kalktı mı? */
+  private tasindi = false;
+
+  /**
+   * İşaret şu an yükün KENDİSİNİ mi gösteriyor?
+   *
+   * Şantiyede yük kasanın beş yerinden birinde ve birinci bölümdeki gibi
+   * hep aynı noktada değil. Forklift rampasındaki kural: işaret her an
+   * "şimdi nereye" sorusunun cevabı — önce yük, kalktıktan sonra hedef.
+   */
+  get isaretKaynakta(): boolean {
+    return this.bolum.kalici && !this.tasindi && this.loadSpec !== null;
+  }
+
+  isaretNoktasi(t: Task): { x: number; y: number } | null {
+    if (this.isaretKaynakta && t === this.loadSpec) {
+      const p = this.load.getPosition();
+      return { x: p.x, y: p.y - t.halfHeight };
+    }
+    return this.hedefNoktasi(t);
+  }
+
+  yeniYukYeri(): string | null {
+    return this.bolum.kalici && this.loadSpec ? M.vinc.yer.kasa : null;
+  }
+
+  /** Güncel yük DIŞINDAKİ yükler — kasada bekleyenler ve konanlar. Çizim için. */
+  get digerYukler(): Array<{ task: Task; body: Body }> {
+    return [
+      ...[...this.bekleyenler].map(([task, body]) => ({ task, body })),
+      ...this.konanGovdeler.values(),
+    ];
+  }
+
+  /** Konmuş yüklerin GERÇEK yerleri — istif hedefi bunlardan hesaplanıyor. */
+  private get konanlar(): ReadonlyMap<string, KonanYuk> {
+    const m = new Map<string, KonanYuk>();
+    for (const [kod, { task, body }] of this.konanGovdeler) {
+      const p = body.getPosition();
+      m.set(kod, { x: p.x, y: p.y, hw: task.halfWidth, hh: task.halfHeight });
+    }
+    return m;
+  }
+
+  get gorevler(): readonly Task[] { return this.bolum.gorevler; }
+  get hizEsikleri(): { tam: number; sifir: number } { return this.bolum.hizEsikleri; }
+  hedefNoktasi(t: Task): { x: number; y: number } | null {
+    return this.bolum.hedefNoktasi(t, this.konanlar);
+  }
+  yerlestirmeToleransi(t: Task): { x: number; y: number } {
+    return this.bolum.yerlestirmeToleransi(t);
+  }
   get sasiHizi(): number { return this.truck.chassis.getLinearVelocity().x; }
-  readonly kameraOlcegi = { yakin: 30, uzak: 15 };
+  get kameraOlcegi(): { yakin: number; uzak: number } { return this.bolum.kameraOlcegi; }
   /** Vinçte 8° zaten kaza: ayaklar açıkken şasi hiç eğilmemeli. */
   get devrildiMi(): boolean { return Math.abs(this.tiltDeg) > 8; }
 
@@ -213,7 +297,16 @@ export class Scene implements OyunSahnesi {
 
   odakNoktalari(): Array<{ x: number; y: number }> {
     const c = this.truck.chassis.getPosition();
-    return [{ x: c.x, y: c.y + 2.2 }, this.crane.tipWorld, this.yukNoktasi];
+    const noktalar = [{ x: c.x, y: c.y + 2.2 }, this.crane.tipWorld, this.yukNoktasi];
+    // Kasadaki yük kadrajda olsun: kamyon çitin ardında, vince 25 metre.
+    // Tepesi DE tabanı da: yalnız tepeye bakınca yükün alt yarısı ekranın
+    // altındaki tuş şeridinin arkasına düşüyordu (masaüstünde ölçüldü).
+    if (this.isaretKaynakta) {
+      const p = this.load.getPosition();
+      const hh = this.loadSpec?.halfHeight ?? 0.5;
+      noktalar.push({ x: p.x, y: p.y + hh + 0.8 }, { x: p.x, y: p.y - hh - 0.6 });
+    }
+    return noktalar;
   }
 
   private get tabloDisi(): boolean { return this.crane.lmi.capacityTonnes <= 0; }
@@ -345,7 +438,9 @@ export class Scene implements OyunSahnesi {
         bas: u.asiriBas,
         govde: u.asiriGovde(r.loadTonnes.toFixed(2), this.crane.radiusM.toFixed(1),
           r.capacityTonnes.toFixed(2)),
-        cozum: kilitli ? u.asiriCozumKilitli : u.asiriCozum,
+        // Uçtaki yükte bomu kaldırmak yükü kasadan koparamaz; orada tek
+        // çare halat katı (klavyede).
+        cozum: this.katOnerisi() ?? (kilitli ? u.asiriCozumKilitli : u.asiriCozum),
       };
     }
     if (r.zone === 'amber') {
@@ -354,10 +449,32 @@ export class Scene implements OyunSahnesi {
         bas: u.yakinBas,
         govde: u.yakinGovde(r.loadTonnes.toFixed(2), r.capacityTonnes.toFixed(2),
           this.crane.radiusM.toFixed(1)),
-        cozum: '',
+        cozum: this.katOnerisi() ?? '',
       };
     }
     return null;
+  }
+
+  /**
+   * Tek kat halata geçmek bu yükte ibreyi anlamlı düşürüyor mu? Düşürüyorsa
+   * öneri cümlesi — yalnız klavyede, çünkü telefonda halat katı düğmesi yok.
+   *
+   * Karşılaştırma tablo ile halat sınırının KÜÇÜĞÜNE karşı: tek kat 2 tonda
+   * duruyor, ağır yükte tek kat önermek yalan olurdu.
+   */
+  private katOnerisi(): string | null {
+    const k = kumandaAdi();
+    const t = this.loadTask;
+    if (!k.kat || !t || !this.crane.hasLoad || this.crane.katSayisi === 1) return null;
+    const blokSimdi = CRANE.hookTonnesByKat[this.crane.katSayisi] ?? CRANE.hookTonnes;
+    const blokTek = CRANE.hookTonnesByKat[1] ?? blokSimdi;
+    const sinir = Math.min(capacityAt(this.crane.radiusM, this.outriggers.state),
+      halatKapasitesi(1));
+    const yeni = (t.tonnes + blokTek) / sinir;
+    const simdi = this.crane.lmi.percent / 100;
+    if (!(yeni < 0.9 && yeni < simdi - 0.1)) return null;
+    return M.vinc.uyari.katOnerisi(((blokSimdi - blokTek) * 1000).toFixed(0),
+      (yeni * 100).toFixed(0), k.kat);
   }
 
   ipucu(): { metin: string; mod: 'drive' | 'crane' | 'ready' } {
@@ -369,7 +486,7 @@ export class Scene implements OyunSahnesi {
       // dururken de aynen duruyor ve oyuncu ayaklara ne zaman basacağını
       // tahmin ediyordu. Pencere çizilen sarı alanın kendisi.
       const x = this.truck.chassis.getPosition().x;
-      if (Math.abs(x - SCENE.setupX) <= SCENE.setupYariEn) {
+      if (Math.abs(x - this.bolum.setupX) <= this.bolum.setupYariEn) {
         return { metin: i.alanda(k), mod: 'ready' };
       }
       return { metin: i.surus(k), mod: 'drive' };
@@ -388,9 +505,14 @@ export class Scene implements OyunSahnesi {
       const t = this.loadTask;
       const h = t ? this.hedefNoktasi(t) : null;
       const yuk = this.load.getPosition();
+      // Bölümün kendi engeli (şantiye çiti) genel yön satırından önce.
+      const engel = t ? this.bolum.tasimaIpucu?.({
+        x: yuk.x, y: yuk.y, yariEn: t.halfWidth, yariBoy: t.halfHeight,
+      }) : null;
+      if (engel) return { metin: engel, mod: 'crane' };
       const satir = t && h
         ? tasimaSatiri({ x: yuk.x, y: yuk.y - t.halfHeight }, h,
-          this.yerlestirmeToleransi())
+          this.yerlestirmeToleransi(t))
         : null;
       return { metin: satir ?? i.yukBagli(k), mod: 'crane' };
     }
@@ -521,6 +643,7 @@ export class Scene implements OyunSahnesi {
 
     // Tepki kuvveti ancak çözümden sonra tanımlı.
     this.crane.sampleLmi(dt, this.outriggers.state);
+    if (this.crane.hasLoad) this.tasindi = true;
 
     // Joint yaratma/yok etme adımın DIŞINDA — planck world.step() içinde kilitli.
     this.crane.flushJointQueue(this.grabbables);
