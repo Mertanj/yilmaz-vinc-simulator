@@ -1,4 +1,5 @@
-import { araclar, type AracTanimi } from '../game/araclar';
+import { araclar, bolumAdi, type AracTanimi } from '../game/araclar';
+import { acikBolumSayisi, bolumAnahtari } from '../game/ilerleme';
 import { enIyiOku, turEnIyiOku } from '../game/enIyi';
 import { sureyiYaz } from './sure';
 import { DILLER, M, dilSec, sozluk, type Dil } from './dil';
@@ -32,8 +33,10 @@ export function secimiYaz(id: string): void {
   yaz(ANAHTAR, id);
 }
 
-/** Oyuncunun açılışta verdiği karar: bir makine ya da Tam Tur. */
-export type Secim = { tur: false; arac: AracTanimi } | { tur: true };
+/** Oyuncunun açılışta verdiği karar: bir makinenin bir bölümü ya da Tam Tur. */
+export type Secim =
+  | { tur: false; arac: AracTanimi; bolumIndeksi: number }
+  | { tur: true };
 
 /** Kartları basar ve oyuncu birine basana kadar bekler. */
 export function aracSec(host: HTMLElement): Promise<Secim> {
@@ -57,14 +60,25 @@ export function aracSec(host: HTMLElement): Promise<Secim> {
           ciz();
         });
       }
-      for (const el of Array.from(host.querySelectorAll<HTMLButtonElement>('button.kart'))) {
-        el.addEventListener('click', () => {
-          const secilen = araclar().find((a) => a.id === el.dataset['id']);
-          if (!secilen?.hazir) return;
-          secimiYaz(secilen.id);
-          host.hidden = true;
-          cozumle({ tur: false, arac: secilen });
-        });
+      // Kart da bölüm çipi de aynı şeyi yapıyor: bir makinenin bir bölümünü
+      // başlatmak. Kart EN SON açık bölümü, çip kendi bölümünü başlatıyor.
+      const sec = (el: HTMLButtonElement): void => {
+        const secilen = araclar().find((a) => a.id === el.dataset['id']);
+        if (!secilen?.hazir) return;
+        const toplam = secilen.bolumler.length;
+        const acik = acikBolumSayisi(secilen.id, secilen.bolumler.map((b) => b.id));
+        const istenen = Number(el.dataset['bolum'] ?? acik - 1);
+        // Kilitli bölüm düğmesi zaten `disabled`; yine de burada da sınır
+        // var — el ile kurcalanmış bir DOM oyuncuyu kilidin arkasına geçirmesin.
+        const bolumIndeksi = Number.isInteger(istenen)
+          ? Math.max(0, Math.min(istenen, acik - 1, toplam - 1)) : acik - 1;
+        secimiYaz(secilen.id);
+        host.hidden = true;
+        cozumle({ tur: false, arac: secilen, bolumIndeksi });
+      };
+      for (const el of Array.from(
+        host.querySelectorAll<HTMLButtonElement>('button.kart, button.bolum'))) {
+        el.addEventListener('click', () => { sec(el); });
       }
       host.querySelector<HTMLButtonElement>('button.tam-tur')
         ?.addEventListener('click', () => {
@@ -85,7 +99,7 @@ function govde(): string {
         <h1>${M.secim.baslik}</h1>
         <p>${M.secim.soru}</p>
       </header>
-      <div class="kartlar">${araclar().map((a) => kart(a, a.id === onceki)).join('')}</div>
+      <div class="kartlar">${araclar().map((a) => kartKabi(a, a.id === onceki)).join('')}</div>
       ${tamTurSeridi()}
       ${kipSecimi()}
       <footer>${M.secim.altBilgi}</footer>
@@ -175,9 +189,11 @@ function dilDugmesi(d: Dil): string {
  * vaat, üstelik kartı da uzatıyor. Satırın olmaması zaten "burayı henüz
  * denemedin" demek.
  */
-function enIyiSatiri(a: AracTanimi): string {
+function enIyiSatiri(a: AracTanimi, bolumIndeksi: number): string {
   if (!a.hazir) return '';
-  const k = enIyiOku(a.id);
+  const b = a.bolumler[bolumIndeksi];
+  if (!b) return '';
+  const k = enIyiOku(bolumAnahtari({ aracId: a.id, bolumId: b.id, indeks: bolumIndeksi }));
   if (!k) return '';
   return `<div class="en-iyi" data-not="${k.not}">`
     + `${M.secim.enIyi(String(k.puan), k.not)}`
@@ -195,11 +211,31 @@ function klavyeNotu(a: AracTanimi): string {
   return `<div class="klavye">⌨ ${M.secim.klavyeGerek}</div>`;
 }
 
-function kart(a: AracTanimi, sonKullanilan: boolean): string {
+/**
+ * Kart ve altındaki bölüm şeridi.
+ *
+ * Bölüm çipleri kartın İÇİNDE değil altında, çünkü kart kendisi bir düğme
+ * ve düğmenin içine düğme konamıyor. Kart EN SON açık bölümü başlatıyor —
+ * oyuncunun en sık yaptığı şey, kaldığı yerden devam etmek. Tek bölümlü
+ * makinede şerit hiç çizilmiyor; seçilecek bir şey yokken seçenek göstermek
+ * yalnız kalabalık.
+ */
+function kartKabi(a: AracTanimi, sonKullanilan: boolean): string {
+  const idler = a.bolumler.map((b) => b.id);
+  const acik = a.hazir ? acikBolumSayisi(a.id, idler) : 0;
+  const oynanacak = Math.max(0, acik - 1);
+  return `<div class="kart-kabi">${kart(a, sonKullanilan, oynanacak)}`
+    + `${bolumSeridi(a, acik)}</div>`;
+}
+
+function kart(a: AracTanimi, sonKullanilan: boolean, bolumIndeksi: number): string {
   const noktalar = [1, 2, 3]
     .map((n) => `<i${n <= a.seviye ? ' class="dolu"' : ''}></i>`).join('');
+  const bolum = a.bolumler[bolumIndeksi];
+  const cokBolumlu = a.bolumler.length > 1;
   return `
-    <button class="kart" data-id="${a.id}"${a.hazir ? '' : ' disabled'}>
+    <button class="kart" data-id="${a.id}" data-bolum="${bolumIndeksi}"${
+      a.hazir ? '' : ' disabled'}>
       ${a.hazir ? '' : `<span class="rozet">${M.secim.yakinda}</span>`}
       ${sonKullanilan ? `<span class="rozet son">${M.secim.sonOynadigin}</span>` : ''}
       <div class="simge">${a.simge}</div>
@@ -210,6 +246,35 @@ function kart(a: AracTanimi, sonKullanilan: boolean): string {
       <div class="zorluk"><span>${M.secim.zorluk}</span>
         <div class="noktalar">${noktalar}</div></div>
       <div class="ipucu">${a.zorluk}</div>
-      ${enIyiSatiri(a)}
+      ${cokBolumlu && bolum
+        ? `<div class="oynanacak">${M.secim.oynanacak(bolumAdi(bolum))}</div>` : ''}
+      ${enIyiSatiri(a, bolumIndeksi)}
     </button>`;
+}
+
+/** Makinenin bölümleri sırayla: bitti ✓, açık ▸, kilitli 🔒. */
+function bolumSeridi(a: AracTanimi, acik: number): string {
+  if (!a.hazir || a.bolumler.length < 2) return '';
+  const cipler = a.bolumler.map((b, i) => {
+    const kayit = enIyiOku(bolumAnahtari({ aracId: a.id, bolumId: b.id, indeks: i }));
+    const no = M.secim.bolumNo(i + 1);
+    if (i >= acik) {
+      const onceki = a.bolumler[i - 1];
+      const neden = onceki ? M.secim.acilma(bolumAdi(onceki)) : M.secim.kilitli;
+      return `<button class="bolum kilitli" disabled title="${neden}">`
+        + `<span class="isaret" aria-hidden="true">🔒</span>`
+        + `<span class="no">${no}</span><span class="ad">${bolumAdi(b)}</span>`
+        + `<span class="alt">${neden}</span></button>`;
+    }
+    const durum = kayit ? 'bitti' : 'acik';
+    return `<button class="bolum ${durum}" data-id="${a.id}" data-bolum="${i}">`
+      + `<span class="isaret" aria-hidden="true">${kayit ? '✓' : '▸'}</span>`
+      + `<span class="no">${no}</span><span class="ad">${bolumAdi(b)}</span>`
+      + (kayit
+        ? `<span class="alt" data-not="${kayit.not}">${
+          M.secim.enIyi(String(kayit.puan), kayit.not)}</span>`
+        : '')
+      + '</button>';
+  }).join('');
+  return `<div class="bolumler">${cipler}</div>`;
 }

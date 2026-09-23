@@ -8,6 +8,9 @@ import { aracSec } from './ui/secim';
 import { enIyiKaydet, enIyiOku, turEnIyiKaydet, turEnIyiOku } from './game/enIyi';
 import { aracBul, type AracTanimi } from './game/araclar';
 import {
+  acikBolumSayisi, bolumAnahtari, rotaAnahtari, type BolumKimligi,
+} from './game/ilerleme';
+import {
   M, baslangicDili, dilSec, gorevAdi, gorevBrifi, kumandaModunuSec,
 } from './ui/dil';
 import { dokunmatikKur, dokunmatikVar } from './ui/dokunmatik';
@@ -116,9 +119,9 @@ async function boot(): Promise<void> {
     }
     const arac = secim.arac;
     // Hazır olmayan kart zaten `disabled`; yine de oyunu düşürmüyoruz.
-    if (!arac.kur) continue;
+    if (!arac.bolumler[secim.bolumIndeksi]) continue;
     keys.sifirla();
-    await oyna(stage, keys, arac);
+    await oyna(stage, keys, arac, secim.bolumIndeksi);
     // Döngü durdu; süregelen sesleri indir, yoksa seçim ekranında motor çalar.
     ses.bosta();
     temizle(stage);
@@ -144,7 +147,7 @@ async function tamTuruOyna(stage: Stage, keys: Kumanda, ses: Ses): Promise<void>
     const sonuc = await birTur(stage, keys, ses);
     if (sonuc === 'cik') return;
     if (sonuc === 'yeniden') continue;
-    await turSonucuGoster(sonuc);
+    await turSonucuGoster(sonuc.bacaklar, sonuc.rota);
     return;
   }
 }
@@ -152,22 +155,25 @@ async function tamTuruOyna(stage: Stage, keys: Kumanda, ses: Ses): Promise<void>
 /** Bir Tam Tur denemesi: ya biter, ya devrilir (yeniden), ya terk edilir. */
 async function birTur(
   stage: Stage, keys: Kumanda, ses: Ses,
-): Promise<Bacak[] | 'yeniden' | 'cik'> {
-  const rekor = turEnIyiOku();
+): Promise<{ bacaklar: Bacak[]; rota: string | undefined } | 'yeniden' | 'cik'> {
+  const rota = turRotasi();
+  const rotaKey = rotaAnahtari(rota.map((a) => a.kimlik));
+  const rekor = turEnIyiOku(rotaKey);
   const bacaklar: Bacak[] = [];
   let toplam = 0;
 
-  for (let i = 0; i < TUR_SIRASI.length; i++) {
-    const arac = aracBul(TUR_SIRASI[i] ?? null);
-    if (!arac.kur) continue;
-    const sonrakiId = TUR_SIRASI[i + 1];
+  for (let i = 0; i < rota.length; i++) {
+    const ayak = rota[i];
+    if (!ayak) continue;
+    const { arac, kimlik } = ayak;
+    const sonraki = rota[i + 1];
     keys.sifirla();
-    const r = await oyna(stage, keys, arac, {
+    const r = await oyna(stage, keys, arac, kimlik.indeks, {
       sira: i + 1,
-      toplam: TUR_SIRASI.length,
+      toplam: rota.length,
       oncekiToplam: toplam,
       rekorBitisler: rekor.hiz?.bitisler ?? [],
-      sonraki: sonrakiId ? aracBul(sonrakiId).ad : '',
+      sonraki: sonraki ? sonraki.arac.ad : '',
     });
     ses.bosta();
     temizle(stage);
@@ -181,7 +187,28 @@ async function birTur(
     bacaklar.push(bacakYap(arac.id, r.r, r.gorevSayisi, toplam));
     toplam += r.r.score.sure;
   }
-  return bacaklar;
+  return { bacaklar, rota: rotaKey };
+}
+
+/**
+ * Tam Tur rotası: `TUR_SIRASI`ndaki her makinenin EN SON açık bölümü.
+ *
+ * Sahadan gelen karar sırayla açılmaydı; tur da oyuncunun ulaştığı yeri
+ * koşuyor. Rotası değişen turun rekoru da ayrı (bkz. `rotaAnahtari`) —
+ * farklı bölümlerden geçen iki turun süresi karşılaştırılamaz.
+ */
+function turRotasi(): Array<{ arac: AracTanimi; kimlik: BolumKimligi }> {
+  const rota: Array<{ arac: AracTanimi; kimlik: BolumKimligi }> = [];
+  for (const id of TUR_SIRASI) {
+    const arac = aracBul(id);
+    if (arac.bolumler.length === 0) continue;
+    const idler = arac.bolumler.map((b) => b.id);
+    const indeks = acikBolumSayisi(arac.id, idler) - 1;
+    const bolum = arac.bolumler[indeks];
+    if (!bolum) continue;
+    rota.push({ arac, kimlik: { aracId: arac.id, bolumId: bolum.id, indeks } });
+  }
+  return rota;
 }
 
 /**
@@ -249,9 +276,9 @@ function escVeyaTus(payMs: number): Promise<'yeniden' | 'cik'> {
  * ayak dökümü ise rekor tura karşı nerede kazanıp nerede kaybettiğini
  * gösteriyor — bölüm içindeki ara süre tablosunun bir üst katmanı.
  */
-function turSonucuGoster(bacaklar: Bacak[]): Promise<void> {
+function turSonucuGoster(bacaklar: Bacak[], rota: string | undefined): Promise<void> {
   const s = turuDegerlendir(bacaklar);
-  const kirilan = turEnIyiKaydet(s);
+  const kirilan = turEnIyiKaydet(s, rota);
   const el = document.getElementById('sonuc');
   const ic = document.getElementById('sonuc-ic');
   if (ic) {
@@ -356,9 +383,20 @@ interface TurBaglami {
  * turun terk edildiği anlamına geliyor.
  */
 function oyna(
-  stage: Stage, keys: Kumanda, arac: AracTanimi, tur: TurBaglami | null = null,
+  stage: Stage, keys: Kumanda, arac: AracTanimi, bolumIndeksi: number,
+  tur: TurBaglami | null = null,
 ): Promise<AyakSonucu | typeof YENIDEN | null> {
-  const { sahne: scene, gorunum, pad: padKaynagi } = arac.kur!();
+  const bolum = arac.bolumler[bolumIndeksi] ?? arac.bolumler[0];
+  if (!bolum) throw new Error(`${arac.id}: bölüm yok`);
+  const { sahne: scene, gorunum, pad: padKaynagi } = bolum.kur();
+  /**
+   * Bu bölümün rekor anahtarı. İlk bölüm eski, araç başına anahtarı
+   * koruyor (gerekçesi `bolumAnahtari`nda).
+   */
+  const kayitAnahtari = bolumAnahtari({
+    aracId: arac.id, bolumId: bolum.id,
+    indeks: arac.bolumler.indexOf(bolum),
+  });
   const mission = new Mission(scene);
 
   document.title = `${arac.ad} · Yılmaz Vinç`;
@@ -391,7 +429,7 @@ function oyna(
    * Tur BAŞINDA okunuyor, sonunda değil: `enIyiKaydet` bölüm bitince yazıyor
    * ve o andan sonra okumak turu kendisiyle karşılaştırmak olurdu.
    */
-  const rekor = enIyiOku(arac.id);
+  const rekor = enIyiOku(kayitAnahtari);
 
   // Kipi sahne kurulur kurulmaz uygula: oyuncunun seçimi fiziğin ilk
   // adımından önce yerinde olmalı.
@@ -902,7 +940,7 @@ function oyna(
         // **Bölüm kaydı her ayakta yazılıyor**, sonuncusunda da: aynı bölüm,
         // aynı ölçü. Yalnız `elDegistir` içinde yazılıyordu ve son makine
         // Tam Tur'da hiç rekor kıramıyordu.
-        enIyiKaydet(arac.id, r);
+        enIyiKaydet(kayitAnahtari, r);
         // **Devrilen ayak "TAMAM" DEĞİL.** Oyun testinde makine burnunun
         // üstünde yatarken önce el değiştirme kartı çıkıyor ve "bu ayak
         // TAMAM · 0/5 görev · sıradaki dirsekli vinç · devam etmek için bir
@@ -925,7 +963,7 @@ function oyna(
       if (sonucYazildi || !hud.sonuc || !hud.sonucIc) return;
       sonucYazildi = true;
       // Derece bölüm BİTİNCE yazılıyor; yarıda Esc'lenen tur kayda girmiyor.
-      const { rekor, onceki } = enIyiKaydet(arac.id, r);
+      const { rekor, onceki } = enIyiKaydet(kayitAnahtari, r);
       const s = r.score;
       const n = M.sonuc;
       const ortSapma = s.sapmalar.length

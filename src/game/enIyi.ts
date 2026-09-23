@@ -111,6 +111,16 @@ export interface TurRekorlari {
 
 const TUR_HIZ = 'yv.enIyi.tamtur.hiz';
 const TUR_PUAN = 'yv.enIyi.tamtur.puan';
+
+/**
+ * Rotanın iki anahtarı. `rota` verilmezse hepsi-birinci-bölüm rotası:
+ * bölümler gelmeden önceki anahtarlar aynen (bkz. `rotaAnahtari`).
+ */
+function turAnahtarlari(rota?: string): { hiz: string; puan: string } {
+  return rota === undefined
+    ? { hiz: TUR_HIZ, puan: TUR_PUAN }
+    : { hiz: `${TUR_HIZ}.${rota}`, puan: `${TUR_PUAN}.${rota}` };
+}
 /** Tek rekorlu ilk sürümün anahtarı — bir kez okunup ikisine de taşınıyor. */
 const TUR_ESKI = 'yv.enIyi.tamtur';
 
@@ -131,13 +141,15 @@ function turOku(anahtar: string): TurEnIyi | null {
   };
 }
 
-export function turEnIyiOku(): TurRekorlari {
-  const eski = turOku(TUR_ESKI);
+export function turEnIyiOku(rota?: string): TurRekorlari {
+  const a = turAnahtarlari(rota);
   // Tek rekorlu sürümden kalan kayıt iki kategoriye de tohum oluyor: oyuncunun
   // koştuğu turu silmek, kaydı şekil değiştirdi diye cezalandırmak olurdu.
+  // O kayıt yalnız hepsi-birinci-bölüm rotasında koşulmuş olabilir.
+  const eski = rota === undefined ? turOku(TUR_ESKI) : null;
   return {
-    hiz: turOku(TUR_HIZ) ?? eski,
-    puan: turOku(TUR_PUAN) ?? eski,
+    hiz: turOku(a.hiz) ?? eski,
+    puan: turOku(a.puan) ?? eski,
   };
 }
 
@@ -157,14 +169,15 @@ function yaz1(anahtar: string, s: TurSonucu): void {
  * girmemeli, aynı gerekçeyle yarıda bırakılan bölüm de girmiyor.
  */
 export function turEnIyiKaydet(
-  s: TurSonucu,
+  s: TurSonucu, rota?: string,
 ): { hizRekoru: boolean; puanRekoru: boolean; onceki: TurRekorlari } {
-  const onceki = turEnIyiOku();
+  const onceki = turEnIyiOku(rota);
+  const a = turAnahtarlari(rota);
   const tamKadro = s.gorevSayisi > 0 && s.tamamlanan === s.gorevSayisi;
   if (!tamKadro) return { hizRekoru: false, puanRekoru: false, onceki };
   const hizRekoru = onceki.hiz === null || s.sure < onceki.hiz.sure;
   const puanRekoru = onceki.puan === null || s.puan > onceki.puan.puan;
-  if (hizRekoru) yaz1(TUR_HIZ, s);
-  if (puanRekoru) yaz1(TUR_PUAN, s);
+  if (hizRekoru) yaz1(a.hiz, s);
+  if (puanRekoru) yaz1(a.puan, s);
   return { hizRekoru, puanRekoru, onceki };
 }

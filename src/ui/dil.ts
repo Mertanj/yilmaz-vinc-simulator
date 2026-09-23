@@ -68,7 +68,22 @@ export interface Metinler {
     kipBaslik: string;
     kipTemel: string; kipTemelAciklama: string;
     kipTam: string; kipTamAciklama: string;
+    /**
+     * Bölüm şeridi — kartın altında, makinenin bölümleri sırayla.
+     *
+     * Sahadan gelen karar: *"sırayla açılsın."* Kilitli bölüm görünüyor ama
+     * basılamıyor; oyuncu neyin geleceğini bilsin, neyi açacağını görsün.
+     */
+    bolumNo: (n: number) => string;
+    kilitli: string;
+    /** Kilitli bölümün açıklaması: hangisini bitirince açılıyor. */
+    acilma: (onceki: string) => string;
+    /** Kart butonunun altındaki satır: basınca hangi bölüm oynanacak. */
+    oynanacak: (bolum: string) => string;
   };
+
+  /** Bölüm adları — bölüm kimliğiyle; kimlik kayıt anahtarında da geçiyor. */
+  bolumAdi: Record<string, string>;
 
   /** Ekran üstü kumandanın düğme adları. */
   dokunma: {
@@ -354,6 +369,16 @@ const TR: Metinler = {
     zorluk: 'zorluk', yakinda: 'yakında', sonOynadigin: 'son oynadığın',
     enIyi: (puan, not_) => `en iyi ${puan} puan · not ${not_}`,
     klavyeGerek: 'klavye gerekir',
+    bolumNo: (n) => `${n}. bölüm`,
+    kilitli: 'kilitli',
+    acilma: (onceki) => `${onceki} bitince açılır`,
+    oynanacak: (bolum) => `▸ ${bolum}`,
+  },
+  bolumAdi: {
+    'depo': 'Sevkiyat koridoru',
+    'rampa': 'Sevkiyat rampası',
+    'sanayi': 'Sanayi sitesi',
+    'dirsekli-dar-sokak': 'Dar sokak',
   },
   dokunma: {
     ileri: 'ileri', geri: 'geri', fren: 'fren',
@@ -691,6 +716,16 @@ const EN: Metinler = {
     kipTam: 'Advanced',
     kipTamAciklama: 'You work the rope yourself — like the real machine, you'
       + ' pay out while you telescope.',
+    bolumNo: (n) => `level ${n}`,
+    kilitli: 'locked',
+    acilma: (onceki) => `unlocks after ${onceki}`,
+    oynanacak: (bolum) => `▸ ${bolum}`,
+  },
+  bolumAdi: {
+    'depo': 'Despatch aisle',
+    'rampa': 'Loading dock',
+    'sanayi': 'Industrial estate',
+    'dirsekli-dar-sokak': 'Narrow street',
   },
   dokunma: {
     ileri: 'forward', geri: 'reverse', fren: 'brake',

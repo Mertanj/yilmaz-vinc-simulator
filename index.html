@@ -677,6 +677,39 @@
     #secim h1 { font-size: 30px; }
     #secim header { margin-bottom: 14px; }
   }
+  /* --- kart + bölüm şeridi ---
+     Kart bir düğme ve düğmenin içine düğme konamıyor; bölüm çipleri o yüzden
+     kartın ALTINDA, ortak bir kabın içinde. Kap sütun: kart esniyor, şerit
+     altta — aynı satırdaki kartlar eşit boyda kalıyor. */
+  #secim .kart-kabi { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  #secim .kart-kabi > .kart { flex: 1 1 auto; width: 100%; }
+  #secim .oynanacak {
+    margin-top: 9px; font-size: 12px; font-weight: 600; color: #E8A62C;
+    letter-spacing: 0.02em;
+  }
+  #secim .bolumler { display: flex; flex-direction: column; gap: 5px; }
+  #secim button.bolum {
+    display: grid; grid-template-columns: 18px auto 1fr; align-items: baseline;
+    column-gap: 8px; row-gap: 1px; text-align: left; cursor: pointer;
+    font: inherit; font-size: 12px; color: #C7D1D6;
+    background: #141A1F; border: 1px solid #262F36; border-radius: 8px;
+    padding: 7px 11px;
+  }
+  #secim button.bolum:hover:not([disabled]) { border-color: #E8A62C; background: #1A2228; }
+  #secim button.bolum:focus-visible { outline: 2px solid #E8A62C; outline-offset: 2px; }
+  #secim button.bolum .isaret { color: #E8A62C; font-weight: 700; }
+  #secim button.bolum.bitti .isaret { color: #5FB07C; }
+  #secim button.bolum .no { color: #8E9BA2; font-size: 11px; white-space: nowrap; }
+  #secim button.bolum .ad { font-weight: 600; color: #E4E9EB; }
+  #secim button.bolum .alt {
+    grid-column: 2 / -1; font-size: 11px; color: #7C878E;
+  }
+  #secim button.bolum .alt[data-not="A"] { color: #5FB07C; }
+  #secim button.bolum .alt[data-not="B"] { color: #9FC46B; }
+  #secim button.bolum .alt[data-not="C"] { color: #E8A62C; }
+  #secim button.bolum.kilitli { cursor: not-allowed; opacity: 0.55; }
+  #secim button.bolum.kilitli .ad { color: #9AA5AB; }
+
   #secim .kart {
     position: relative; text-align: left; cursor: pointer;
     background: #161D23; border: 1px solid #2A343C; border-radius: 12px;

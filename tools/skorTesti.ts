@@ -10,6 +10,9 @@
 import { enIyiOku, enIyiKaydet, turEnIyiOku, turEnIyiKaydet } from '../src/game/enIyi';
 import { turuDegerlendir, type Bacak } from '../src/game/tamTur';
 import { turSonucuHtml } from '../src/ui/turSonucHtml';
+import {
+  acikBolumSayisi, bolumAnahtari, rotaAnahtari, type BolumKimligi,
+} from '../src/game/ilerleme';
 import { M } from '../src/ui/dil';
 import { farkiYaz, sureyiYaz } from '../src/ui/sure';
 import type { Result } from '../src/game/mission';
@@ -282,3 +285,47 @@ icermez('yarim turda TAM TUR BITTI YOK', yarimHtml, M.tur.bitti);
 icerir('yarim turda gorev sayisi eksik', yarimHtml, '>11 / 15<');
 icermez('yarim turda usta rozeti YOK', yarimHtml, 'class="rozet"');
 icerir('temiz tam kadroda usta rozeti VAR', ilkHtml, 'class="rozet"');
+
+// --- BOLUM ILERLEMESI ---
+//
+// Sahadan gelen karar: "sirayla acilsin." Ilerleme ayri bir kayit degil,
+// rekorlardan TURETILIYOR — iki kaynak birbirinden kopamiyor.
+esit('ilk bolumun anahtari ESKI arac anahtari',
+  bolumAnahtari({ aracId: 'deneme', bolumId: 'bir', indeks: 0 }), 'deneme');
+esit('sonraki bolum kendi anahtarini aliyor',
+  bolumAnahtari({ aracId: 'deneme', bolumId: 'iki', indeks: 1 }), 'deneme.iki');
+
+const uc = ['bir', 'iki', 'uc'];
+esit('hic oynanmamis makinede yalniz ilk bolum acik', acikBolumSayisi('deneme', uc), 1);
+enIyiKaydet(bolumAnahtari({ aracId: 'deneme', bolumId: 'bir', indeks: 0 }),
+  sonuc(9000, 'A'));
+esit('ilk bolum bitince ikincisi aciliyor', acikBolumSayisi('deneme', uc), 2);
+// Devrilen tur kayda girmedigi icin bolum de ACMIYOR.
+enIyiKaydet(bolumAnahtari({ aracId: 'deneme', bolumId: 'iki', indeks: 1 }),
+  { ...sonuc(4000, 'D'), devrildi: true });
+esit('devrilen tur bolum ACMIYOR', acikBolumSayisi('deneme', uc), 2);
+enIyiKaydet(bolumAnahtari({ aracId: 'deneme', bolumId: 'iki', indeks: 1 }),
+  sonuc(8000, 'B'));
+esit('ikinci bitince ucuncu aciliyor', acikBolumSayisi('deneme', uc), 3);
+enIyiKaydet(bolumAnahtari({ aracId: 'deneme', bolumId: 'uc', indeks: 2 }),
+  sonuc(8000, 'B'));
+esit('acik bolum sayisi bolum sayisini ASMIYOR', acikBolumSayisi('deneme', uc), 3);
+esit('tek bolumlu makine hep 1', acikBolumSayisi('tek', ['yalniz']), 1);
+// Bolumler gelmeden once birinci bolumu bitirmis oyuncu: kaydi eski
+// anahtarda duruyor ve ikinci bolum kendiliginden acik geliyor.
+esit('eski arac kaydi olan oyuncuda ikinci bolum acik',
+  acikBolumSayisi('forklift', ['depo', 'rampa']), 2);
+
+// --- TAM TUR ROTASI ---
+const k0 = (aracId: string, bolumId: string, indeks: number): BolumKimligi =>
+  ({ aracId, bolumId, indeks });
+esit('hepsi-birinci-bolum rotasi ESKI tur anahtarlarini koruyor',
+  rotaAnahtari([k0('forklift', 'depo', 0), k0('vinc', 'sanayi', 0)]), undefined);
+const rotaIki = rotaAnahtari([k0('forklift', 'rampa', 1), k0('vinc', 'sanayi', 0)]);
+esit('farkli bolumden gecen rota kendi anahtarini aliyor',
+  rotaIki, 'forklift.rampa+vinc.sanayi');
+esit('yeni rotada rekor YOK (eski rotanin rekoru tasinmiyor)',
+  turEnIyiOku(rotaIki), { hiz: null, puan: null });
+turEnIyiKaydet(tamTur, rotaIki);
+esit('yeni rotanin rekoru kendi anahtarinda', turEnIyiOku(rotaIki).hiz?.sure, 1840);
+esit('eski rotanin rekoru ETKILENMEDI', turEnIyiOku().hiz?.sure, 1450);

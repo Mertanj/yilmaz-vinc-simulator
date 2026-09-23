@@ -211,3 +211,10 @@ export const SEVKIYAT_KORIDORU: ForkliftBolum = {
   /** Küçük makine, dar koridor: vinçten belirgin biçimde daha yakın. */
   kameraOlcegi: { yakin: 46, uzak: 24 },
 };
+
+/**
+ * Forkliftin bölümleri, AÇILMA SIRASIYLA.
+ *
+ * Sıra oyuncunun göreceği sıra: birincisini bitiren ikinciyi açıyor.
+ */
+export const FORKLIFT_BOLUMLERI: readonly ForkliftBolum[] = [SEVKIYAT_KORIDORU];

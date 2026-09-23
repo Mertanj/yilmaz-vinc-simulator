@@ -5,6 +5,9 @@ import {
   SahneGorunumu, VincGorunumu, ForkliftGorunumu, DirsekliGorunumu,
 } from '../render/gorunum';
 import { DirsekliSahne } from '../sim/dirsekliSahne';
+import { DAR_SOKAK } from '../sim/avlu';
+import { FORKLIFT_BOLUMLERI } from './forkliftTasks';
+import type { ForkliftBolum } from './forkliftBolum';
 import { M } from '../ui/dil';
 import type { DokunmatikDuzeni, PadKaynagi } from '../ui/dokunmatik';
 import { OutriggerState } from '../sim/loadChart';
@@ -45,12 +48,54 @@ export interface AracTanimi {
   dokunmatikVar?: boolean;
   hazir: boolean;
   /**
+   * Makinenin bölümleri, AÇILMA SIRASIYLA. Boşsa araç oynanamaz.
+   *
+   * Sahadan gelen karar: *"sırayla açılsın."* Birinci bölümü bitiren
+   * ikinciyi açıyor (bkz. `acikBolumSayisi`).
+   */
+  bolumler: readonly BolumTanimi[];
+}
+
+/** Bir makinenin bir bölümü: kimliği, adı ve sahneyi kuran fonksiyon. */
+export interface BolumTanimi {
+  /**
+   * Kalıcı kimlik — rekor anahtarında geçiyor, DEĞİŞTİRİLMEMELİ.
+   * Değiştirmek o bölümün bütün rekorlarını sessizce düşürür.
+   */
+  id: string;
+  /**
    * Padin kaynağı `kur()` ile birlikte dönüyor, tanımda durmuyor: düğme
    * etiketleri makinenin O ANKİ durumundan besleniyor ("4 kat yap"), yani
    * pade sahnenin kendisi lazım. Seçim ekranının ihtiyacı olan tek şey
    * padin VAR OLUP OLMADIĞI, o da `dokunmatikVar` bayrağında.
    */
-  kur?: () => { sahne: OyunSahnesi; gorunum: SahneGorunumu; pad?: PadKaynagi };
+  kur: () => { sahne: OyunSahnesi; gorunum: SahneGorunumu; pad?: PadKaynagi };
+}
+
+/** Bölümün ekranda görünen adı — dil dosyasından, kimlikle. */
+export function bolumAdi(b: BolumTanimi): string {
+  return M.bolumAdi[b.id] ?? b.id;
+}
+
+/**
+ * Forklift bölümü → seçim ekranının bölüm tanımı.
+ *
+ * İki depo aynı makineyi, aynı padi kullanıyor; farklı olan yalnız veri.
+ */
+function forkliftBolumu(b: ForkliftBolum): BolumTanimi {
+  return {
+    id: b.id,
+    kur: () => {
+      const sahne = new ForkliftSahnesi(b);
+      return {
+        sahne,
+        gorunum: new ForkliftGorunumu(sahne),
+        // Forklift fazsız ve düğmeleri sabit: sabit anahtar, hiç yeniden
+        // çizilmiyor.
+        pad: { anahtar: () => 'sabit', duzen: forkliftPadi },
+      };
+    },
+  };
 }
 
 /**
@@ -226,16 +271,7 @@ export function araclar(): readonly AracTanimi[] {
     tuslar: M.forklift.tuslar,
     dokunmatikVar: true,
     hazir: true,
-    kur: () => {
-      const sahne = new ForkliftSahnesi();
-      return {
-        sahne,
-        gorunum: new ForkliftGorunumu(sahne),
-        // Forklift fazsız ve düğmeleri sabit: sabit anahtar, hiç yeniden
-        // çizilmiyor.
-        pad: { anahtar: () => 'sabit', duzen: forkliftPadi },
-      };
-    },
+    bolumler: FORKLIFT_BOLUMLERI.map(forkliftBolumu),
   },
   {
     id: 'vinc',
@@ -248,17 +284,20 @@ export function araclar(): readonly AracTanimi[] {
     tuslar: M.vinc.tuslar,
     dokunmatikVar: true,
     hazir: true,
-    kur: () => {
-      const sahne = new Scene();
-      return {
-        sahne,
-        gorunum: new VincGorunumu(sahne),
-        pad: {
-          anahtar: () => `${sahne.calismaModunda}|${sahne.outriggers.state}`,
-          duzen: () => vincPadi(sahne),
-        },
-      };
-    },
+    bolumler: [{
+      id: 'sanayi',
+      kur: () => {
+        const sahne = new Scene();
+        return {
+          sahne,
+          gorunum: new VincGorunumu(sahne),
+          pad: {
+            anahtar: () => `${sahne.calismaModunda}|${sahne.outriggers.state}`,
+            duzen: () => vincPadi(sahne),
+          },
+        };
+      },
+    }],
   },
   {
     id: 'dirsekli',
@@ -273,25 +312,29 @@ export function araclar(): readonly AracTanimi[] {
     tuslar: M.dirsekli.tuslar,
     dokunmatikVar: true,
     hazir: true,
-    kur: () => {
-      const sahne = new DirsekliSahne();
-      return {
-        sahne,
-        gorunum: new DirsekliGorunumu(sahne),
-        pad: {
-          anahtar: () => `${sahne.calismaModunda}|${sahne.outriggers.state}`,
-          duzen: () => dirsekliPadi(sahne),
-        },
-      };
-    },
+    bolumler: [{
+      id: DAR_SOKAK.id,
+      kur: () => {
+        const sahne = new DirsekliSahne(DAR_SOKAK);
+        return {
+          sahne,
+          gorunum: new DirsekliGorunumu(sahne),
+          pad: {
+            anahtar: () => `${sahne.calismaModunda}|${sahne.outriggers.state}`,
+            duzen: () => dirsekliPadi(sahne),
+          },
+        };
+      },
+    }],
   },
   ];
 }
 
 export function aracBul(id: string | null): AracTanimi {
   const liste = araclar();
-  const bulunan = liste.find((a) => a.id === id && a.hazir);
-  const ilk = liste.find((a) => a.hazir);
+  const oynanir = (a: AracTanimi): boolean => a.hazir && a.bolumler.length > 0;
+  const bulunan = liste.find((a) => a.id === id && oynanir(a));
+  const ilk = liste.find(oynanir);
   if (!bulunan && !ilk) throw new Error('oynanabilir araç yok');
   return bulunan ?? (ilk as AracTanimi);
 }
