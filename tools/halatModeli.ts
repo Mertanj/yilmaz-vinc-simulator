@@ -79,6 +79,10 @@ function olc(
   // kusur görünmüyordu — ölçüm iki makinede AYNI şeyi ölçmüyordu.
   for (let i = 0; i < 60 * 8; i++) adim(uzatKomutu(-1));
   halatSal(6);
+  // Vinç rampası dursun: komut kesilince vinç 0.3-0.45 s daha salıyor ve o
+  // salınan halat uzama ölçümünün içine "yenmeyen halat" diye karışıyordu
+  // (vinçte -0.02, rampası eklenen dirseklide -0.05 — eşiğin tam üstü).
+  for (let i = 0; i < 60; i++) adim(uzatKomutu(0));
   const b0 = oku();
   for (let i = 0; i < 60 * 6; i++) adim(uzatKomutu(1));
   const b1 = oku();

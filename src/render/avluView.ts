@@ -145,10 +145,9 @@ export function drawYarimEv(): Container {
  * nerede duracağını söyleyen tek şey bu. Kamyon geri geri geldiği için
  * cebin ARKA çizgisi kalın: durulacak yer orası.
  */
-export function drawParkCebi(): Container {
+export function drawParkCebi(x: number = AVLU.parkX, p: number = AVLU.parkPayiM): Container {
   const c = new Container();
   const g = new Graphics();
-  const { parkX: x, parkPayiM: p } = AVLU;
   const yari = 4.9;   // kamyonun yarı boyu kadar; cep aracı sarsın
   g.rect(x - yari, 0, yari * 2, 0.02).fill({ color: C.hazardY, alpha: 0.15 });
   // Yan çizgiler.

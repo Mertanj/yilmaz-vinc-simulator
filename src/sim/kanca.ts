@@ -1,5 +1,5 @@
-import { Box, DistanceJoint, RevoluteJoint, Vec2,
-  type Body, type World, type DistanceJoint as DJ } from 'planck';
+import { Box, RevoluteJoint, RopeJoint, Vec2,
+  type Body, type World } from 'planck';
 import { TRUCK_GROUP, type Snapshotter } from './world';
 
 /**
@@ -97,7 +97,7 @@ export interface KancaAyari {
 
 export class Kanca {
   readonly hook: Body;
-  private readonly cable: DJ;
+  private readonly cable: RopeJoint;
   private attached: Body | null = null;
   private attachJoint: RevoluteJoint | null = null;
   private birakilanAcisalSonum = 0.5;
@@ -147,12 +147,26 @@ export class Kanca {
     this.hook.setLinearDamping(ayar.yolSonum);
     this.hook.setAngularDamping(ayar.yolSonum);
 
-    // Halat RİJİT. frequencyHz verilirse yay gibi esner; spike'ta 3.45 t altında
-    // yükü emniyet halatı taşımaya başladı ve kuvvet okuması yarıya düştü.
-    this.cable = world.createJoint(new DistanceJoint({
-      length: halatM,
+    // Halat RİJİT ama yalnız ÇEKİYOR: bir halat itemez.
+    //
+    // Yay değil — frequencyHz verilirse esner; spike'ta 3.45 t altında yükü
+    // emniyet halatı taşımaya başladı ve kuvvet okuması yarıya düştü. Ama
+    // DistanceJoint de değil: o iki yönlü, boyu SABİT tutuyor. Yük oturduktan
+    // sonra vinci salmaya devam eden oyuncu yükü tahtaya BASTIRIYORDU — kasa
+    // yükleme bölümünde ölçüldü: palet 20 santim kaydı, halat "kuvveti"
+    // 11.7 tona, LMI %510'a çıktı, hem de yük kasada otururken. Sıkı istif
+    // bölümünün en kötü anı: dikkatle hizalanan palet bırakılırken kayıyor.
+    //
+    // RopeJoint bir üst sınır: gerginken DistanceJoint'in aynısı (sarkaç,
+    // kuvvet okuması, tepki), yük oturunca halat gevşiyor ve hiçbir şeyi
+    // itmiyor. Vinç sarılınca önce gevşek alınıyor, sonra yük kalkıyor —
+    // sahadaki de bu.
+    this.cable = world.createJoint(new RopeJoint({
+      bodyA: ucGovde, bodyB: this.hook,
+      localAnchorA: ucYerel, localAnchorB: Vec2.zero(),
+      maxLength: halatM,
       collideConnected: true,
-    }, ucGovde, this.hook, uc, this.hook.getWorldCenter())) as DJ;
+    }))!;
 
     snaps.track(this.hook);
   }
@@ -163,7 +177,7 @@ export class Kanca {
     return { x: p.x, y: p.y };
   }
 
-  halatiAyarla(m: number): void { this.cable.setLength(m); }
+  halatiAyarla(m: number): void { this.cable.setMaxLength(m); }
 
   /** Kanca bloğunun kütlesi (t) — halat katı değişince yeniden yazılıyor. */
   kutleyiYaz(ton: number): void {
@@ -204,10 +218,11 @@ export class Kanca {
    * yük düşüyor, belki bir çarpma yazıyor, belki hedefin yanına saçılıyor ve
    * oyuncuya hiçbir şey söylenmiyordu.
    *
-   * Ölçü olarak halat kuvvetini kullanmak DENENMEDİ ve kullanılmamalı: halat
-   * rijit bir DistanceJoint, yani yük oturduktan sonra vinç halatı salmaya
-   * devam edince kuvvet işaret değiştirip BÜYÜYOR. Büyüklüğe bakan bir eşik tam
-   * da doğru anda "yük havada" derdi. Temas listesi ise doğrudan sorduğumuz
+   * Ölçü olarak halat kuvvetini kullanmak DENENMEDİ ve kullanılmamalı. Halat
+   * iki yönlü bir DistanceJoint iken yük oturduktan sonra salmaya devam
+   * edince kuvvet işaret değiştirip BÜYÜYORDU; şimdi gevşiyor ve sıfıra
+   * iniyor — ama salınımın tepesinde de bir an gevşeyebilir, yani "kuvvet
+   * düştü" oturmanın tanığı değil. Temas listesi ise doğrudan sorduğumuz
    * şeyin kendisi: yükün altında kancadan başka bir gövde var mı?
    *
    * Düşey hız şartı, yükü duvara sürterken bırakmayı da eleme amacıyla: temas

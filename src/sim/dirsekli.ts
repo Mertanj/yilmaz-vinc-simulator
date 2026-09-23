@@ -151,6 +151,16 @@ export const DIRSEKLI_NEUTRAL: DirsekliInput = { ana: 0, kirma: 0, uzat: 0, winc
 const clamp = (v: number, lo: number, hi: number): number =>
   (v < lo ? lo : v > hi ? hi : v);
 
+/**
+ * Rampalı komut: hedefe her adımda en çok `dt / rampaSn` yaklaşıyor. Kilitli
+ * yöne (`kilitliYon` işaretinde) rampa yok — o yöndeki komut hemen sıfır.
+ */
+function rampala(simdiki: number, hedef: number, dt: number, kilitliYon: -1 | 0 | 1): number {
+  const adim = dt / S.rampaSn;
+  const k = simdiki + clamp(hedef - simdiki, -adim, adim);
+  return kilitliYon !== 0 && Math.sign(k) === kilitliYon ? 0 : k;
+}
+
 export class Dirsekli {
   readonly anaBom: Body;
   readonly kirmaBom: Body;
@@ -174,6 +184,14 @@ export class Dirsekli {
   /** Kırmanın hidrolik uzaması (m). */
   private uzamaM = 0;
   private yolda = true;
+  /**
+   * Rampalanmış komutlar (-1..1, kumandanın işaretiyle) — bkz. `rampaSn`.
+   * Vinçteki `luffRate`/`winchRate`'in karşılığı.
+   */
+  private anaKomut = 0;
+  private kirmaKomut = 0;
+  private uzatKomut = 0;
+  private vincKomut = 0;
 
   /** Bu adımda oyuncu kilitli bir kola bastı mı? */
   kilitliDenendi = false;
@@ -213,7 +231,15 @@ export class Dirsekli {
    */
   private sikismaSn = 0;
 
-  constructor(world: World, private readonly chassis: Body, snaps: Snapshotter) {
+  /**
+   * @param montaj kolonun şasi yerel çerçevesindeki yeri. Varsayılan kasanın
+   *   en arkası (`DIRSEKLI.pivot`); kasa yükleme bölümünde kabinin arkası —
+   *   kendi kasasını yükleyen kırma bomlu kamyonun hâli o.
+   */
+  constructor(
+    world: World, private readonly chassis: Body, snaps: Snapshotter,
+    private readonly montaj: Vec2 = DIRSEKLI.pivot,
+  ) {
     // Kinematik gövdeler: konumları her adımda eklem açılarından yazılıyor,
     // dolayısıyla kurulumda nereye konduklarının önemi yok — ilk adım
     // düzeltiyor. Yine de doğru yere koyuyoruz ki ilk kare sıçramasın.
@@ -245,6 +271,8 @@ export class Dirsekli {
   }
 
   get hook(): Body { return this.kanca.hook; }
+  /** Kolonun şasi yerel x'i — çizim kolonu buraya koyuyor. */
+  get montajX(): number { return this.montaj.x; }
   get anaAciDeg(): number { return this.anaDeg; }
   get kirmaAciDeg(): number { return this.kirmaDeg; }
   get uzamaBoyuM(): number { return this.uzamaM; }
@@ -261,7 +289,7 @@ export class Dirsekli {
 
   /** Tabla merkezinin dünyadaki yeri. */
   get tablaWorld(): { x: number; y: number } {
-    const p = this.chassis.getWorldPoint(DIRSEKLI.pivot);
+    const p = this.chassis.getWorldPoint(this.montaj);
     return { x: p.x, y: p.y };
   }
 
@@ -329,6 +357,7 @@ export class Dirsekli {
   update(input: DirsekliInput, dt: number, lmi: LmiReading): void {
     this.kilitliDenendi = false;
     if (this.yolda) {
+      this.anaKomut = 0; this.kirmaKomut = 0; this.uzatKomut = 0; this.vincKomut = 0;
       // Yol konumu: bom katlı ve kanca toplu.
       this.anaDeg += clamp(S.yolAnaDeg - this.anaDeg, -1, 1) * S.anaHizDegPerSec * dt * 3;
       this.kirmaDeg += clamp(S.yolKirmaDeg - this.kirmaDeg, -1, 1)
@@ -352,15 +381,6 @@ export class Dirsekli {
     // Kırmayı AÇMAK (düzleştirmek) da yarıçapı büyütüyor.
     let kirma = input.kirma;
     if (kilit && kirma > 0) { kirma = 0; this.kilitliDenendi = true; }
-
-    this.anaDeg = clamp(
-      this.anaDeg + ana * S.anaHizDegPerSec * olcek * dt, S.anaMinDeg, S.anaMaxDeg,
-    );
-    // Kırma açısı ters: komutun +1'i "aç" demek, açı ise KÜÇÜLÜRKEN açılıyor.
-    this.kirmaDeg = clamp(
-      this.kirmaDeg - kirma * S.kirmaHizDegPerSec * olcek * dt,
-      S.kirmaMinDeg, S.kirmaMaxDeg,
-    );
 
     // Teleskobu UZATMAK da yarıçapı büyütüyor — aynı kilit.
     let uzat = input.uzat;
@@ -394,15 +414,43 @@ export class Dirsekli {
     // kilitli; burada ucu AŞAĞI indiren hareketler de duruyor, çünkü sıkışan
     // yükü daha da ezen hareket odur. Kurtulma yolları açık: kırmayı katla
     // (kirma < 0), ana bomu kaldır (ana > 0), halatı sal.
+    //
+    // (Bu süzgeç eskiden ana bomla kırmayı zaten İŞLEDİKTEN sonra
+    // çalışıyordu; yalnız teleskobu durduruyordu. Kilitlerin hepsi artık
+    // hareketten önce.)
     if (this.hidrolikDurdu) {
       if (ana < 0) { ana = 0; this.kilitliDenendi = true; }
       if (kirma > 0) { kirma = 0; this.kilitliDenendi = true; }
       if (uzat !== 0) { uzat = 0; this.kilitliDenendi = true; }
     }
+
+    // **Hızlar RAMPALI — vinçteki gibi.** Komut basamak, hidrolik değil.
+    //
+    // Halat gevşeyebilir olunca ortaya çıktı (kanca.ts): basamak komutla uç
+    // bir karede 1.1 m/s'yle aşağı kalkıyordu, yük ona yerçekimiyle
+    // yetişemiyor, halat gevşiyor ve 0.3 saniye sonra yük halatı silkiyordu —
+    // LMI %118. Rijit halat bunu yükü aşağı İTEREK gizliyordu. Rampa ucun
+    // ivmesini yerçekiminin altında tutuyor; kilitli yöne ise rampa yok, o yön
+    // hemen kesiliyor (kilit bir güvenlik düzeneği, yavaşlayarak durmaz).
+    const kilitliAna = (kilit || this.hidrolikDurdu) ? -1 : 0;
+    const kilitliKirma = (kilit || this.hidrolikDurdu) ? 1 : 0;
+    this.anaKomut = rampala(this.anaKomut, ana * olcek, dt, kilitliAna);
+    this.kirmaKomut = rampala(this.kirmaKomut, kirma * olcek, dt, kilitliKirma);
+    this.uzatKomut = this.hidrolikDurdu ? 0
+      : rampala(this.uzatKomut, uzat * olcek, dt, uzat === 0 && input.uzat > 0 ? 1 : 0);
+
+    const anaYeni = this.anaDeg + this.anaKomut * S.anaHizDegPerSec * dt;
+    this.anaDeg = clamp(anaYeni, S.anaMinDeg, S.anaMaxDeg);
+    if (this.anaDeg !== anaYeni) this.anaKomut = 0;
+    // Kırma açısı ters: komutun +1'i "aç" demek, açı ise KÜÇÜLÜRKEN açılıyor.
+    const kirmaYeni = this.kirmaDeg - this.kirmaKomut * S.kirmaHizDegPerSec * dt;
+    this.kirmaDeg = clamp(kirmaYeni, S.kirmaMinDeg, S.kirmaMaxDeg);
+    if (this.kirmaDeg !== kirmaYeni) this.kirmaKomut = 0;
+
     const oncekiUzama = this.uzamaM;
-    this.uzamaM = clamp(
-      this.uzamaM + uzat * S.uzamaHizMps * olcek * dt, 0, S.kirmaUzamaM,
-    );
+    const uzamaYeni = this.uzamaM + this.uzatKomut * S.uzamaHizMps * dt;
+    this.uzamaM = clamp(uzamaYeni, 0, S.kirmaUzamaM);
+    if (this.uzamaM !== uzamaYeni) this.uzatKomut = 0;
 
     // **Halat bom boyunu takip ediyor.** Toplam halat sabit: tambur→uç yolu ile
     // uç→kanca parçasının toplamı. Teleskop uzayınca birincisi uzuyor, yani
@@ -423,10 +471,10 @@ export class Dirsekli {
     // çıkış yolu o.
     const winchIzin = ikiBlok ? Math.min(0, input.winch) : input.winch;
     if (winchIzin !== input.winch) this.kilitliDenendi = true;
-    this.halatM = clamp(
-      this.halatM - winchIzin * S.winchSpeedMps * olcek * dt,
-      DIRSEKLI.minHalatM, DIRSEKLI.maxHalatM,
-    );
+    this.vincKomut = rampala(this.vincKomut, winchIzin * olcek, dt, ikiBlok ? 1 : 0);
+    const halatYeni = this.halatM - this.vincKomut * S.winchSpeedMps * dt;
+    this.halatM = clamp(halatYeni, DIRSEKLI.minHalatM, DIRSEKLI.maxHalatM);
+    if (this.halatM !== halatYeni) this.vincKomut = 0;
 
     this.govdeleriYerlestir();
     this.kanca.halatiAyarla(this.halatM);
@@ -434,7 +482,7 @@ export class Dirsekli {
 
   /** Kinematik kolları eklem açılarından konumlandırır. */
   private govdeleriYerlestir(): void {
-    const taban = this.chassis.getWorldPoint(DIRSEKLI.pivot);
+    const taban = this.chassis.getWorldPoint(this.montaj);
     const sasiAci = this.chassis.getAngle();
     const durum = this.durum;
     const L2 = kirmaBoyu(durum);
@@ -585,7 +633,7 @@ export class Dirsekli {
    * otopilot da, ileride bir yardım oku da dünyada düşünüp burada çözecek.
    */
   dunyadanYerele(p: { x: number; y: number }): { x: number; y: number } {
-    const taban = this.chassis.getWorldPoint(DIRSEKLI.pivot);
+    const taban = this.chassis.getWorldPoint(this.montaj);
     const aci = this.chassis.getAngle();
     const wx = p.x - taban.x;
     const wy = p.y - taban.y;

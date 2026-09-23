@@ -9,6 +9,8 @@ import {
 } from '../render/gorunum';
 import { DirsekliSahne } from '../sim/dirsekliSahne';
 import { DAR_SOKAK } from '../sim/avlu';
+import { KASA_YUKLEME } from '../sim/kasaYukleme';
+import type { DirsekliBolum } from '../sim/dirsekliBolum';
 import { FORKLIFT_BOLUMLERI } from './forkliftTasks';
 import type { ForkliftBolum } from './forkliftBolum';
 import { M } from '../ui/dil';
@@ -96,6 +98,24 @@ function forkliftBolumu(b: ForkliftBolum): BolumTanimi {
         // Forklift fazsız ve düğmeleri sabit: sabit anahtar, hiç yeniden
         // çizilmiyor.
         pad: { anahtar: () => 'sabit', duzen: forkliftPadi },
+      };
+    },
+  };
+}
+
+/** Dirsekli bölümü → seçim ekranının bölüm tanımı. Makine ve pad ortak. */
+function dirsekliBolumu(b: DirsekliBolum): BolumTanimi {
+  return {
+    id: b.id,
+    kur: () => {
+      const sahne = new DirsekliSahne(b);
+      return {
+        sahne,
+        gorunum: new DirsekliGorunumu(sahne),
+        pad: {
+          anahtar: () => `${sahne.calismaModunda}|${sahne.outriggers.state}`,
+          duzen: () => dirsekliPadi(sahne),
+        },
       };
     },
   };
@@ -320,20 +340,7 @@ export function araclar(): readonly AracTanimi[] {
     tuslar: M.dirsekli.tuslar,
     dokunmatikVar: true,
     hazir: true,
-    bolumler: [{
-      id: DAR_SOKAK.id,
-      kur: () => {
-        const sahne = new DirsekliSahne(DAR_SOKAK);
-        return {
-          sahne,
-          gorunum: new DirsekliGorunumu(sahne),
-          pad: {
-            anahtar: () => `${sahne.calismaModunda}|${sahne.outriggers.state}`,
-            duzen: () => dirsekliPadi(sahne),
-          },
-        };
-      },
-    }],
+    bolumler: [DAR_SOKAK, KASA_YUKLEME].map(dirsekliBolumu),
   },
   ];
 }

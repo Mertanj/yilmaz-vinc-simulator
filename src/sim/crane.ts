@@ -16,7 +16,7 @@ import {
  *
  *   şasi --RevoluteJoint(motor+limit)--> bom dibi      luff
  *   bom dibi --PrismaticJoint(motor+limit)--> bom ucu  teleskop
- *   bom ucu --DistanceJoint(rijit, setLength)--> kanca vinç
+ *   bom ucu --RopeJoint(rijit, yalnız çeker)--> kanca vinç
  *   kanca --RevoluteJoint--> yük                       bağlama
  *
  * **Bom KİNEMATİK, yük tamamen dinamik.** Bu karar ölçümle alındı.
@@ -596,7 +596,7 @@ export class Crane {
 
     // Halattaki gerçek kuvvet — kanca ve yük ne kadar çekiyorsa o.
     //
-    // try/catch şart: planck'te DistanceJoint'in tepki kuvveti ancak hız
+    // try/catch şart: planck'te halat mafsalının tepki kuvveti ancak hız
     // kısıtları bir kez çözüldükten sonra tanımlı. İlk karede iç vektör yok ve
     // metot DÖNMÜYOR, FIRLATIYOR — dönen değeri kontrol etmek yetmiyor. Bu
     // hataya bir kez düşülüp (LMI okumasında) yanlış ders çıkarılmıştı; burada
@@ -632,7 +632,7 @@ export class Crane {
    * Statik yükle hesaplanan bir LMI yalan söyler.
    *
    * Sıra önemli ve ilk sürümde yanlıştı: LMI hem adımdan önce hem render'da
-   * okunuyordu. planck'te DistanceJoint'in tepki kuvveti ancak hız kısıtları
+   * okunuyordu. planck'te halat mafsalının tepki kuvveti ancak hız kısıtları
    * çözüldükten sonra tanımlı; ilk karede iç vektör tanımsız olduğu için her
    * karede hata fırlıyordu. Artık adımdan sonra bir kez örnekleniyor ve
    * saklanıyor; aktüatör kısıtları bir kare önceki değeri kullanıyor, ki

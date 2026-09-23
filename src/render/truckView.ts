@@ -22,6 +22,22 @@ export const RIG = {
   deckTop: 0.42,
 } as const;
 
+/**
+ * Yüklenecek düz kasa, şasi yerel x'inde — dirsekli vincin kasa bölümü.
+ *
+ * Varsayılan kasa açılır YANAKLI ve 72 santim yüksek; üstüne palet konacak
+ * olunca yanak paletin alt yarısını örterdi. Düz kasa yanaksız, önünde çelik
+ * bir ön duvar var — fizikteki `kasayiKur`'un aynısı.
+ */
+export interface DuzKasa {
+  on: number;
+  arka: number;
+  /** Ön duvarın kasa tabanından yüksekliği (m). */
+  onDuvar: number;
+  /** Kasa tahtasının kalınlığı (m). */
+  taban: number;
+}
+
 export class TruckView extends Container {
   /** Slew yapan üst yapı: tabla, karşı ağırlık ve bom birlikte döner. */
   readonly superstructure = new Container();
@@ -34,10 +50,10 @@ export class TruckView extends Container {
    * ortak — ama üst yapısı bambaşka: tabla kasanın en arkasında ve bom iki
    * eklemli. O yüzden gövde burada, kol takımı kendi dosyasında.
    */
-  constructor(teleskopikUstYapi = true) {
+  constructor(teleskopikUstYapi = true, kasa?: DuzKasa) {
     super();
 
-    this.addChild(drawChassis(), drawCab(), drawOutriggersStowed());
+    this.addChild(drawChassis(kasa), drawCab(), drawOutriggersStowed());
 
     if (!teleskopikUstYapi) return;
 
@@ -52,7 +68,7 @@ export class TruckView extends Container {
   }
 }
 
-function drawChassis(): Container {
+function drawChassis(kasa?: DuzKasa): Container {
   const g = new Graphics();
   const { halfLength: L, halfHeight: H } = RIG;
 
@@ -61,18 +77,8 @@ function drawChassis(): Container {
   g.rect(-L, -H, L * 2, H * 0.42).fill({ color: C.frameLight, alpha: 0.9 });
   g.rect(-L, H - H * 0.35, L * 2, H * 0.35).fill({ color: C.frameDark, alpha: 0.9 });
 
-  // Kasa (flatbed) — gerçek araçta uzun, krem-sarı, açılır yanaklı
-  const bedFront = -0.2;
-  g.rect(-L, H, L + bedFront, 0.14).fill(C.deckShade);
-  g.rect(-L, H + 0.14, L + bedFront, 0.72).fill(C.deck);
-  g.rect(-L, H + 0.14, L + bedFront, 0.16).fill({ color: 0xE6D9A4, alpha: 0.7 });
-  g.rect(-L, H + 0.78, L + bedFront, 0.08).fill(C.deckShade);
-  // Yanak dikmeleri
-  for (let x = -L + 0.7; x < bedFront - 0.3; x += 1.25) {
-    g.rect(x, H + 0.14, 0.12, 0.72).fill({ color: C.deckLine, alpha: 0.65 });
-  }
-  g.rect(-L, H + 0.14, L + bedFront, 0.72)
-    .stroke({ width: 0.04, color: C.deckLine, alpha: 0.8 });
+  if (kasa) duzKasa(g, kasa);
+  else yanakliKasa(g);
 
   // Yan etek paneli — ana giydirme yüzeyi. Teleskop yapmadığı için yazı burada
   // güvenle durabilir. Gerçek araçta sarı zemine kırmızı yazı.
@@ -107,6 +113,46 @@ function drawChassis(): Container {
   tel2.position.set(0.85, -0.14);
 
   return kapla(g, logo, tel, tel2);
+}
+
+/**
+ * Düz kasa: tahta taban, yanak yok, önde çelik ön duvar. Yük üstüne
+ * konacak — yanak paletin alt yarısını örterdi.
+ */
+function duzKasa(g: Graphics, k: DuzKasa): void {
+  const { halfHeight: H } = RIG;
+  const en = k.on - k.arka;
+  g.rect(k.arka, H, en, k.taban).fill(C.deck);
+  g.rect(k.arka, H, en, k.taban * 0.35).fill({ color: C.deckShade, alpha: 0.9 });
+  g.rect(k.arka, H + k.taban - 0.03, en, 0.03).fill({ color: 0xE6D9A4, alpha: 0.8 });
+  // Bağlama cepleri — kasa kenarında, halat ve spanzet takılan yer.
+  for (let x = k.arka + 0.45; x < k.on - 0.2; x += 1.15) {
+    g.rect(x, H + 0.02, 0.1, 0.07).fill({ color: C.frameDark, alpha: 0.75 });
+  }
+  // Ön duvar: çelik çerçeve, yatay kuşaklar. Yükün dayanacağı yer.
+  const alt = H + k.taban;
+  g.rect(k.on, alt, 0.12, k.onDuvar).fill(C.frame);
+  g.rect(k.on, alt, 0.04, k.onDuvar).fill({ color: C.frameLight, alpha: 0.8 });
+  for (let y = alt + 0.25; y < alt + k.onDuvar - 0.05; y += 0.25) {
+    g.rect(k.on - 0.01, y, 0.14, 0.035).fill({ color: C.frameDark, alpha: 0.9 });
+  }
+  g.rect(k.on - 0.02, alt + k.onDuvar - 0.05, 0.16, 0.05).fill(C.hazardY);
+}
+
+/** Varsayılan kasa — gerçek araçta uzun, krem-sarı, açılır yanaklı. */
+function yanakliKasa(g: Graphics): void {
+  const { halfLength: L, halfHeight: H } = RIG;
+  const bedFront = -0.2;
+  g.rect(-L, H, L + bedFront, 0.14).fill(C.deckShade);
+  g.rect(-L, H + 0.14, L + bedFront, 0.72).fill(C.deck);
+  g.rect(-L, H + 0.14, L + bedFront, 0.16).fill({ color: 0xE6D9A4, alpha: 0.7 });
+  g.rect(-L, H + 0.78, L + bedFront, 0.08).fill(C.deckShade);
+  // Yanak dikmeleri
+  for (let x = -L + 0.7; x < bedFront - 0.3; x += 1.25) {
+    g.rect(x, H + 0.14, 0.12, 0.72).fill({ color: C.deckLine, alpha: 0.65 });
+  }
+  g.rect(-L, H + 0.14, L + bedFront, 0.72)
+    .stroke({ width: 0.04, color: C.deckLine, alpha: 0.8 });
 }
 
 function drawCab(): Container {

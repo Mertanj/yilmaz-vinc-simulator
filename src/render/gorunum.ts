@@ -28,8 +28,10 @@ import {
 import {
   drawBahceDuvari, drawParkCebi, drawSokakSirasi, drawYarimEv,
 } from './avluView';
+import { drawDepoCephesi, drawYuklemeAlani } from './kasaView';
 import { RIG } from './truckView';
-import { DIRSEKLI } from '../sim/dirsekli';
+import { KASA_ON_DUVAR, KASA_TABANI } from '../sim/dirsekliBolum';
+import { YUKLEME } from '../sim/kasaYukleme';
 
 /**
  * Bir aracın görünümü.
@@ -224,7 +226,7 @@ export class VincGorunumu extends SahneGorunumu {
  */
 export class DirsekliGorunumu extends SahneGorunumu {
   private readonly shadow = drawContactShadow(TRUCK.chassisHalfLength * 0.92);
-  private readonly truckView = new TruckView(false);
+  private readonly truckView: TruckView;
   private readonly wheelViews: Container[];
   private readonly outriggerView = new OutriggerView();
   private readonly anaBomView = drawAnaBom();
@@ -232,17 +234,30 @@ export class DirsekliGorunumu extends SahneGorunumu {
   private readonly cableView = new CableView();
   private readonly hookView = drawHookBlock();
 
+  /**
+   * Kasa bölümü: kasaya konmuş (şasiye kaynamış) yükler ve depoda sırasını
+   * bekleyenler. Birinci bölümde ikisi de boş.
+   */
+  private readonly kasaKatmani = new Container();
+  private kasaSayisi = -1;
+  private readonly bekleyenKatmani = new Container();
+  private bekleyenGorevi: Task | null | undefined = undefined;
+
   constructor(private readonly s: DirsekliSahne) {
     super(s);
     this.isaretBoyu = 0.8;
+    const k = s.bolum.kasa;
+    this.truckView = new TruckView(false,
+      k ? { ...k, onDuvar: KASA_ON_DUVAR, taban: KASA_TABANI } : undefined);
     this.wheelViews = s.truck.wheels.map(() => drawWheel(TRUCK.wheelRadius));
     // Kolon kamyonun çocuğu, çünkü şasiyle birlikte dönüyor ve kasaya
-    // cıvatalı. Kollar değil: onların açısı şasininkinden bağımsız.
+    // cıvatalı. Kollar değil: onların açısı şasininkinden bağımsız. Yeri
+    // bölüme göre: kasanın en arkası ya da kabinin arkası (bkz. `montajX`).
     const kolon = drawKolon();
-    kolon.position.set(DIRSEKLI.pivot.x, RIG.deckTop);
+    kolon.position.set(s.bom.montajX, RIG.deckTop);
     this.truckView.addChild(kolon);
 
-    this.aktorler.addChild(this.shadow);
+    this.aktorler.addChild(this.shadow, this.bekleyenKatmani, this.kasaKatmani);
     this.yukuKur();
     this.aktorler.addChild(
       ...this.wheelViews, this.outriggerView, this.truckView,
@@ -251,13 +266,78 @@ export class DirsekliGorunumu extends SahneGorunumu {
   }
 
   dekor(): Container[] {
+    if (this.s.bolum.kalici) {
+      return [
+        drawGround(SIM.groundLeft, SIM.groundRight),
+        drawDepoCephesi(), drawYuklemeAlani(),
+        drawParkCebi(YUKLEME.parkX, YUKLEME.parkPayiM),
+      ];
+    }
     return [
       drawGround(SIM.groundLeft, SIM.groundRight),
       drawYarimEv(), drawBahceDuvari(), drawParkCebi(),
     ];
   }
 
-  override uzak(): Container[] { return [drawSokakSirasi()]; }
+  override uzak(): Container[] {
+    return [this.s.bolum.kalici ? drawFarSkyline() : drawSokakSirasi()];
+  }
+
+  override ciz(alpha: number, hedef: { x: number; y: number } | null,
+               hedefHw: number, frameDt = 1 / 60): void {
+    // İşaret önce paletin KENDİSİNİ gösteriyor: ok yükün üstünde olmalı,
+    // yoksa yükün arkasında kalıyor (forklift rampasındaki ders).
+    const t = this.s.loadTask;
+    this.isaretBoyu = this.s.isaretKaynakta && t ? t.halfHeight * 2 + 0.4 : 0.8;
+    super.ciz(alpha, hedef, hedefHw, frameDt);
+    // Depoda bekleyen güncel palet de sıradakiler gibi derinlikte: henüz
+    // alınamaz, forklift getirecek.
+    if (this.s.yukDepoda) {
+      this.loadView.position.set(this.loadView.position.x + 0.42, this.loadView.position.y + 0.2);
+      this.loadView.scale.set(0.93);
+      this.loadView.alpha = 0.72;
+    } else if (this.loadView.alpha !== 1) {
+      this.loadView.scale.set(1);
+      this.loadView.alpha = 1;
+    }
+    this.kasayiGuncelle(alpha);
+    this.bekleyenleriGuncelle();
+  }
+
+  /** Kasadakiler şasiyle birlikte hareket ediyor: her karede yerleri yazılıyor. */
+  private kasayiGuncelle(alpha: number): void {
+    const liste = this.s.kasadakiler;
+    if (liste.length !== this.kasaSayisi) {
+      this.kasaSayisi = liste.length;
+      for (const c of this.kasaKatmani.removeChildren()) c.destroy({ children: true });
+      for (const { task } of liste) this.kasaKatmani.addChild(this.yukCiz(task, false));
+    }
+    liste.forEach(({ body }, i) => {
+      const v = this.kasaKatmani.children[i];
+      if (!v) return;
+      const p = this.s.snaps.interpolate(body, alpha);
+      v.position.set(p.x, p.y);
+      v.rotation = p.a;
+    });
+  }
+
+  /** Depoda sırasını bekleyen paletler — görev değişince yeniden çiziliyor. */
+  private bekleyenleriGuncelle(): void {
+    const t = this.s.loadTask;
+    if (t === this.bekleyenGorevi) return;
+    this.bekleyenGorevi = t;
+    for (const c of this.bekleyenKatmani.removeChildren()) c.destroy({ children: true });
+    const b = this.s.bolum;
+    if (!b.bekleyenX || !t) return;
+    const gorevler = b.gorevler;
+    for (let i = gorevler.indexOf(t) + 1; i < gorevler.length; i++) {
+      const g = gorevler[i];
+      if (!g) continue;
+      const v = this.yukCiz(g, false);
+      v.position.set(b.bekleyenX(i), g.halfHeight + 0.02);
+      this.bekleyenKatmani.addChild(derinlige(v));
+    }
+  }
 
   arkaPlan(w: number, h: number): Container { return drawSky(w, h); }
 

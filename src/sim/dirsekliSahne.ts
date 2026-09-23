@@ -1,12 +1,12 @@
-import { Box, type Body, type Contact } from 'planck';
-import { createWorld, createGround, Snapshotter, SIM } from './world';
-import { Truck } from './truck';
+import { Box, Vec2, WeldJoint, type Body, type Contact } from 'planck';
+import { createWorld, createGround, Snapshotter, SIM, TRUCK_GROUP } from './world';
+import { Truck, TRUCK } from './truck';
 import { Outriggers } from './outriggers';
 import { Dirsekli, DIRSEKLI, DIRSEKLI_NEUTRAL, type DirsekliInput } from './dirsekli';
 import { DIRSEKLI_SPEC as S, dirsekliCozum } from './dirsekliGeometri';
 import type { Grabbable } from './kanca';
 import { DAR_SOKAK } from './avlu';
-import type { DirsekliBolum } from './dirsekliBolum';
+import { KASA_TABANI, KASA_ON_DUVAR, type DirsekliBolum } from './dirsekliBolum';
 import type { Task } from '../game/tasks';
 import { OutriggerState } from './loadChart';
 import { bomGirdisiVar, type SceneInput } from './scene';
@@ -40,6 +40,7 @@ const girdiyiCevir = (c: SceneInput['crane']): DirsekliInput =>
 
 /** Bunun üstündeki normal impuls (N·s) çarpma sayılıyor. */
 const CARPMA_ESIGI_NS = 4500;
+
 /**
  * İki çarpma arasındaki en kısa süre (s).
  *
@@ -79,7 +80,9 @@ export class DirsekliSahne implements OyunSahnesi {
     bolum.kur(this.world);
     this.truck = new Truck(this.world, this.snaps, bolum.spawnX);
     this.outriggers = new Outriggers(this.world, this.truck.chassis, this.snaps);
-    this.bom = new Dirsekli(this.world, this.truck.chassis, this.snaps);
+    this.bom = new Dirsekli(this.world, this.truck.chassis, this.snaps,
+      bolum.montajX === undefined ? DIRSEKLI.pivot : new Vec2(bolum.montajX, DIRSEKLI.pivot.y));
+    if (bolum.kasa) this.kasayiKur(bolum.kasa);
 
     this.spawnLoad(bolum.gorevler[0] ?? null);
 
@@ -96,7 +99,36 @@ export class DirsekliSahne implements OyunSahnesi {
     });
   }
 
+  /**
+   * Kasa tabanı ve ön duvar — şasinin kendi fikstürleri.
+   *
+   * Şasi kutusu kasanın tabanını çizimden 14 santim alçakta bitiriyordu;
+   * yük oraya konsa tahtanın içine gömülü görünürdü. Yoğunluk SIFIR: şasinin
+   * kütlesi elle verildi (24 t, merkez arkada) ve yoğunluklu bir fikstür onu
+   * planck'te sessizce yeniden hesaplatırdı.
+   */
+  private kasayiKur(k: { on: number; arka: number }): void {
+    const c = this.truck.chassis;
+    const H = TRUCK.chassisHalfHeight;
+    const filtre = { density: 0, filterGroupIndex: TRUCK_GROUP };
+    c.createFixture(new Box((k.on - k.arka) / 2, KASA_TABANI / 2,
+      new Vec2((k.on + k.arka) / 2, H + KASA_TABANI / 2), 0), { friction: 0.85, ...filtre });
+    c.createFixture(new Box(0.06, KASA_ON_DUVAR / 2,
+      new Vec2(k.on + 0.06, H + KASA_TABANI + KASA_ON_DUVAR / 2), 0), { friction: 0.6, ...filtre });
+  }
+
+  /** Kasaya konmuş, şasiye kaynamış yükler — yalnız kalıcı bölümde. */
+  private readonly konanlar: Array<{ task: Task; body: Body }> = [];
+  /** Güncel yük yükleme karesinde mi, yoksa henüz depoda mı bekliyor? */
+  private teslimEdildi = true;
+  /** Güncel yük bir kez olsun kancada kalktı mı? */
+  private tasindi = false;
+  /** Şasinin kıpırdamadan geçirdiği süre (s) — teslimin şartı. */
+  private dinginSn = 0;
+
   spawnLoad(spec: Task | null): void {
+    this.tasindi = false;
+    if (this.bolum.kalici) { this.kaliciYukle(spec); return; }
     if (this.load) this.world.destroyBody(this.load);
     this.loadSpec = spec;
     if (!spec) { this.grabbables = []; return; }
@@ -117,11 +149,127 @@ export class DirsekliSahne implements OyunSahnesi {
     this.grabbables = [{ body, halfWidth: spec.halfWidth, halfHeight: spec.halfHeight }];
   }
 
+  private konanlariTemizle(): void {
+    for (const k of this.konanlar) { this.world.destroyBody(k.body); this.snaps.birak(k.body); }
+    this.konanlar.length = 0;
+  }
+
+  /**
+   * Kasa bölümünde yük akışı.
+   *
+   * Konan yük şasiye KAYNIYOR: kamyonun parçası oluyor, sallanan bir sonraki
+   * yük ona çarparsa yerinden oynatamıyor, kamyon kıpırdarsa onunla gidiyor.
+   * Yeni yük depoda bekliyor ve makine ayaklarını açınca yükleme karesine,
+   * kuyruğun arkasına geliyor (bkz. `malzemeYerel`).
+   */
+  private kaliciYukle(spec: Task | null): void {
+    const bolumBasi = spec !== null && spec === this.bolum.gorevler[0];
+    if (bolumBasi) {
+      this.konanlariTemizle();
+      if (this.load) { this.world.destroyBody(this.load); this.snaps.birak(this.load); }
+    } else if (this.load && this.loadSpec) {
+      this.world.createJoint(new WeldJoint({}, this.truck.chassis, this.load,
+        this.load.getWorldCenter()));
+      this.konanlar.push({ task: this.loadSpec, body: this.load });
+    }
+    this.loadSpec = spec;
+    if (!spec) { this.grabbables = []; return; }
+    const sira = this.bolum.gorevler.indexOf(spec);
+    const body = this.world.createDynamicBody({
+      x: this.bolum.bekleyenX?.(sira) ?? this.bolum.malzemeX, y: spec.halfHeight + 0.02,
+    });
+    body.createFixture(new Box(spec.halfWidth, spec.halfHeight), {
+      density: 1, friction: 0.85, restitution: 0.02,
+    });
+    body.setAngularDamping(0.5);
+    this.snaps.track(body);
+    this.load = body;
+    // Makine zaten kurulu ve duruyorsa (sonraki görevler) palet hemen geliyor.
+    if (this.teslimeHazir) this.teslimEt();
+    else this.depodaBeklet();
+  }
+
+  /** Depoda: çarpışmasız, kıpırtısız, alınamaz — makine kurulunca gelecek. */
+  private depodaBeklet(): void {
+    this.teslimEdildi = false;
+    for (let f = this.load.getFixtureList(); f; f = f.getNext()) f.setFilterMaskBits(0);
+    this.load.setType('static');
+    this.grabbables = [];
+  }
+
+  /** Forklift paleti kuyruğun arkasına, vincin erişeceği yere bıraktı. */
+  private teslimEt(): void {
+    const spec = this.loadSpec;
+    if (!spec) return;
+    const yerel = this.bolum.malzemeYerel;
+    const x = yerel === undefined ? this.bolum.malzemeX
+      : this.truck.chassis.getWorldPoint(new Vec2(yerel, 0)).x;
+    this.load.setType('dynamic');
+    for (let f = this.load.getFixtureList(); f; f = f.getNext()) f.setFilterMaskBits(0xFFFF);
+    this.load.setTransform({ x, y: spec.halfHeight + 0.02 }, 0);
+    this.load.setLinearVelocity({ x: 0, y: 0 });
+    this.load.setAngularVelocity(0);
+    this.load.setMassData({
+      mass: spec.tonnes * 1000,
+      center: { x: 0, y: 0 },
+      I: (spec.tonnes * 1000 * (spec.halfWidth ** 2 + spec.halfHeight ** 2)) / 3,
+    });
+    this.teslimEdildi = true;
+    this.grabbables = [{ body: this.load, halfWidth: spec.halfWidth, halfHeight: spec.halfHeight }];
+  }
+
+  /**
+   * Forklift paleti getirebilir mi: ayaklar TAM açık ve kamyon durulmuş.
+   *
+   * "Çalışma modu" (ayaklar %15'ten fazla açık) yetmiyordu: yarım açıkken
+   * teslim edilen palet, ayaklar sonuna kadar açılınca kamyonun 16 santim
+   * kaymasıyla vinçten o kadar uzakta kalıyordu — ilk palet R 8.56'da, diğer
+   * dördü R 8.40'ta alındı ve ibre ilkinde iki puan fazla gösterdi.
+   */
+  private get teslimeHazir(): boolean {
+    return this.outriggers.state === OutriggerState.Full && this.dinginSn > 0.5
+      && this.parkta;
+  }
+
+  /** Kamyon bölümün park cebinde mi? Cep tanımlı değilse her yer uygun. */
+  private get parkta(): boolean {
+    const p = this.bolum.park;
+    return !p || Math.abs(this.truck.chassis.getPosition().x - p.x) <= p.payM;
+  }
+
+  /** Kasaya konmuş yükler — çizim her karede şasiyle birlikte çiziyor. */
+  get kasadakiler(): ReadonlyArray<{ task: Task; body: Body }> { return this.konanlar; }
+  /** Güncel yük henüz depoda mı? Çizim ve ipucu soruyor. */
+  get yukDepoda(): boolean { return !this.teslimEdildi; }
+
+  /** İşaret şu an yükün KENDİSİNİ mi gösteriyor (kasa bölümü, henüz alınmadı)? */
+  get isaretKaynakta(): boolean {
+    return this.bolum.kalici === true && !this.tasindi && this.teslimEdildi
+      && this.loadSpec !== null;
+  }
+
+  isaretNoktasi(t: Task): { x: number; y: number } | null {
+    if (this.isaretKaynakta && t === this.loadSpec) {
+      const p = this.load.getPosition();
+      return { x: p.x, y: p.y - t.halfHeight };
+    }
+    return this.hedefNoktasi(t);
+  }
+
+  yeniYukYeri(): string | null {
+    return this.bolum.kalici && this.loadSpec ? M.dirsekli.yer.kare : null;
+  }
+
   // --- bölüm --- (hepsi `DirsekliBolum`'den; gerekçeler orada)
   get gorevler(): readonly Task[] { return this.bolum.gorevler; }
   get hizEsikleri(): { tam: number; sifir: number } { return this.bolum.hizEsikleri; }
   hedefNoktasi(t: Task): { x: number; y: number } | null {
-    return this.bolum.hedefNoktasi(t);
+    const konanlar = new Map<string, { x: number; y: number; hw: number; hh: number }>();
+    for (const { task, body } of this.konanlar) {
+      const p = body.getPosition();
+      konanlar.set(task.kod, { x: p.x, y: p.y, hw: task.halfWidth, hh: task.halfHeight });
+    }
+    return this.bolum.hedefNoktasi(t, { sasi: this.truck.chassis, konanlar });
   }
   yerlestirmeToleransi(t: Task): { x: number; y: number } {
     return this.bolum.yerlestirmeToleransi(t);
@@ -155,7 +303,13 @@ export class DirsekliSahne implements OyunSahnesi {
 
   odakNoktalari(): Array<{ x: number; y: number }> {
     const c = this.truck.chassis.getPosition();
-    return [{ x: c.x, y: c.y + 1.6 }, this.bom.tipWorld, this.yukNoktasi];
+    const noktalar = [{ x: c.x, y: c.y + 1.6 }, this.bom.tipWorld, this.yukNoktasi];
+    if (this.isaretKaynakta) {
+      const p = this.load.getPosition();
+      const hh = this.loadSpec?.halfHeight ?? 0.5;
+      noktalar.push({ x: p.x, y: p.y + hh + 0.6 }, { x: p.x, y: 0 });
+    }
+    return noktalar;
   }
 
   kipiSec(k: SimKipi): void { this.kip = k; this.bom.kipiSec(k); }
@@ -167,9 +321,18 @@ export class DirsekliSahne implements OyunSahnesi {
   step(input: SceneInput, dt: number): void {
     this.carpmaBekleme = Math.max(0, this.carpmaBekleme - dt);
     if (input.reset) {
+      // Kaynaklı yükler şasiyle birlikte ışınlanamaz: kaynak onları bir adımda
+      // şasiye çekerdi. Bölüm zaten baştan başlıyor, önce onları kaldır.
+      if (this.bolum.kalici) this.konanlariTemizle();
       this.truck.reset(this.bolum.spawnX);
       this.outriggers.reset(this.truck.chassis);
     }
+    // Makine kuruldu ve AYAKLARIN ÜSTÜNDE DURULDU: depodaki palet yükleme
+    // karesine geliyor. Ayaklar açılırken kamyon 17 santim kayıyor; palet
+    // kurulum bitmeden gelse vincin 17 santim ötesinde kalıyordu.
+    const v = this.truck.chassis.getLinearVelocity();
+    this.dinginSn = Math.hypot(v.x, v.y) < 0.02 ? this.dinginSn + dt : 0;
+    if (!this.teslimEdildi && this.teslimeHazir) this.teslimEt();
     const u = M.vinc.uyari;
 
     // **Faz kilitleri EN ÖNDE yazılıyor, özel retler sonra.**
@@ -240,6 +403,7 @@ export class DirsekliSahne implements OyunSahnesi {
 
     this.bom.sampleLmi(dt);
     this.bom.flushJointQueue(this.grabbables);
+    if (this.bom.hasLoad) this.tasindi = true;
   }
 
   // --- HUD ---
@@ -415,6 +579,15 @@ export class DirsekliSahne implements OyunSahnesi {
       // Park penceresi BÖLÜME ait — gerekçesi `DAR_SOKAK.surusIpucu`'da.
       const x = this.truck.chassis.getPosition().x;
       return this.bolum.surusIpucu?.(x) ?? { metin: k.yanasma(t), mod: 'drive' };
+    }
+    // Kasa bölümü: palet henüz depoda. Kurulum yarımsa ne yapılacağını,
+    // tamsa neyin beklendiğini söyle — yoksa satır "kancayı yükün üstüne
+    // indir" derdi ve yükleme karesi boş.
+    if (this.yukDepoda && !this.hasLoad) {
+      if (!this.parkta) return { metin: k.cepDisi(t), mod: 'drive' };
+      return this.outriggers.state === OutriggerState.Full
+        ? { metin: k.paletGeliyor, mod: 'crane' }
+        : { metin: k.paletBekliyor(t), mod: 'ready' };
     }
     if (this.hasLoad) {
       // **Aşılacak engel BÖLÜME ait, teleskop MAKİNEYE.** Duvar uyarısını

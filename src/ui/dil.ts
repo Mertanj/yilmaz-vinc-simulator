@@ -225,6 +225,8 @@ export interface Metinler {
    */
   dirsekli: {
     ad: string; sinif: string; ozet: string; zorluk: string; tuslar: string;
+    /** "Yerine kondu" kartında yeni yükün yeri (kasa bölümü). */
+    yer: { kare: string };
     baslik: string;
     satir: {
       anaBom: string; kirma: string; uzama: string; ucKotu: string;
@@ -247,6 +249,14 @@ export interface Metinler {
       yanasma: (k: KumandaAdi) => string;
       /** Park cebini geçti — tabla malzemenin berisine düşüyor. */
       cebiGectin: string;
+      /** Kasa bölümü: cebi geçti, kuyruk deponun bekleme sırasına giriyor. */
+      cebiGectinDepo: string;
+      /** Kasa bölümü: ayaklar yarım — forklift paleti ancak tam kurulunca getiriyor. */
+      paletBekliyor: (k: KumandaAdi) => string;
+      /** Kasa bölümü: makine kuruldu, palet yolda (yarım saniyelik an). */
+      paletGeliyor: string;
+      /** Kasa bölümü: cebin dışında kuruldu — forklift paleti getiremez. */
+      cepDisi: (k: KumandaAdi) => string;
       /** Cebin içinde — olumlu işaret, bölümün tek "doğru yerdesin" anı. */
       cepte: (k: KumandaAdi) => string;
       yukBagli: (k: KumandaAdi) => string;
@@ -367,7 +377,9 @@ export interface Metinler {
   dekor: { sanayi: string; kurulum: string; sevkiyat: string; malKabul: string;
     park: string; avlu: string; rampa: string;
     /** Şantiye stok sahasının zemin etiketleri ve çit levhası. */
-    istif: string; kaide: string; kulube: string; baret: string };
+    istif: string; kaide: string; kulube: string; baret: string;
+    /** Dirsekli kasa bölümü: depo tabelası ve yükleme alanının zemin yazısı. */
+    yapiDepo: string; yukleme: string };
 
   gorev: Record<string, { ad: string; brif: string }>;
 
@@ -408,6 +420,7 @@ const TR: Metinler = {
     'sanayi': 'Sanayi sitesi',
     'santiye': 'Şantiye teslimatı',
     'dirsekli-dar-sokak': 'Dar sokak',
+    'dirsekli-kasa': 'Kasa yükleme',
   },
   dokunma: {
     ileri: 'ileri', geri: 'geri', fren: 'fren',
@@ -523,6 +536,7 @@ const TR: Metinler = {
     yer: { kasa: 'kamyon kasasında' },
   },
   dirsekli: {
+    yer: { kare: 'yükleme karesinde' },
     ad: 'YV-9 Dirsekli Vinç',
     sinif: '9 tm · kırma bomlu · dar sokak',
     ozet: 'Bahçe duvarının ardında yükselen kaba inşaatın teraslarına malzeme '
@@ -560,6 +574,12 @@ const TR: Metinler = {
     ipucu: {
       yanasma: (k) => `geri geri park cebine yanaş, sonra ayakları aç (${k.ayaklar})`,
       cebiGectin: 'park cebini geçtin — biraz ileri al, yoksa vinç malzemeye yetişmez',
+      cebiGectinDepo: 'park cebini geçtin — biraz ileri al, forklifte paleti bırakacak yer kalsın',
+      paletBekliyor: (k) => `ayakları SONUNA KADAR aç — forklift paleti ancak makine tam `
+        + `kurulunca getiriyor (${k.ayaklar})`,
+      paletGeliyor: 'forklift paleti yükleme karesine getiriyor…',
+      cepDisi: (k) => `park cebinin dışındasın — forklift paleti buraya getiremez · `
+        + `ayakları topla (${k.ayaklar}), cebe gir`,
       cepte: (k) => `PARK CEBİNDESİN · ayakları aç (${k.ayaklar})`,
       yukBagli: (k) => `yük bağlı · duvarı aş, sonra bırak (${k.kanca})`,
       uzat: () => 'hedef bu boyla erişilmiyor · TELESKOBU UZAT (⇧↑)',
@@ -707,6 +727,7 @@ const TR: Metinler = {
     sevkiyat: 'YILMAZ LOJİSTİK · SEVKİYAT', malKabul: 'MAL KABUL',
     park: 'PARK CEBİ', avlu: 'AVLU · İNŞAAT', rampa: 'RAMPA 1',
     istif: 'İSTİF', kaide: 'JENERATÖR', kulube: 'KULÜBE', baret: 'BARETSİZ GİRİLMEZ',
+    yapiDepo: 'YAPI MALZEMESİ DEPOSU', yukleme: 'YÜKLEME',
   },
   gorev: {
     /* Dirsekli bomun gorevleri BURADA DEGIL. `gorevAdi`/`gorevBrifi` sozlukte
@@ -766,6 +787,7 @@ const EN: Metinler = {
     'sanayi': 'Industrial estate',
     'santiye': 'Site delivery',
     'dirsekli-dar-sokak': 'Narrow street',
+    'dirsekli-kasa': 'Loading the bed',
   },
   dokunma: {
     ileri: 'forward', geri: 'reverse', fren: 'brake',
@@ -884,6 +906,7 @@ const EN: Metinler = {
     yer: { kasa: 'on the truck bed' },
   },
   dirsekli: {
+    yer: { kare: 'on the loading square' },
     ad: 'YV-9 Knuckle Boom Crane',
     sinif: '9 tm · articulated boom · narrow street',
     ozet: 'Lift materials up onto the terraces of a shell building behind a garden '
@@ -923,6 +946,12 @@ const EN: Metinler = {
     ipucu: {
       yanasma: (k) => `back into the parking bay, then set the outriggers (${k.ayaklar})`,
       cebiGectin: 'you are past the bay — pull forward a little, or the crane cannot reach the load',
+      cebiGectinDepo: 'you are past the bay — pull forward a little so the forklift has room for the pallet',
+      paletBekliyor: (k) => `set the outriggers ALL THE WAY — the forklift only brings the `
+        + `pallet once the machine is fully set up (${k.ayaklar})`,
+      paletGeliyor: 'the forklift is bringing the pallet to the loading square…',
+      cepDisi: (k) => `you are outside the parking bay — the forklift cannot bring the `
+        + `pallet here · stow the outriggers (${k.ayaklar}) and get into the bay`,
       cepte: (k) => `YOU ARE IN THE BAY · set the outriggers (${k.ayaklar})`,
       yukBagli: (k) => `load on the hook · clear the wall, then release (${k.kanca})`,
       uzat: () => 'the target is out of reach at this length · EXTEND THE BOOM (⇧↑)',
@@ -1071,6 +1100,7 @@ const EN: Metinler = {
     sevkiyat: 'YILMAZ LOGISTICS · DESPATCH', malKabul: 'GOODS IN',
     park: 'PARKING BAY', avlu: 'COURTYARD · BUILD', rampa: 'DOCK 1',
     istif: 'STACK', kaide: 'GENERATOR', kulube: 'CABIN', baret: 'HARD HATS ONLY',
+    yapiDepo: 'BUILDING SUPPLIES DEPOT', yukleme: 'LOADING',
   },
   gorev: {
     S1: { ad: 'Block pallet',
@@ -1089,6 +1119,17 @@ const EN: Metinler = {
     T3: { ad: 'Generator', brif: '125 kVA canopied generator — second-floor terrace' },
     T4: { ad: 'Screw compressor', brif: 'Screw compressor — third floor, 19 m radius' },
     T5: { ad: 'Air handling unit', brif: 'AHU — top terrace, end of the boom, 92% on the gauge' },
+    /* Kasa yüklemenin Türkçesi veri dosyasında (`YUKLEME_GOREVLERI`). */
+    N1: { ad: 'Block pallet',
+      brif: 'Front of the bed, right behind the column: fold the boom, butt it up to the headboard' },
+    N2: { ad: 'Cement pallet',
+      brif: 'Push it tight to the one ahead — like the trailer, but this load swings' },
+    N3: { ad: 'Sand bag',
+      brif: 'Big bag: kill the swing, then lower — a soft load does not bounce back' },
+    N4: { ad: 'Tile pallet',
+      brif: 'Fourth row: past the middle of the bed, the margin is shrinking' },
+    N5: { ad: 'Formwork pack',
+      brif: 'Last row, nearest the tail: if the others are tight, there is room' },
     /* Şantiye teslimatının Türkçesi veri dosyasında (`SANTIYE_GOREVLERI`). */
     K1: { ad: 'Generator',
       brif: 'Back of the truck → the pad: the heaviest load, but the closest to the crane' },

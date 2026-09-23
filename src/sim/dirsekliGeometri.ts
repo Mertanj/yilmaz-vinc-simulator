@@ -120,6 +120,15 @@ export const DIRSEKLI_SPEC = {
   kirmaHizDegPerSec: 7.0,
   /** Teleskop hızı (m/s). Eklemlerden yavaş: uzatma kolları ağır çalışır. */
   uzamaHizMps: 0.55,
+  /**
+   * Kumandanın sıfırdan tam hıza çıkma süresi (s) — dört kolun hepsinde.
+   *
+   * Vinçte 0.6 (bom) ve 0.45 (vinç); bu makine daha çevik ve kısa bir rampa
+   * yetiyor: uç en hızlı ~1.1 m/s'yle gidiyor, 0.3 saniyelik rampada ivmesi
+   * 3.7 m/s² — yerçekiminin altında, yani aşağı kalkan ucu yük halat
+   * gevşemeden izleyebiliyor.
+   */
+  rampaSn: 0.3,
 
   /** Moment sınırı (ton·metre) — makinenin ilan değeri. */
   momentTm: 9.0,
