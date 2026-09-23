@@ -13,7 +13,9 @@ import { turSonucuHtml } from '../src/ui/turSonucHtml';
 import {
   acikBolumSayisi, bolumAnahtari, rotaAnahtari, type BolumKimligi,
 } from '../src/game/ilerleme';
-import { M } from '../src/ui/dil';
+import { M, dilSec, gorevBrifi } from '../src/ui/dil';
+import { FORKLIFT_BOLUMLERI } from '../src/game/forkliftTasks';
+import { adresKotu, katAdi } from '../src/game/forkliftBolum';
 import { farkiYaz, sureyiYaz } from '../src/ui/sure';
 import type { Result } from '../src/game/mission';
 
@@ -329,3 +331,26 @@ esit('yeni rotada rekor YOK (eski rotanin rekoru tasinmiyor)',
 turEnIyiKaydet(tamTur, rotaIki);
 esit('yeni rotanin rekoru kendi anahtarinda', turEnIyiOku(rotaIki).hiz?.sure, 1840);
 esit('eski rotanin rekoru ETKILENMEDI', turEnIyiOku().hiz?.sure, 1450);
+
+// --- FORKLIFT BRIFINGLERI: adres ve kot RAFIN KENDISINDEN ---
+// Raf katlari 3.00/4.70'ten 2.80/4.90'a indiginde veri dosyasi guncellendi
+// ama sozlukteki brifler guncellenmedi: oyuncu iki surum boyunca "B1, 3.00
+// m" okudu. Brif bir adres ya da kot yaziyorsa, rafin gercek adresi ve
+// kotu olmak zorunda — iki dilde de.
+for (const b of FORKLIFT_BOLUMLERI) {
+  for (const g of b.gorevler) {
+    const raf = g.kaynak.tur === 'raf' ? g.kaynak : g.varis.tur === 'raf' ? g.varis : null;
+    if (!raf) continue;
+    const kot = adresKotu(b, raf.adres) ?? -1;
+    const ad = katAdi(b, raf.adres);
+    for (const dil of ['tr', 'en'] as const) {
+      dilSec(dil);
+      const brif = gorevBrifi(g.kod, g.brif);
+      const kotlar = [...brif.matchAll(/(\d+\.\d{2}) m\b/g)].map((m) => Number(m[1]));
+      esit(`${b.id}/${g.kod} ${dil}: brif adresle basliyor (${ad})`, brif.startsWith(`${ad},`), true);
+      esit(`${b.id}/${g.kod} ${dil}: brifteki kot rafin kotu (${kot.toFixed(2)})`,
+        kotlar.every((k) => Math.abs(k - kot) < 0.005), true);
+    }
+  }
+}
+dilSec('tr');

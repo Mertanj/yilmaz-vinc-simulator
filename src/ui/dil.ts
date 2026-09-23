@@ -45,7 +45,8 @@ export interface KonduMetni {
   isabet: (cm: number) => string;
   hiz: (sure: string) => string;
   ceza: string; enYuksekMoment: string;
-  sonraki: (kalan: number) => string;
+  /** @param yer yeni yükün nerede beklediği; sahne söylemiyorsa genel ifade. */
+  sonraki: (kalan: number, yer?: string) => string;
 }
 
 export interface Metinler {
@@ -271,11 +272,21 @@ export interface Metinler {
       yuklu: string; yanas: string; uzak: string; sig: string;
       /** Paleti gözün dışına bıraktın — ne olduğunu söyle. */
       kacirdi: string;
+      /** Dorse bölümü: yük çatalda, dorseye götür. */
+      yukluDorse: string;
+      /** Dorse bölümü: palet sırasına oturmadı. */
+      kacirdiDorse: string;
+      /** Palet rafın derinliğinde: makine henüz adanın batısına geçmedi. */
+      rafta: (adres: string) => string;
+      /** Palet gözün önünde ama makine uzakta. */
+      uzakRaf: (adres: string) => string;
       hazir: (k: KumandaAdi) => string;
       yuksek: (k: KumandaAdi) => string;
       alcak: (k: KumandaAdi) => string;
       kot: (k: KumandaAdi) => string;
     };
+    /** "Yerine kondu" kartında yeni yükün yeri. */
+    yer: { raf: (adres: string) => string; konveyor: string };
   };
 
   kondu: KonduMetni;
@@ -339,7 +350,7 @@ export interface Metinler {
   cevir: { bas: string; govde: string; yineOyna: string; yatayOyna: string };
 
   dekor: { sanayi: string; kurulum: string; sevkiyat: string; malKabul: string;
-    park: string; avlu: string };
+    park: string; avlu: string; rampa: string };
 
   gorev: Record<string, { ad: string; brif: string }>;
 
@@ -540,8 +551,8 @@ const TR: Metinler = {
   forklift: {
     ad: 'YF-25 Forklift',
     sinif: '2.5 ton · karşı ağırlıklı · depo',
-    ozet: 'Paletleri kademeli rafın gözlerine koy. Yük alma tuşu yok: '
-      + 'bıçağı paletin cebine sokup kaldırıyorsun, gerisi fizik.',
+    ozet: 'Paletleri rafın gözlerine koy, raftan alıp dorseye yükle. Yük alma '
+      + 'tuşu yok: bıçağı paletin cebine sokup kaldırıyorsun, gerisi fizik.',
     zorluk: 'Sınırı yatay mesafe koyuyor: çatal ne kadar az girerse yük merkezi o kadar uzar.',
     tuslar: '<b>sürüş</b> <kbd>→</kbd> gaz <kbd>←</kbd> geri <kbd>boşluk</kbd> el freni<br>'
       + '<b>çatal</b> <kbd>W</kbd><kbd>S</kbd> kaldır/indir '
@@ -594,12 +605,17 @@ const TR: Metinler = {
       hazir: (k) => `ÇATAL CEBİN DİBİNDE · kaldır (${k.kaldir})`,
       sig: 'cepte ama SIĞ · biraz daha ileri sür, yoksa yük merkezi uzar',
       kacirdi: 'palet gözün dışında kaldı · yeniden al ve gözüne koy',
+      yukluDorse: 'yük çatalda · dorseye sür, öndeki palete yanaştır, indir',
+      kacirdiDorse: 'palet sırasına oturmadı · yeniden al, öndekine boşluksuz yanaştır',
+      rafta: (adres) => `palet ${adres} gözünde · almak için adanın batısına geri çekil`,
+      uzakRaf: (adres) => `palet ${adres} gözünde · doğuya sür, çatalı cebin hizasına getir`,
       yuksek: (k) => `çatal çok yüksek · cebin altına in (${k.indir})`,
       alcak: (k) => `çatal çok alçak · paletin cebine getir (${k.kaldir})`,
       yanas: 'kot doğru · ileri sür, bıçağı cebe sok',
       kot: (k) => `çatalı paletin cebi hizasına getir (${k.ikisi})`,
       uzak: 'paletler yükleme karesine iniyor · doğuya sür',
     },
+    yer: { raf: (adres) => `${adres} gözünde`, konveyor: 'mal kabulde' },
   },
   kondu: {
     toplam: (sure) => `tur toplamı · ${sure}`,
@@ -607,8 +623,8 @@ const TR: Metinler = {
     isabet: (cm) => `isabet · ${cm} cm sapma`,
     hiz: (sure) => `hız · ${sure}`,
     ceza: 'aşırı yük / çarpma', enYuksekMoment: 'bu görevde en yüksek moment',
-    sonraki: (kalan) => kalan > 0
-      ? `sırada ${kalan} görev var · yeni yük malzeme alanında`
+    sonraki: (kalan, yer) => kalan > 0
+      ? `sırada ${kalan} görev var · yeni yük ${yer ?? 'malzeme alanında'}`
       : 'bölümdeki son yük — toparlayabilirsin',
   },
   tur: {
@@ -667,7 +683,7 @@ const TR: Metinler = {
   dekor: {
     sanayi: 'SANAYİ SİTESİ · C BLOK', kurulum: 'KURULUM ALANI',
     sevkiyat: 'YILMAZ LOJİSTİK · SEVKİYAT', malKabul: 'MAL KABUL',
-    park: 'PARK CEBİ', avlu: 'AVLU · İNŞAAT',
+    park: 'PARK CEBİ', avlu: 'AVLU · İNŞAAT', rampa: 'RAMPA 1',
   },
   gorev: {
     /* Dirsekli bomun gorevleri BURADA DEGIL. `gorevAdi`/`gorevBrifi` sozlukte
@@ -685,13 +701,13 @@ const TR: Metinler = {
     D1: { ad: 'Çimento paleti',
       brif: 'A-Z, zemin gözü — ısınma turu: çatalı paletin cebine dibine kadar sok' },
     D2: { ad: 'Fayans paleti',
-      brif: 'B1, 3.00 m — ikinci ada: kapasite tam burada erimeye başlıyor' },
+      brif: 'B1, 2.80 m — ikinci ada: kapasite tam burada erimeye başlıyor' },
     D3: { ad: 'Boya varilleri',
-      brif: 'C1, 3.00 m — geniş palet: çatal az girerse yük merkezi uzar, ibre tırmanır' },
+      brif: 'C1, 2.80 m — geniş palet: çatal az girerse yük merkezi uzar, ibre tırmanır' },
     D4: { ad: 'Yalıtım balyası',
-      brif: 'A2, 4.70 m — bölümün en hafifi ama en genişi: ilk adaya geri dön' },
+      brif: 'A2, 4.90 m — bölümün en hafifi ama en genişi: ilk adaya geri dön' },
     D5: { ad: 'Çelik profil',
-      brif: 'C2, 4.70 m — bölümün en ağırı, en uzak adanın en üst katı' },
+      brif: 'C2, 4.90 m — bölümün en ağırı, en uzak adanın en üst katı' },
   },
   yuzde: (n) => `%${n}`,
   hata: (e) => `Başlatılamadı: ${e}`,
@@ -890,8 +906,9 @@ const EN: Metinler = {
   forklift: {
     ad: 'YF-25 Forklift',
     sinif: '2.5 t · counterbalance · warehouse',
-    ozet: 'Put pallets into a stepped rack. No pick-up key: you slide the blades '
-      + 'into the pallet pockets and lift — the rest is physics.',
+    ozet: 'Put pallets into the rack, then pick them back out and load the trailer. '
+      + 'No pick-up key: you slide the blades into the pallet pockets and lift — '
+      + 'the rest is physics.',
     zorluk: 'Horizontal distance sets the limit: the shallower the forks go in, '
       + 'the longer the load centre.',
     tuslar: '<b>drive</b> <kbd>→</kbd> throttle <kbd>←</kbd> reverse <kbd>space</kbd> brake<br>'
@@ -945,12 +962,17 @@ const EN: Metinler = {
       hazir: (k) => `BLADES FULLY HOME · lift (${k.kaldir})`,
       sig: 'in the pocket but SHALLOW · go in further or the load centre runs out',
       kacirdi: 'the pallet is outside the bay · pick it up and place it again',
+      yukluDorse: 'load on the forks · drive onto the trailer, butt it up to the pallet ahead, lower',
+      kacirdiDorse: 'the pallet missed its row · pick it up and push it tight to the one ahead',
+      rafta: (adres) => `the pallet is in bay ${adres} · back off west of the island to reach it`,
+      uzakRaf: (adres) => `the pallet is in bay ${adres} · drive east, line the forks up with the pocket`,
       yuksek: (k) => `forks too high · get under the pocket (${k.indir})`,
       alcak: (k) => `forks too low · line up with the pocket (${k.kaldir})`,
       yanas: 'height is right · drive in, slide the blades into the pocket',
       kot: (k) => `line the forks up with the pallet pocket (${k.ikisi})`,
       uzak: 'pallets arrive at the loading square · drive east',
     },
+    yer: { raf: (adres) => `in bay ${adres}`, konveyor: 'at goods-in' },
   },
   kondu: {
     toplam: (sure) => `run total · ${sure}`,
@@ -958,8 +980,8 @@ const EN: Metinler = {
     isabet: (cm) => `accuracy · ${cm} cm off`,
     hiz: (sure) => `speed · ${sure}`,
     ceza: 'overload / impact', enYuksekMoment: 'peak moment on this task',
-    sonraki: (kalan) => kalan > 0
-      ? `${kalan} task${kalan === 1 ? '' : 's'} to go · next load is waiting`
+    sonraki: (kalan, yer) => kalan > 0
+      ? `${kalan} task${kalan === 1 ? '' : 's'} to go · next load is ${yer ?? 'waiting'}`
       : 'last load of the level — pack up',
   },
   tur: {
@@ -1018,7 +1040,7 @@ const EN: Metinler = {
   dekor: {
     sanayi: 'INDUSTRIAL ESTATE · BLOCK C', kurulum: 'SET-UP ZONE',
     sevkiyat: 'YILMAZ LOGISTICS · DESPATCH', malKabul: 'GOODS IN',
-    park: 'PARKING BAY', avlu: 'COURTYARD · BUILD',
+    park: 'PARKING BAY', avlu: 'COURTYARD · BUILD', rampa: 'DOCK 1',
   },
   gorev: {
     S1: { ad: 'Block pallet',
@@ -1040,13 +1062,25 @@ const EN: Metinler = {
     D1: { ad: 'Cement pallet',
       brif: 'A-Z, floor bay — warm-up: get the blades right into the pocket' },
     D2: { ad: 'Tile pallet',
-      brif: 'B1, 3.00 m — second island: this is where capacity starts to melt' },
+      brif: 'B1, 2.80 m — second island: this is where capacity starts to melt' },
     D3: { ad: 'Paint drums',
-      brif: 'C1, 3.00 m — wide pallet: go in shallow and the load centre runs away' },
+      brif: 'C1, 2.80 m — wide pallet: go in shallow and the load centre runs away' },
     D4: { ad: 'Insulation bale',
-      brif: 'A2, 4.70 m — lightest of the level but the widest: back to the first island' },
+      brif: 'A2, 4.90 m — lightest of the level but the widest: back to the first island' },
     D5: { ad: 'Steel sections',
-      brif: 'C2, 4.70 m — heaviest of the level, top bay of the farthest island' },
+      brif: 'C2, 4.90 m — heaviest of the level, top bay of the farthest island' },
+    /* Rampa bölümünün Türkçesi veri dosyasında (`RAMPA_GOREVLERI`) — tek
+       kaynak orası; burada yalnız çevirisi var. */
+    Y1: { ad: 'Paint drums',
+      brif: 'C-Z, floor bay → the front of the trailer: drive until it touches the headboard' },
+    Y2: { ad: 'Cement pallet',
+      brif: 'A1, 2.80 m — the farthest island; on the trailer, butt it up to the one ahead' },
+    Y3: { ad: 'Tile pallet',
+      brif: 'B2, 4.90 m — first high pick: the load comes onto the forks up there, and so does the needle' },
+    Y4: { ad: 'Insulation bale',
+      brif: 'C1, 2.80 m — the widest pallet: the blades cannot reach the back, long load centre' },
+    Y5: { ad: 'Steel sections',
+      brif: 'A2, 4.90 m — heaviest of the level: from the top of the farthest island to the tailgate' },
   },
   yuzde: (n) => `${n}%`,
   hata: (e) => `Failed to start: ${e}`,

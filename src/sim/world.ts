@@ -121,6 +121,9 @@ export class Snapshotter {
     return body;
   }
 
+  /** Yok edilen gövdeyi bırak — yoksa her yeniden başlatmada liste büyüyor. */
+  birak(body: Body): void { this.prev.delete(body); }
+
   /** Her fizik adımından ÖNCE çağrılır. */
   capture(): void {
     for (const [body, slot] of this.prev) {

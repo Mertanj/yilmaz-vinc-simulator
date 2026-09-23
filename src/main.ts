@@ -398,6 +398,11 @@ function oyna(
     indeks: arac.bolumler.indexOf(bolum),
   });
   const mission = new Mission(scene);
+  // Tarayıcı testlerinin kancası: yalnız geliştirme sunucusunda. Üretim
+  // derlemesinde `DEV` sabit `false` ve satır tamamen siliniyor.
+  if (import.meta.env.DEV) {
+    (window as unknown as { __yv?: unknown }).__yv = { scene, mission };
+  }
 
   document.title = `${arac.ad} · Yılmaz Vinç`;
   const ustBaslik = document.querySelector('#ust b');
@@ -844,7 +849,7 @@ function oyna(
           + `<dd data-iyi="${lmiIyi ? 'evet' : 'hayir'}">${M.yuzde(t.maxLmi.toFixed(0))}</dd>`,
           '</dl>',
           araSatiri(t.sira, t.toplamSure),
-          `<p class="sonraki">${k.sonraki(t.kalan)}</p>`,
+          `<p class="sonraki">${k.sonraki(t.kalan, scene.yeniYukYeri?.() ?? undefined)}</p>`,
         ].join('');
         hud.kondu.hidden = false;
       }

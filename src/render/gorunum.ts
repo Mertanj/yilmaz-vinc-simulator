@@ -15,7 +15,7 @@ import { CableView, drawHookBlock } from './craneView';
 import { ForkliftView, drawForkliftWheel } from './forkliftView';
 import {
   drawRaf, drawDepoZemin, drawDepoIci, drawPalet, drawDepoArkaPlan, drawKonveyor,
-  derinlige, drawSevkiyatAlani, CepGostergesi, TozBulutu,
+  derinlige, drawSevkiyatAlani, drawDisari, drawDorse, CepGostergesi, TozBulutu,
 } from './depo';
 import {
   drawGround, drawFactory, drawFarSkyline, drawEntranceSign, drawPropBox,
@@ -41,7 +41,7 @@ export abstract class SahneGorunumu {
   readonly aktorler = new Container();
   protected readonly marker = new TargetMarker();
   private loadViewFor: Task | null = null;
-  private loadView: Container = new Container();
+  protected loadView: Container = new Container();
   /** Hedef işaretinin direk boyu (m) — raf katı terastan alçak. */
   protected isaretBoyu = 1.15;
 
@@ -276,7 +276,8 @@ export class ForkliftGorunumu extends SahneGorunumu {
     // önünde duruyor — arkasında değil.
     // Stok katmanı yükün ve makinenin ALTINDA: konan palet gözün
     // derinliğinde duruyor, koridordaki her şey onun önünden geçiyor.
-    this.aktorler.addChild(this.stokKatmani);
+    // Sırası gelmemiş paletler stoktan da geride: hâlâ rafın derinliğindeler.
+    this.aktorler.addChild(this.bekleyenKatmani, this.stokKatmani);
     this.aktorler.addChild(this.makineView, ...this.wheelViews);
     this.yukuKur();
     // Cep göstergesi ve toz EN ÜSTTE: ikisi de makinenin önünde geçiyor.
@@ -286,6 +287,9 @@ export class ForkliftGorunumu extends SahneGorunumu {
   /** Oyuncunun yerine koyduğu paletler — sahnede kalıyorlar. */
   private readonly stokKatmani = new Container();
   private cizilenStok = 0;
+  /** Rafta sırasını bekleyen paletler; görev değişince yeniden çiziliyor. */
+  private readonly bekleyenKatmani = new Container();
+  private bekleyenlerGorevi: Task | null | undefined = undefined;
   private readonly cepGostergesi = new CepGostergesi();
   private readonly toz = new TozBulutu();
   private oncekiDusus = 0;
@@ -293,10 +297,14 @@ export class ForkliftGorunumu extends SahneGorunumu {
   dekor(): Container[] {
     const b = this.s.bolum;
     return [
-      drawDepoIci(b.bati, b.dogu),
-      drawSevkiyatAlani(b.bati, b.girisX - 2),
+      drawDisari(b),
+      drawDepoIci(b.bati, b.dorse?.arka ?? b.dogu, b.dorse !== undefined),
+      // Hazırlık alanı mal kabulün ya da ilk adanın koridorunun batısında
+      // bitiyor: dorse bölümünde konveyör yok, ilk ada da daha batıda.
+      drawSevkiyatAlani(b.bati,
+        b.malKabul ? b.malKabul.x - 2 : (b.adaX[0] ?? b.bati) - 3.4),
       drawDepoZemin(b),
-      drawRaf(b), drawKonveyor(b),
+      drawRaf(b), drawKonveyor(b), drawDorse(b),
     ];
   }
 
@@ -316,15 +324,57 @@ export class ForkliftGorunumu extends SahneGorunumu {
       if (!kayit) continue;
       const kutu = this.yukCiz(kayit.task, false);
       kutu.position.set(kayit.x, kayit.y);
-      this.stokKatmani.addChild(derinlige(kutu));
+      kutu.rotation = kayit.a;
+      // Rafa konan gözün derinliğine itiliyor; dorseye konan yerinde kalıyor.
+      this.stokKatmani.addChild(kayit.derin ? derinlige(kutu) : kutu);
     }
     this.cizilenStok = liste.length;
   }
 
+  /** Rafta bekleyen paletleri görev değişince yeniden çiz. */
+  private bekleyenleriGuncelle(): void {
+    const t = this.s.loadTask;
+    if (t === this.bekleyenlerGorevi) return;
+    this.bekleyenlerGorevi = t;
+    for (const c of this.bekleyenKatmani.removeChildren()) c.destroy({ children: true });
+    for (const p of this.s.bekleyenPaletler) {
+      const kutu = this.yukCiz(p.task, false);
+      kutu.position.set(p.x, p.y);
+      this.bekleyenKatmani.addChild(derinlige(kutu));
+    }
+  }
+
+  /**
+   * Yük çiziminin sırası: raftayken makinenin ARKASINDA, sonra önünde.
+   *
+   * Taşınan yük direğin önünde duruyor, o yüzden yük normalde en üstte.
+   * Ama rafın derinliğinde bekleyen paletin önünden makine geçiyor — üstte
+   * çizilse makine paletin arkasından geçiyormuş gibi görünürdü. Sıra
+   * değiştiği anda makine paletin tamamen batısında (bkz. `rafaUlasir`),
+   * yani ikisi üst üste değil ve geçiş görünmüyor.
+   */
+  private yukSirasi(): void {
+    const a = this.aktorler;
+    const yuk = this.loadView;
+    const arkada = a.getChildIndex(yuk) < a.getChildIndex(this.makineView);
+    if (this.s.paletRafta === arkada) return;
+    a.removeChild(yuk);
+    if (this.s.paletRafta) a.addChildAt(yuk, a.getChildIndex(this.makineView));
+    else a.addChildAt(yuk, a.getChildIndex(this.marker) + 1);
+  }
+
   override ciz(alpha: number, hedef: { x: number; y: number } | null,
                hedefHw: number, frameDt = 1 / 60): void {
+    // İşaret raftaki paleti gösterirken ok paletin ÜSTÜNDE olmalı: 0.55
+    // metrelik direkle ok paletin arkasında kalıyor, yan direkler de rafın
+    // sarı dikme koruyucularına karışıyordu — işaret vardı ama görünmüyordu.
+    const t = this.s.loadTask;
+    this.isaretBoyu = this.s.isaretKaynakta && t
+      ? PALET_AYAK + t.halfHeight * 2 + 0.3 : 0.55;
     super.ciz(alpha, hedef, hedefHw, frameDt);
     this.stoguGuncelle();
+    this.bekleyenleriGuncelle();
+    this.yukSirasi();
     this.cepGostergesi.guncelle(this.s.forklift.cep(this.s.grabbables));
     this.tozuSur(frameDt);
   }

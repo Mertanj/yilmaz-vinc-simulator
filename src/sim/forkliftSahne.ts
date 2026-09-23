@@ -7,8 +7,8 @@ import {
   PALET_AYAK, RAF_DERINLIK, SEVKIYAT_KORIDORU, TESLIM_HIZI, ZEMIN_BANDI,
 } from '../game/forkliftTasks';
 import {
-  DORSE_ARALIGI, DORSE_PAYI, adresKotu, adresX, dorseSiraMerkezi,
-  type ForkliftBolum, type ForkliftGorevi,
+  DORSE_ARALIGI, DORSE_PAYI, adresKotu, adresX, dorseSiraMerkezi, katAdi,
+  type Dorse, type ForkliftBolum, type ForkliftGorevi,
 } from '../game/forkliftBolum';
 import type { Task } from '../game/tasks';
 import type { SceneInput } from './scene';
@@ -117,6 +117,43 @@ export function createDepoDuvarlari(world: World, b: ForkliftBolum): Body {
 }
 
 /**
+ * Dorsenin ön duvarı — paletlerin dayandığı yer.
+ *
+ * Yalnız ön duvar fizikte; taban depo zeminiyle aynı kotta olduğu için
+ * zemin plakası zaten onu taşıyor (bkz. `Dorse`). Duvar HER ŞEYLE çarpışıyor,
+ * çatal dahil: boş çatalla duvara sürmek sahada da duvara sürmektir. Bu
+ * yüzden dibe giden ilk palet çataldan DERİN olmak zorunda — sığ bir
+ * paletin önünden taşan bıçak ucu duvara dayanır ve palet dibe varamaz
+ * (bölüm verisi bunu kuruyor, sahne değil).
+ */
+export const ON_DUVAR = { kalinlik: 0.14, yukseklik: 2.4 } as const;
+
+export function createDorse(world: World, d: Dorse): Body {
+  const body = world.createBody();
+  body.createFixture(
+    new Box(ON_DUVAR.kalinlik / 2, ON_DUVAR.yukseklik / 2,
+      new Vec2(d.on + ON_DUVAR.kalinlik / 2, ON_DUVAR.yukseklik / 2), 0),
+    { friction: 0.6, restitution: 0 },
+  );
+  return body;
+}
+
+/**
+ * Paletin çarpışmasını aç ya da kapat.
+ *
+ * Her fikstürün asıl maskesi kendi `userData`sında duruyor; kapatınca maske
+ * sıfır oluyor (`MASKE.stok` ile aynı anlam: hiçbir şeye değmiyor), açınca
+ * asıl maskeye dönüyor. Maskeyi burada yeniden yazmak, `spawnLoad`'daki
+ * filtreyle sessizce ayrışabilecek ikinci bir kopya olurdu.
+ */
+function carpisma(body: Body, acik: boolean): void {
+  for (let f = body.getFixtureList(); f; f = f.getNext()) {
+    const asil = f.getUserData();
+    if (typeof asil === 'number') f.setFilterMaskBits(acik ? asil : 0);
+  }
+}
+
+/**
  * Forklift sahnesi.
  *
  * Vinç sahnesiyle aynı arayüzü uyguluyor, dolayısıyla görev akışı, puanlama,
@@ -133,13 +170,20 @@ export class ForkliftSahnesi implements OyunSahnesi {
   grabbables: Grabbable[] = [];
   carpma = 0;
   private olcumTon = 0;
-  /** Palet konveyörde mi, iniyor mu, yerde mi? */
-  private teslim: 'bekliyor' | 'iniyor' | 'hazir' = 'hazir';
+  /**
+   * Palet nerede?
+   *
+   * - `bekliyor`/`iniyor`: konveyörde ya da iniyor;
+   * - `rafta`: raf gözünün derinliğinde — makine henüz batısına geçmedi;
+   * - `hazir`: alınabilir.
+   */
+  private teslim: 'bekliyor' | 'iniyor' | 'rafta' | 'hazir' = 'hazir';
 
   constructor(readonly bolum: ForkliftBolum = SEVKIYAT_KORIDORU) {
     createGround(this.world);
     createRaf(this.world, bolum);
     createDepoDuvarlari(this.world, bolum);
+    if (bolum.dorse) createDorse(this.world, bolum.dorse);
     this.forklift = new Forklift(this.world, this.snaps);
     this.spawnLoad(bolum.gorevler[0] ?? null);
 
@@ -170,43 +214,108 @@ export class ForkliftSahnesi implements OyunSahnesi {
    * yapmak için yine aynı yere gelirdik — üstelik bir de boşuna çözülen
    * gövde taşıyarak.
    */
-  readonly stok: Array<{ task: Task; x: number; y: number }> = [];
+  readonly stok: Array<{
+    task: Task; x: number; y: number; a: number;
+    /**
+     * Rafa konan palet gözün DERİNLİĞİNE itilmiş sayılıyor ve çizimde
+     * kaydırılıyor; dorseye konan olduğu yerde duruyor.
+     */
+    derin: boolean;
+  }> = [];
+
+  /**
+   * Dorseye konmuş paletlerin gövdeleri — **katı ve statik.**
+   *
+   * Rafa konan palet çarpışmayı bırakıyor (derinliğe itildi, koridordan
+   * çıktı). Dorsede bu doğru olmazdı: konan palet orada, bir sonrakinin
+   * önünde duruyor. İkinci bölümün dersi tam da bu — ilk palet en dibe,
+   * sonrakiler ona dayanarak. Kötü konan palet bir sonrakinin yerini
+   * gerçekten kapatıyor.
+   */
+  private readonly katilar: Body[] = [];
 
   spawnLoad(spec: Task | null): void {
     // `gorevler[0]` ile çağrılmak bölümün BAŞI demek: ya ilk açılış ya da
     // yeniden başlatma. İkisinde de depo boş sayfadan başlamalı.
     const bolumBasi = spec !== null && spec === this.bolum.gorevler[0];
-    if (bolumBasi) this.stok.length = 0;
+    if (bolumBasi) {
+      this.stok.length = 0;
+      for (const g of this.katilar) { this.world.destroyBody(g); this.snaps.birak(g); }
+      this.katilar.length = 0;
+    }
     if (this.load) {
       // Bölüm ortasında yeni görev geliyorsa öncekini oyuncu YERİNE KOYDU;
       // sahnede kalsın. Başta ise eskisini temizliyoruz.
       const onceki = this.loadSpec;
       if (!bolumBasi && onceki) {
         const p = this.load.getPosition();
-        this.stok.push({ task: onceki, x: p.x, y: p.y });
+        const dorsede = this.gorev(onceki).varis.tur === 'dorse';
+        this.stok.push({
+          task: onceki, x: p.x, y: p.y, a: this.load.getAngle(), derin: !dorsede,
+        });
+        if (dorsede) {
+          this.load.setType('static');
+          // **Çatal dorsedeki palete DEĞMİYOR.** Bıçak 1.35 metre ve dar
+          // paletlerden uzun: dibine kadar sokulmuş bıçağın ucu paletin
+          // önünden 30 santim taşıyor. Komşu palet çatalla çarpışsaydı uç
+          // ona dayanır, taşınan palet komşusuna hiç yanaşamazdı — sıkı
+          // istif, dersin kendisi, imkânsız olurdu. Gerçekte de bıçağın ucu
+          // öndeki paletin cebine girer. Paletler birbirine yine değiyor.
+          for (let f = this.load.getFixtureList(); f; f = f.getNext()) {
+            const m = f.getFilterMaskBits() & ~KATEGORI.catal;
+            f.setFilterMaskBits(m);
+            f.setUserData(m);
+          }
+          this.katilar.push(this.load);
+        } else {
+          this.world.destroyBody(this.load);
+          this.snaps.birak(this.load);
+        }
+      } else {
+        this.world.destroyBody(this.load);
+        this.snaps.birak(this.load);
       }
-      this.world.destroyBody(this.load);
     }
     this.loadSpec = spec;
     this.tasindi = false;
     if (!spec) { this.grabbables = []; return; }
-    // **Palet ancak makine yükleme karesinin BATISINDAYKEN iniyor.**
-    // Forklift dönemediği için paleti alabilmek hep onun batısında olmak
-    // demek; oysa önceki paleti rafa bırakınca makine doğuda kalıyor. Palet
-    // önceden yerde dursaydı makine batıya dönerken onu önüne katardı
-    // (ölçüldü: palet 1.7 metre süründü, çatal cebe hiç girmedi). Mal kabul
-    // konveyörü sahada da tam olarak bunu yapıyor: sen yerine geçince indirir.
+
+    const kaynak = this.gorev(spec).kaynak;
     const yerKotu = spec.halfHeight + PALET_AYAK;
-    const acik = this.forklift.forkTip.x < this.teslimKapisi();
-    this.teslim = acik ? 'hazir' : 'bekliyor';
-    const body = this.world.createDynamicBody({
-      x: this.bolum.girisX, y: acik ? yerKotu : this.bolum.teslimKotu + spec.halfHeight,
-    });
-    if (!acik) body.setType('kinematic');
+    let x: number;
+    let y: number;
+    if (kaynak.tur === 'raf') {
+      // **Palet gözün ön kenarında, kirişe AYAKLARIYLA oturmuş doğuyor** —
+      // birinci bölümde oyuncunun onu bıraktığı yerin tam aynısı. Tam oturma
+      // kotunda doğması şart: birkaç santim yukarıda doğsa kirişe düşüp
+      // sekiyor, oyuncu daha dokunmadan yerinden oynuyordu.
+      const kot = adresKotu(this.bolum, kaynak.adres) ?? 0;
+      const on = adresX(this.bolum, kaynak.adres) ?? 0;
+      x = on + spec.halfWidth + 0.06;
+      y = kot + yerKotu;
+      this.teslim = this.rafaUlasir(x - spec.halfWidth) ? 'hazir' : 'rafta';
+    } else {
+      // **Palet ancak makine yükleme karesinin BATISINDAYKEN iniyor.**
+      // Forklift dönemediği için paleti alabilmek hep onun batısında olmak
+      // demek; oysa önceki paleti rafa bırakınca makine doğuda kalıyor.
+      // Palet önceden yerde dursaydı makine batıya dönerken onu önüne
+      // katardı (ölçüldü: palet 1.7 metre süründü, çatal cebe hiç girmedi).
+      // Mal kabul konveyörü sahada da tam olarak bunu yapıyor: sen yerine
+      // geçince indirir.
+      const mk = this.bolum.malKabul;
+      if (!mk) throw new Error(`${this.bolum.id}: konveyör kaynağı var, mal kabul yok`);
+      const acik = this.forklift.forkTip.x < mk.beklemeCizgisi;
+      this.teslim = acik ? 'hazir' : 'bekliyor';
+      x = mk.x;
+      y = acik ? yerKotu : mk.teslimKotu + spec.halfHeight;
+    }
+    const body = this.world.createDynamicBody({ x, y });
+    if (this.teslim === 'bekliyor') body.setType('kinematic');
     // Yükün kendisi: her şeye değiyor.
     body.createFixture(new Box(spec.halfWidth, spec.halfHeight), {
       density: 1, friction: 0.9, restitution: 0.01,
       filterCategoryBits: KATEGORI.yuk, filterMaskBits: MASKE.yuk,
+      userData: MASKE.yuk,
     });
     // **Paletin ayakları.** Cebi açan şey bunlar: yük zeminden 15 cm yukarıda
     // duruyor ve çatal altına giriyor. Ayaklar çatalla ÇARPIŞMIYOR, çünkü
@@ -218,16 +327,93 @@ export class ForkliftSahnesi implements OyunSahnesi {
           new Vec2(sx * (spec.halfWidth - 0.18), -spec.halfHeight - PALET_AYAK / 2), 0),
         { density: 0.2, friction: 0.9,
           filterCategoryBits: KATEGORI.paletAyagi,
-          filterMaskBits: MASKE.paletAyagi & MASKE.yuk },
+          filterMaskBits: MASKE.paletAyagi & MASKE.yuk,
+          userData: MASKE.paletAyagi & MASKE.yuk },
       );
     }
     this.load = body;
     this.kutleyiYaz(spec);
     body.setAngularDamping(0.6);
     this.snaps.track(body);
+    if (this.teslim === 'rafta') {
+      // Rafın derinliğinde: hiçbir şeye değmiyor, düşmüyor, alınamıyor.
+      carpisma(body, false);
+      body.setType('static');
+      this.grabbables = [];
+      return;
+    }
     this.grabbables = [{
       body, halfWidth: spec.halfWidth, halfHeight: spec.halfHeight, ayakM: PALET_AYAK,
     }];
+  }
+
+  /**
+   * Makine raftaki palete ulaşabilir mi — yani TAMAMEN batısında mı?
+   *
+   * **Sorunun kendisi 2B'den doğuyor.** Çatal doğuya bakıyor ve dorse
+   * doğuda; yani palet her seferinde doğudan geri gelen bir makinenin
+   * önünde. Palet baştan katı olsaydı makine ona arkasından çarpardı:
+   * zemin gözündekini direk ve sırtlık itiyor, 2.80'deki paletin tabanı
+   * (3.16 m) ise direğin tepesinden (3.30 m) alçakta — geri geri gelen
+   * makine onu kirişten süpürürdü.
+   *
+   * Yan görünümün baştan beri kullandığı sözleşme bunu zaten çözüyor: raf
+   * koridorun DERİNLİĞİNDE duruyor ve makine onun önünden geçiyor (kirişler
+   * de bu yüzden makineye değmiyor). Palet de makine adanın batısına
+   * geçene kadar o derinlikte bekliyor; çatalın ucu paletin önüne çıkınca
+   * gözün önüne geliyor. O anda makinenin hiçbir parçası paletle üst üste
+   * değil — çatalın ucu makinenin en doğu noktası.
+   */
+  private rafaUlasir(paletBatisi: number): boolean {
+    return this.forklift.forkTip.x < paletBatisi - 0.05;
+  }
+
+  /** Raftaki palet gözün önüne geldi: artık katı, düşebilir, alınabilir. */
+  private raftanCikar(spec: Task): void {
+    this.load.setType('dynamic');
+    carpisma(this.load, true);
+    this.load.setLinearVelocity({ x: 0, y: 0 });
+    this.load.setAngularVelocity(0);
+    this.kutleyiYaz(spec);
+    this.teslim = 'hazir';
+    this.grabbables = [{
+      body: this.load, halfWidth: spec.halfWidth, halfHeight: spec.halfHeight,
+      ayakM: PALET_AYAK,
+    }];
+  }
+
+  yeniYukYeri(): string | null {
+    const t = this.loadSpec;
+    if (!t) return null;
+    const k = this.gorev(t).kaynak;
+    return k.tur === 'raf' ? M.forklift.yer.raf(katAdi(this.bolum, k.adres))
+      : M.forklift.yer.konveyor;
+  }
+
+  /** Palet hâlâ rafın derinliğinde mi? Çizim bunu soruyor. */
+  get paletRafta(): boolean { return this.teslim === 'rafta'; }
+
+  /**
+   * Sırası henüz gelmemiş, rafta bekleyen paletler — tamamen çizim için.
+   *
+   * Fizik gövdeleri yok: yalnız GÜNCEL görevin paleti gövde. Gerisi rafın
+   * derinliğinde duruyor ve sırası gelince gözün önüne geçiyor.
+   */
+  get bekleyenPaletler(): Array<{ task: Task; x: number; y: number }> {
+    const gorevler = this.bolum.gorevler;
+    const i = this.loadSpec ? gorevler.indexOf(this.loadSpec as ForkliftGorevi) : -1;
+    if (i < 0) return [];
+    const liste: Array<{ task: Task; x: number; y: number }> = [];
+    for (const g of gorevler.slice(i + 1)) {
+      if (g.kaynak.tur !== 'raf') continue;
+      const kot = adresKotu(this.bolum, g.kaynak.adres);
+      const on = adresX(this.bolum, g.kaynak.adres);
+      if (kot === undefined || on === undefined) continue;
+      liste.push({
+        task: g, x: on + g.halfWidth + 0.06, y: kot + PALET_AYAK + g.halfHeight,
+      });
+    }
+    return liste;
   }
 
   /** Forklift bölümü — depo. Hedefler raf katları. */
@@ -307,8 +493,29 @@ export class ForkliftSahnesi implements OyunSahnesi {
     return dorseSiraMerkezi(this.bolum, sira) ?? d.on - DORSE_PAYI - t.halfWidth;
   }
 
-  /** Hedef işareti kirişin ÜSTÜNDE dursun, paletin tabanında değil. */
+  /**
+   * Hedef işareti kirişin ÜSTÜNDE dursun, paletin tabanında değil.
+   *
+   * **Raftan alınacak palet henüz alınmadıysa işaret ONU gösteriyor.**
+   * Birinci bölümde palet hep konveyörde, gözün önündeydi; burada ise
+   * dolu bir rafın içinde, stok paletlerin arasında. İşaret her an "şimdi
+   * nereye" sorusunun cevabı olmalı: önce palet, sonra dorse.
+   */
+  /** İşaret şu an paletin KENDİSİNİ mi gösteriyor (henüz alınmadı)? */
+  get isaretKaynakta(): boolean {
+    const t = this.loadSpec;
+    return t !== null && this.gorev(t).kaynak.tur === 'raf' && !this.tasindi;
+  }
+
   isaretNoktasi(t: Task): { x: number; y: number } | null {
+    const k = this.gorev(t).kaynak;
+    if (k.tur === 'raf' && !this.tasindi && t === this.loadSpec) {
+      const kot = adresKotu(this.bolum, k.adres);
+      const on = adresX(this.bolum, k.adres);
+      if (kot !== undefined && on !== undefined) {
+        return { x: on + t.halfWidth + 0.06, y: kot };
+      }
+    }
     const h = this.hedefNoktasi(t);
     if (!h) return null;
     const v = this.gorev(t).varis;
@@ -377,12 +584,18 @@ export class ForkliftSahnesi implements OyunSahnesi {
     const yuk = this.hasLoad ? this.loadSpec : null;
     // Kirişe ilk dokunacak iki aday: sırtlığın tepesi (taşıyıcıda, dar) ve
     // bıçağın/yükün üstü (çatal boyunca).
+    //
+    // **Taşınan yükün kutusu BIÇAĞIN ÜSTÜNDE duruyor**, ayakları bıçağın iki
+    // yanından aşağı sarkıyor. Burada bir ara `PALET_AYAK` yazıyordu ve yük
+    // 30 santim yüksek sanılıyordu: raftan alan oyuncu, paleti kirişten
+    // daha 13 santim kaldırmışken "kiriş altında, kaldırma kilitli" uyarısı
+    // alıyordu — üstteki kirişle arasında gerçekte 55 santim varken.
     const topuk = f.forkWorld.x;
     const adaylar: Array<{ x0: number; x1: number; ust: number }> = [
       { x0: topuk - 0.1, x1: topuk + 0.1, ust: f.liftM + FORKLIFT.sirtlikM },
       yuk
         ? { x0: topuk, x1: topuk + yuk.halfWidth * 2,
-            ust: f.liftM + PALET_AYAK + yuk.halfHeight * 2 }
+            ust: f.liftM + FORKLIFT.bicakKalinligiM + yuk.halfHeight * 2 }
         : { x0: topuk, x1: f.forkTip.x, ust: f.liftM + FORKLIFT.bicakKalinligiM },
     ];
     for (const on of this.bolum.adaX) {
@@ -432,6 +645,14 @@ export class ForkliftSahnesi implements OyunSahnesi {
       // ayak izleri ve "DUR" çizgisi — yani oyuncuya nerede duracağını
       // söyleyen her şey — çizilmiş ama görünmüyordu.
       { x: c.x, y: -ZEMIN_BANDI },
+      // **Sıradaki palet rafta bekliyorsa o da kadraja giriyor.** Rampa
+      // bölümünde makine dorseden 26 metre geri dönüyor ve palet ekranın
+      // dışında kalıyordu: oyuncu işareti değil yalnız ipucu satırını
+      // görüyordu. Taşırken hedefi zaten `main.ts` ekliyor.
+      ...(this.isaretKaynakta && !this.hasLoad ? [{
+        x: this.load.getPosition().x,
+        y: this.load.getPosition().y + (this.loadSpec?.halfHeight ?? 0.5) + 0.6,
+      }] : []),
     ];
   }
 
@@ -478,10 +699,15 @@ export class ForkliftSahnesi implements OyunSahnesi {
     this.olcumTon += (ham - this.olcumTon) * Math.min(1, dt / 0.2);
   }
 
-  /** Yükleme karesine palet indirme akışı. */
+  /** Yükleme karesine palet indirme akışı; raftaki paleti gözün önüne alma. */
   private teslimiYurut(): void {
     const spec = this.loadSpec;
     if (!spec || this.teslim === 'hazir') return;
+    if (this.teslim === 'rafta') {
+      const p = this.load.getPosition();
+      if (this.rafaUlasir(p.x - spec.halfWidth)) this.raftanCikar(spec);
+      return;
+    }
     if (this.teslim === 'bekliyor') {
       if (this.forklift.forkTip.x >= this.teslimKapisi()) return;
       this.load.setLinearVelocity({ x: 0, y: -TESLIM_HIZI });
@@ -492,7 +718,8 @@ export class ForkliftSahnesi implements OyunSahnesi {
     if (this.load.getPosition().y > yerKotu) return;
     // Yere değdi: artık normal dinamik gövde. setType kütleyi sıfırladığı
     // için kütle verisi yeniden yazılıyor — vinçteki kanca hatasının aynısı.
-    this.load.setTransform({ x: this.bolum.girisX, y: yerKotu }, 0);
+    this.load.setTransform({ x: this.bolum.malKabul?.x ?? this.load.getPosition().x,
+      y: yerKotu }, 0);
     this.load.setType('dynamic');
     this.load.setLinearVelocity({ x: 0, y: 0 });
     this.load.setAngularVelocity(0);
@@ -504,9 +731,11 @@ export class ForkliftSahnesi implements OyunSahnesi {
    * Paletin inebilmesi için çatal ucunun batısında kalması gereken çizgi.
    *
    * Artık yüke göre değişmiyor: zeminde boyalı duran çizgiyle aynı yerde
-   * (bkz. `this.bolum.beklemeCizgisi`). Oyuncunun göremediği bir kural, kural değil.
+   * (bkz. `MalKabul.beklemeCizgisi`). Oyuncunun göremediği bir kural, kural değil.
    */
-  private teslimKapisi(): number { return this.bolum.beklemeCizgisi; }
+  private teslimKapisi(): number {
+    return this.bolum.malKabul?.beklemeCizgisi ?? Number.NEGATIVE_INFINITY;
+  }
 
   /** Palet yere indi mi? HUD ve rig bunu soruyor. */
   get paletHazir(): boolean { return this.teslim === 'hazir'; }
@@ -625,6 +854,11 @@ export class ForkliftSahnesi implements OyunSahnesi {
 
   ipucu(): { metin: string; mod: 'drive' | 'crane' | 'ready' } {
     const i = M.forklift.ipucu;
+    const kaynak = this.loadSpec ? this.gorev(this.loadSpec).kaynak : null;
+    const kaynakAdi = kaynak?.tur === 'raf' ? katAdi(this.bolum, kaynak.adres) : null;
+    if (this.teslim === 'rafta' && kaynakAdi) {
+      return { metin: i.rafta(kaynakAdi), mod: 'drive' };
+    }
     if (!this.paletHazir) {
       return {
         metin: this.teslim === 'iniyor' ? i.teslimIniyor : i.teslimBekle,
@@ -633,9 +867,13 @@ export class ForkliftSahnesi implements OyunSahnesi {
     }
     const durum = this.forklift.durum(this.grabbables);
     const k = kumandaAdi();
+    const dorseye = this.loadSpec !== null
+      && this.gorev(this.loadSpec).varis.tur === 'dorse';
     const say: Record<typeof durum, string> = {
-      yuklu: i.yuklu, hazir: i.hazir(k), sig: i.sig, yuksek: i.yuksek(k),
-      alcak: i.alcak(k), yanas: i.yanas, kot: i.kot(k), uzak: i.uzak,
+      yuklu: dorseye ? i.yukluDorse : i.yuklu, hazir: i.hazir(k), sig: i.sig, yuksek: i.yuksek(k),
+      alcak: i.alcak(k), yanas: i.yanas, kot: i.kot(k),
+      // Konveyörün cümlesi raftaki palet için yalan olurdu.
+      uzak: kaynakAdi ? i.uzakRaf(kaynakAdi) : i.uzak,
     };
     let metin = say[durum];
     const t = this.loadSpec;
@@ -666,7 +904,7 @@ export class ForkliftSahnesi implements OyunSahnesi {
       // **Işıksız bir hata olmasın.** Palet gözün yanına düştüğünde oyun hiçbir
       // şey söylemiyordu: HUD sessizce alma ipucuna dönüyordu ve oyuncu neyi
       // yanlış yaptığını hiç öğrenemiyordu.
-      metin = `${i.kacirdi} · ${metin}`;
+      metin = `${dorseye ? i.kacirdiDorse : i.kacirdi} · ${metin}`;
     }
 
     return {
@@ -682,13 +920,17 @@ export class ForkliftSahnesi implements OyunSahnesi {
    * kez taşımış) ve hedef pencerenin dışında durması.
    */
   private kacirildi(t: Task, hedef: { x: number; y: number }): boolean {
-    if (this.hasLoad || !this.paletHazir) return false;
+    // Ölçüm: palet bir kez çatala binmiş (yani oyuncu onu taşıdı), şimdi
+    // çatalda değil ve hedef pencerenin dışında duruyor. Eskiden "palet
+    // yükleme karesinden çıktı mı" diye bakılıyordu; o yalnız konveyörden
+    // gelen paletler için anlamlıydı, raftan alınan palet için değil.
+    if (this.hasLoad || !this.paletHazir || !this.tasindi) return false;
     const p = this.load.getPosition();
-    if (p.x < this.bolum.girisX + 1.5) return false;
     const tol = this.yerlestirmeToleransi(t);
     return Math.abs(p.x - hedef.x) > tol.x
       || Math.abs(p.y - (hedef.y + t.halfHeight)) > tol.y;
   }
+
 
   reset(): void { this.forklift.reset(); }
 }

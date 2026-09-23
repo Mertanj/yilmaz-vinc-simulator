@@ -94,6 +94,14 @@ export interface OyunSahnesi {
    */
   isaretNoktasi?(t: Task): { x: number; y: number } | null;
   /**
+   * Güncel yük NEREDE bekliyor — "yerine kondu" kartının son satırı.
+   *
+   * Kart her makinede "yeni yük malzeme alanında" yazıyordu; rampa
+   * bölümünde yeni palet bir raf gözünde ve kart oyuncuyu yanlış yere
+   * yolluyordu. Söylemeyen sahne genel ifadeyi alıyor.
+   */
+  yeniYukYeri?(): string | null;
+  /**
    * Makine kurtarılamayacak şekilde devrildi mi?
    *
    * Eşik makineye ait, çünkü aynı açı iki araçta aynı şeyi anlatmıyor:

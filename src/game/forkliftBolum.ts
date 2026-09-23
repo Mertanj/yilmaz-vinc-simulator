@@ -39,6 +39,19 @@ export interface ForkliftGorevi extends Task {
   varis: Nokta;
 }
 
+export interface MalKabul {
+  /** Konveyörün x'i — paletler buraya iniyor. */
+  x: number;
+  /** Paletin konveyörde beklediği kot (m). */
+  teslimKotu: number;
+  /**
+   * Bekleme çizgisi (m) — paletin inebilmesi için çatal ucunun batısında
+   * kalması gereken x. Zeminde boyalı duruyor; oyuncunun göremediği bir
+   * kural, kural değil.
+   */
+  beklemeCizgisi: number;
+}
+
 /**
  * Sevkiyat kapısına yanaşmış tır dorsesi.
  *
@@ -78,16 +91,14 @@ export interface ForkliftBolum {
    */
   readonly katlar: readonly number[];
 
-  /** Mal kabul konveyörünün x'i — paletler buraya iniyor. */
-  readonly girisX: number;
-  /** Paletin indiği kot (m). */
-  readonly teslimKotu: number;
   /**
-   * Bekleme çizgisi (m) — paletin inebilmesi için çatal ucunun batısında
-   * kalması gereken x. Zeminde boyalı duruyor; göremediği bir kural, kural
-   * değil.
+   * Mal kabul konveyörü — yalnız paletleri KONVEYÖRDEN gelen bölümlerde.
+   *
+   * Dorse bölümünde paletler raflardan alınıyor ve konveyör yok; alanı
+   * zorunlu tutmak, o bölümün verisinde var olmayan bir makinenin kotunu
+   * yazmak demekti.
    */
-  readonly beklemeCizgisi: number;
+  readonly malKabul?: MalKabul;
 
   /** Deponun iki ucu (m) — duvarlar ve kamera sınırı buradan. */
   readonly bati: number;

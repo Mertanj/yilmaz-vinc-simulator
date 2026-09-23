@@ -183,11 +183,13 @@ export const SEVKIYAT_KORIDORU: ForkliftBolum = {
   adaX: B1_ADA_X,
   adaAdi: ['A', 'B', 'C'],
   katlar: B1_KATLAR,
-  girisX: B1_GIRIS_X,
-  teslimKotu: 3.6,
-  // En geniş paletin (yarı en 0.95) batı yüzü 16.05'te; çizgi 15.75'te,
-  // 30 cm pay. Görevden göreve değişmiyor ki zeminde boyanabilsin.
-  beklemeCizgisi: B1_GIRIS_X - 1.25,
+  malKabul: {
+    x: B1_GIRIS_X,
+    teslimKotu: 3.6,
+    // En geniş paletin (yarı en 0.95) batı yüzü 16.05'te; çizgi 15.75'te,
+    // 30 cm pay. Görevden göreve değişmiyor ki zeminde boyanabilsin.
+    beklemeCizgisi: B1_GIRIS_X - 1.25,
+  },
   bati: -12,
   dogu: 44,
   gorevler: FORKLIFT_TASKS,
@@ -212,9 +214,122 @@ export const SEVKIYAT_KORIDORU: ForkliftBolum = {
   kameraOlcegi: { yakin: 46, uzak: 24 },
 };
 
+// --- BÖLÜM 2: "Sevkiyat rampası" --------------------------------------------
+
+/**
+ * **Yol TERSİNE dönüyor: raftan kamyona.**
+ *
+ * Birinci bölüm malı rafa koymayı öğretiyordu; sahadaki işin öteki yarısı
+ * onu raftan alıp sevkiyata çıkarmak. İki yeni şey var:
+ *
+ *  - **Raftan almak koymaktan zor.** Yük çatala YUKARIDA biniyor: ibre
+ *    4.90 metrede, yük merkezi ne kadar derin girdiğine göre tırmanıyor ve
+ *    palet kirişten ancak birkaç santim kaldırılıp geri çekilerek çıkıyor.
+ *  - **Dorse sıkı yüklenir.** İlk palet ön duvara, her sonraki öndekine
+ *    dayanarak. Arada boşluk bırakan oyuncunun hatası birikmiyor (hedef
+ *    öndeki paletin GERÇEK yerinden hesaplanıyor) ama her palet kendi
+ *    komşusuna yanaşmak zorunda.
+ *
+ * Adalar birinci bölümdekiyle aynı ölçüde (2.60 m raf + 3.40 m koridor) ve
+ * aynı katlarda; değişen yerleri. Deponun doğu ucu rampa, ötesi dorse.
+ */
+const B2_ADA_X = [10.0, 16.0, 22.0];
+const B2_KATLAR = [0.00, 2.80, 4.90];
+const b2 = (ada: number, kat: number): number => ada * B2_KATLAR.length + kat;
+
+/**
+ * Raftan dorseye. `hedef` ortak `Task` alanı; burada dorse sırası — rafın
+ * adresi `kaynak`ta.
+ */
+const raftanDorseye = (ada: number, kat: number, sira: number): Pick<ForkliftGorevi,
+  'hedef' | 'kaynak' | 'varis'> => ({
+  hedef: sira,
+  kaynak: { tur: 'raf', adres: b2(ada, kat) },
+  varis: { tur: 'dorse', sira },
+});
+
+/**
+ * Beş görev, beş sıra — dorsenin önünden arkasına.
+ *
+ *   Y1  C-Z  zemin  → 1. sıra: ön duvara. Isınma; en yakın ada.
+ *   Y2  A1   2.80 m → 2. sıra: en uzak ada, ilk kirişten alma
+ *   Y3  B2   4.90 m → 3. sıra: ilk yüksek alma
+ *   Y4  C1   2.80 m → 4. sıra: en geniş palet — bıçak dibe varmıyor
+ *   Y5  A2   4.90 m → 5. sıra: en ağır palet, en uzak adanın tepesi
+ *
+ * **Ön duvara giden ilk palet ÇATALDAN DERİN olmak zorunda** (varil paleti
+ * 1.76 m, bıçak 1.35 m). Sığ bir paletin önünden bıçağın ucu taşıyor ve
+ * ön duvar çatalla çarpışıyor; palet dibe hiç varamazdı.
+ */
+export const RAMPA_GOREVLERI: readonly ForkliftGorevi[] = [
+  {
+    kod: 'Y1', ad: 'Boya varilleri', tonnes: 1.20,
+    halfWidth: 0.88, halfHeight: 0.45, kind: 'varil', ...raftanDorseye(2, 0, 0),
+    brif: 'C-Z, zemin gözü → dorsenin dibine: ön duvara dayanana kadar sür',
+  },
+  {
+    kod: 'Y2', ad: 'Çimento paleti', tonnes: 1.29,
+    halfWidth: 0.58, halfHeight: 0.42, kind: 'cimento', ...raftanDorseye(0, 1, 1),
+    brif: 'A1, 2.80 m — en uzak ada; dorsede öndekine boşluksuz yanaştır',
+  },
+  {
+    kod: 'Y3', ad: 'Fayans paleti', tonnes: 1.45,
+    halfWidth: 0.60, halfHeight: 0.38, kind: 'fayans', ...raftanDorseye(1, 2, 2),
+    brif: 'B2, 4.90 m — ilk yüksek alma: yük çatala yukarıda biniyor, ibre de orada',
+  },
+  {
+    kod: 'Y4', ad: 'Yalıtım balyası', tonnes: 1.02,
+    halfWidth: 0.95, halfHeight: 0.45, kind: 'balya', ...raftanDorseye(2, 1, 3),
+    brif: 'C1, 2.80 m — en geniş palet: bıçak dibe varmaz, yük merkezi uzun',
+  },
+  {
+    kod: 'Y5', ad: 'Çelik profil', tonnes: 1.70,
+    halfWidth: 0.52, halfHeight: 0.30, kind: 'profil', ...raftanDorseye(0, 2, 4),
+    brif: 'A2, 4.90 m — bölümün en ağırı: en uzak adanın tepesinden dorsenin kapağına',
+  },
+];
+
+export const SEVKIYAT_RAMPASI: ForkliftBolum = {
+  id: 'rampa',
+  adaX: B2_ADA_X,
+  adaAdi: ['A', 'B', 'C'],
+  katlar: B2_KATLAR,
+  bati: -6,
+  /**
+   * Doğu ucu çekicinin tamponu: kamera buraya kadar gösteriyor. Fizikte
+   * makineyi durduran şey dorsenin ön duvarı, bu duvar değil.
+   */
+  dogu: 40.4,
+  gorevler: RAMPA_GOREVLERI,
+  /**
+   * 9 metrelik açık kasa. Beş palet ön duvardan itibaren 7.44 metre
+   * tutuyor; arkada kalan 1.5 metre, son paleti koyarken makinenin
+   * kapıdan girip çıkma payı.
+   */
+  dorse: { arka: 28.0, on: 37.0 },
+  /** Görevlerin gözleri dışında kalan dört adres dolu: depo boş durmasın. */
+  stok: [
+    { hedef: b2(0, 0), kind: 'briket', halfWidth: 0.66, halfHeight: 0.46 },
+    { hedef: b2(1, 0), kind: 'cimento', halfWidth: 0.70, halfHeight: 0.44 },
+    { hedef: b2(1, 1), kind: 'fayans', halfWidth: 0.62, halfHeight: 0.40 },
+    { hedef: b2(2, 2), kind: 'balya', halfWidth: 0.90, halfHeight: 0.42 },
+  ],
+  /**
+   * Ölçülen tur: görev başına 35–91 s. Birinci bölümden uzun, çünkü her
+   * görev iki yol: dorseden rafa GERİ, raftan dorseye İLERİ — en uzunu 26
+   * metre gidip 25 metre dönüyor, ve yüksek gözden almak (Y3, Y5) direk
+   * yukarıdayken adım hızında sürmek demek. Eşikler rig'in hız bonusundan
+   * birinci bölümdekiyle aynı payı (%76) alacağı yerde.
+   */
+  hizEsikleri: { tam: 45, sifir: 140 },
+  kameraOlcegi: { yakin: 46, uzak: 24 },
+};
+
 /**
  * Forkliftin bölümleri, AÇILMA SIRASIYLA.
  *
  * Sıra oyuncunun göreceği sıra: birincisini bitiren ikinciyi açıyor.
  */
-export const FORKLIFT_BOLUMLERI: readonly ForkliftBolum[] = [SEVKIYAT_KORIDORU];
+export const FORKLIFT_BOLUMLERI: readonly ForkliftBolum[] = [
+  SEVKIYAT_KORIDORU, SEVKIYAT_RAMPASI,
+];

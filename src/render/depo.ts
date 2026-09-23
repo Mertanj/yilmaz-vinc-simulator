@@ -6,7 +6,9 @@ import { RAF_DERINLIK, PALET_AYAK, ZEMIN_BANDI } from '../game/forkliftTasks';
 import {
   adresIndeksi, adresKotu, adresX, katAdi, type ForkliftBolum,
 } from '../game/forkliftBolum';
+import { ON_DUVAR } from '../sim/forkliftSahne';
 import { drawLoad } from './missionView';
+import { drawWheel } from './truckView';
 import { M } from '../ui/dil';
 
 /**
@@ -148,7 +150,8 @@ export function drawDepoZemin(b: ForkliftBolum): Container {
   const g = new Graphics();
   const yazilar: Container[] = [];
   const left = b.bati;
-  const right = b.dogu;
+  // Dorse bölümünde depo RAMPADA bitiyor; ötesi dorsenin kendisi.
+  const right = b.dorse?.arka ?? b.dogu;
   // Zeminin kendisi ve kenar pahı
   g.rect(left, -8, right - left, 8).fill(C.depoFloor);
   g.rect(left, -0.06, right - left, 0.06).fill(C.depoFloorD);
@@ -213,29 +216,49 @@ export function drawDepoZemin(b: ForkliftBolum): Container {
     yazilar.push(et);
   });
 
-  // --- 5. Yükleme karesi: paletler buraya iniyor ---
-  g.rect(b.girisX - 1.6, -0.16, 3.2, 0.08).fill({ color: C.hazardY, alpha: 0.95 });
-  g.rect(b.girisX - 1.6, -1.15, 3.2, 0.08).fill({ color: C.hazardY, alpha: 0.95 });
-  for (const x of [b.girisX - 1.6, b.girisX + 1.52]) {
-    g.rect(x, -1.15, 0.08, 1.07).fill({ color: C.hazardY, alpha: 0.95 });
-  }
-  taraliAlan(g, b.girisX - 1.52, b.girisX + 1.52, -0.24, -1.07, 0.3);
+  // --- 5 + 6. Mal kabul: yükleme karesi ve bekleme çizgisi ---
+  // Yalnız paletleri konveyörden gelen bölümlerde; dorse bölümünde mal
+  // raflardan alınıyor ve orada boyalı bir yükleme karesi yalan söylerdi.
+  const mk = b.malKabul;
+  if (mk) {
+    g.rect(mk.x - 1.6, -0.16, 3.2, 0.08).fill({ color: C.hazardY, alpha: 0.95 });
+    g.rect(mk.x - 1.6, -1.15, 3.2, 0.08).fill({ color: C.hazardY, alpha: 0.95 });
+    for (const x of [mk.x - 1.6, mk.x + 1.52]) {
+      g.rect(x, -1.15, 0.08, 1.07).fill({ color: C.hazardY, alpha: 0.95 });
+    }
+    taraliAlan(g, mk.x - 1.52, mk.x + 1.52, -0.24, -1.07, 0.3);
 
-  // --- 6. Bekleme çizgisi: paletin inmesi için buranın batısında dur ---
-  // Kural zaten vardı ama GÖRÜNMÜYORDU: oyuncuya "yükleme karesinin
-  // batısına geç" deniyor, nereye kadar olduğu söylenmiyordu.
-  g.rect(b.beklemeCizgisi - 0.07, -2.3, 0.14, 2.3)
-    .fill({ color: 0xE8EEF0, alpha: 0.9 });
-  for (let y = -2.25; y < -0.1; y += 0.34) {
-    g.rect(b.beklemeCizgisi - 0.07, y, 0.14, 0.17)
-      .fill({ color: C.liveryRed, alpha: 0.95 });
+    // Kural zaten vardı ama GÖRÜNMÜYORDU: oyuncuya "yükleme karesinin
+    // batısına geç" deniyor, nereye kadar olduğu söylenmiyordu.
+    g.rect(mk.beklemeCizgisi - 0.07, -2.3, 0.14, 2.3)
+      .fill({ color: 0xE8EEF0, alpha: 0.9 });
+    for (let y = -2.25; y < -0.1; y += 0.34) {
+      g.rect(mk.beklemeCizgisi - 0.07, y, 0.14, 0.17)
+        .fill({ color: C.liveryRed, alpha: 0.95 });
+    }
+    const bekle = worldText('DUR', 0.36, { fill: 0xE8EEF0 });
+    bekle.position.set(mk.beklemeCizgisi - 0.95, -0.52);
+    bekle.anchor.set(0.5, 0.5);
+    bekle.scale.y = Math.abs(bekle.scale.y) * -0.55;
+    bekle.scale.x = Math.abs(bekle.scale.x);
+    yazilar.push(bekle);
   }
-  const bekle = worldText('DUR', 0.36, { fill: 0xE8EEF0 });
-  bekle.position.set(b.beklemeCizgisi - 0.95, -0.52);
-  bekle.anchor.set(0.5, 0.5);
-  bekle.scale.y = Math.abs(bekle.scale.y) * -0.55;
-  bekle.scale.x = Math.abs(bekle.scale.x);
-  yazilar.push(bekle);
+
+  // --- 7. Rampa önü: yükleme alanı ---
+  // Dorse bölümünde kapının önü taranıyor ve kapının adı zemine yazılıyor.
+  // Oyuncunun bu bölümde bulacağı ilk soru "mal nereye gidecek" ve cevabı
+  // rafların arasında değil, koridorun doğu ucunda.
+  const d = b.dorse;
+  if (d) {
+    taraliAlan(g, d.arka - 3.1, d.arka - 0.3, -0.22, -1.62, 0.3);
+    g.rect(d.arka - 3.2, -1.7, 3.2, 0.08).fill({ color: C.hazardY, alpha: 0.95 });
+    const rampa = worldText(M.dekor.rampa, 0.42, { fill: 0xEBD79A });
+    rampa.position.set(d.arka - 1.6, -0.92);
+    rampa.anchor.set(0.5, 0.5);
+    rampa.scale.y = Math.abs(rampa.scale.y) * -0.55;
+    rampa.scale.x = Math.abs(rampa.scale.x);
+    yazilar.push(rampa);
+  }
 
   return kapla(g, ...yazilar);
 }
@@ -270,7 +293,16 @@ function taraliAlan(g: Graphics, x0: number, x1: number, y0: number, y1: number,
  * ve ekranın üst yarısı boş kalıyordu — kapalı bir mekânda bu, deponun
  * tavanının olmadığı izlenimi veriyordu.
  */
-export function drawDepoIci(left: number, right: number): Container {
+/**
+ * Rampa kapısının açıklığı (m).
+ *
+ * Gerçek rampa kapısı 2.7–3.0 metredir; buradaki 4.4 metre, direği 3.30
+ * metre olan bir makinenin kapıdan geçebilmesi için. Direği alçak bir
+ * "konteyner forklifti" yerine standart depo makinesini kullanmanın bedeli.
+ */
+export const RAMPA_KAPISI = 4.4;
+
+export function drawDepoIci(left: number, right: number, rampa = false): Container {
   const c = new Container();
   const g = new Graphics();
   const tavan = 7.4;
@@ -316,6 +348,10 @@ export function drawDepoIci(left: number, right: number): Container {
   // duruyor) ama çizilmiyordu: oyun testinde batı ucunda ekranın %43'ü
   // bomboş gri kalıyor ve makine görünmeyen bir kenara dayanıp duruyordu.
   for (const [x, yon] of [[left, 1], [right, -1]] as const) {
+    if (rampa && yon < 0) {
+      rampaDuvari(g, x, tavan);
+      continue;
+    }
     g.rect(x - (yon > 0 ? 0.55 : 0), 0, 0.55, tavan).fill(C.depoWallD);
     g.rect(x + (yon > 0 ? 0 : -0.14), 0, 0.14, tavan)
       .fill({ color: 0x6E767C, alpha: 0.9 });
@@ -332,6 +368,14 @@ export function drawDepoIci(left: number, right: number): Container {
     g.rect(left + 1.5, y, 3.4, 0.34).fill({ color: 0x9AA2A7, alpha: 0.95 });
   }
 
+  if (rampa) {
+    const levha = worldText(M.dekor.rampa, 0.42, { fill: 0xF4F7F8 });
+    const lx = right - 1.6;
+    g.roundRect(lx - 0.95, RAMPA_KAPISI + 0.55, 1.9, 0.62, 0.06).fill(0x2B5F8F);
+    levha.position.set(lx, RAMPA_KAPISI + 0.86);
+    c.addChild(levha);
+  }
+
   const tabela = worldText(M.dekor.sevkiyat, 0.5, { fill: C.liveryRed });
   // Tabela doğuya kaydırıldı: yatay telefonda kadrajın sol kenarından taşıp
   // yarısı kesiliyordu (ölçüm: görünen alan x −4.7…13.7, tabela −5.6).
@@ -339,6 +383,238 @@ export function drawDepoIci(left: number, right: number): Container {
   c.addChild(tabela);
 
   c.addChildAt(g, 0);
+  return c;
+}
+
+/**
+ * Doğu duvarı — rampa kapısıyla.
+ *
+ * Yan görünümde duvar kenarından görünüyor, yani kapı duvarın içinde bir
+ * BOŞLUK: altı açık, üstünde lento ve sarılmış kepenk. Kapının dikme
+ * koruyucuları bilerek çizilmedi — yan görünümde tam makinenin geçtiği
+ * yerde duracaklar ve bir engel gibi okunacaklardı.
+ */
+function rampaDuvari(g: Graphics, x: number, tavan: number): void {
+  const k = RAMPA_KAPISI;
+  g.rect(x, k, 0.55, tavan - k).fill(C.depoWallD);
+  g.rect(x - 0.14, k, 0.14, tavan - k).fill({ color: 0x6E767C, alpha: 0.9 });
+  // Lento ve kepenk tamburu
+  g.rect(x - 0.6, k - 0.06, 1.15, 0.18).fill(0x4C545B);
+  g.roundRect(x - 0.62, k + 0.12, 0.62, 0.56, 0.24).fill(0x5A6268);
+  g.roundRect(x - 0.62, k + 0.12, 0.62, 0.56, 0.24)
+    .stroke({ width: 0.03, color: 0x3A4046 });
+  // Kepenk rayları: kapının iki yanında, kenarından görünüyor.
+  g.rect(x - 0.08, 0, 0.06, k).fill({ color: 0x3A4046, alpha: 0.85 });
+  g.rect(x + 0.04, 0, 0.05, k).fill({ color: 0x3A4046, alpha: 0.6 });
+}
+
+/**
+ * Dışarısı — rampanın doğusu: gökyüzü, avlu, uzak yapılar.
+ *
+ * Depo kapalı bir mekân ve arka planı ekran uzayında çiziliyor (loş iç
+ * hacim). Kapının dışı ise gün ışığı: bu yüzden DÜNYA uzayında, rampadan
+ * doğuya doğru ayrı bir katman. Ölçek aynı sahnedeki gökyüzüyle — vinç
+ * bölümünün paleti.
+ */
+export function drawDisari(b: ForkliftBolum): Container {
+  const c = new Container();
+  const d = b.dorse;
+  if (!d) return c;
+  const g = new Graphics();
+  const x0 = d.arka;
+  const x1 = b.dogu + 40;
+  const avlu = -DORSE_TABANI;
+
+  // Gökyüzü: aşağıda açık, yukarıda koyu — vinç sahnesinin aynısı.
+  const bant = 16;
+  const tepe = 32;
+  for (let i = 0; i < bant; i++) {
+    const t = i / (bant - 1);
+    const y = avlu + ((tepe - avlu) * i) / bant;
+    g.rect(x0, y, x1 - x0, (tepe - avlu) / bant + 0.05).fill(karistir(C.skyLow, C.sky, t));
+  }
+  // Uzak sanayi hattı: puslu, alçak, gökyüzüne karışıyor.
+  let x = x0 + 1.5;
+  let n = 0;
+  while (x < x1) {
+    const w = 4 + ((n * 37) % 7);
+    const h = 3.2 + ((n * 53) % 5) * 0.9;
+    const renk = karistir(C.roof, C.sky, 0.52 + ((n * 17) % 3) * 0.06);
+    g.rect(x, avlu, w, h).fill(renk);
+    g.rect(x + 0.5, avlu + h - 0.9, w - 1, 0.35)
+      .fill({ color: karistir(renk, C.frameDark, 0.2), alpha: 0.6 });
+    x += w + 1.2 + ((n * 29) % 4);
+    n++;
+  }
+  // Avlu: asfalt, aşağı doğru koyulaşıyor (depo zemini gibi kadrajın kenarı).
+  g.rect(x0, avlu - 8, x1 - x0, 8).fill(0x50565A);
+  for (let i = 0; i < 10; i++) {
+    const t = i / 9;
+    g.rect(x0, avlu - 0.8 - (5.6 * (i + 1)) / 10, x1 - x0, 5.6 / 10 + 0.02)
+      .fill(karistir(0x50565A, 0x0B0F12, t));
+  }
+  g.rect(x0, avlu - 0.06, x1 - x0, 0.06).fill(0x3E4448);
+  // Tel çit — dorsenin arkasında, avlunun sınırı
+  g.rect(x0, avlu + 1.55, x1 - x0, 0.05).fill({ color: 0x59636A, alpha: 0.8 });
+  g.rect(x0, avlu, x1 - x0, 1.6).fill({ color: 0x6F7B82, alpha: 0.16 });
+  for (let px = Math.ceil(x0 / 2.5) * 2.5; px < x1; px += 2.5) {
+    g.rect(px - 0.03, avlu, 0.06, 1.7).fill({ color: 0x59636A, alpha: 0.85 });
+  }
+  // Aydınlatma direği
+  const dx = d.arka + 4.2;
+  g.rect(dx - 0.07, avlu, 0.14, 9.2).fill(0x59636A);
+  g.rect(dx - 0.07, avlu + 9.1, 1.2, 0.1).fill(0x59636A);
+  g.roundRect(dx + 0.7, avlu + 8.85, 0.7, 0.26, 0.08).fill(0x3E4448);
+  g.rect(dx + 0.75, avlu + 8.83, 0.6, 0.05).fill({ color: 0xF5F0DC, alpha: 0.9 });
+
+  c.addChild(g);
+  return c;
+}
+
+/**
+ * Dorse tabanının avludan yüksekliği (m) — rampa yüksekliği de bu.
+ *
+ * Standart rampa 1.20–1.40 metre; dorse tabanı ona göre. Depo zemini y = 0
+ * olduğu için avlu y = −1.35'te.
+ */
+const DORSE_TABANI = 1.35;
+
+/**
+ * Rampaya yanaşmış açık kasa dorse ve çekicisi.
+ *
+ * **Açık kasa, bilerek.** Tenteli dorsenin iç yüksekliği 2.7 metre; makinenin
+ * direği 3.30. Gerçekte tenteli dorseye alçak direkli makineyle girilir —
+ * burada tek makine var ve açık kasa dürüst olan seçim.
+ *
+ * Tabanı depo zeminiyle aynı kotta (bkz. `Dorse`), yani y = 0'ın altında
+ * kalan her şey — şasi, tekerler, çekici — dorsenin YAN yüzü. Depo içinde
+ * o bant zemin boyasının bandı; rampa ikisinin sınırı.
+ */
+export function drawDorse(b: ForkliftBolum): Container {
+  const c = new Container();
+  const d = b.dorse;
+  if (!d) return c;
+  const g = new Graphics();
+  const avlu = -DORSE_TABANI;
+  const tekerR = 0.5;
+  const tekerY = avlu + tekerR;
+
+  // --- Rampa: ön yüz, tamponlar, rampa köprüsü, saçak ---
+  g.rect(d.arka - 0.3, avlu, 0.3, DORSE_TABANI).fill(C.concreteD);
+  g.rect(d.arka - 0.3, -0.12, 0.3, 0.12).fill(C.concrete);
+  for (const y of [-0.78, -0.42]) {
+    g.roundRect(d.arka, y, 0.14, 0.3, 0.03).fill(0x1B1F22);
+  }
+  // Rampa köprüsü: zemin hizasında çelik levha, dudağı dorsenin üstünde.
+  g.rect(d.arka - 1.3, -0.07, 1.75, 0.07).fill(0x6B7278);
+  for (let x = d.arka - 1.25; x < d.arka + 0.4; x += 0.2) {
+    g.rect(x, -0.05, 0.1, 0.03).fill({ color: 0x8B959B, alpha: 0.7 });
+  }
+  g.rect(d.arka - 1.3, -0.07, 0.1, 0.07).fill(C.hazardY);
+  // Saçak: rampanın üstünde, dışarıda
+  const sy = RAMPA_KAPISI + 0.55;
+  g.rect(d.arka, sy, 2.6, 0.16).fill(0x4C545B);
+  g.moveTo(d.arka, sy - 0.9).lineTo(d.arka + 2.2, sy)
+    .stroke({ width: 0.07, color: 0x4C545B });
+
+  // --- Dorse ---
+  const boy = d.on - d.arka;
+  // Gölge avluda
+  g.rect(d.arka + 0.2, avlu - 0.02, boy + 3.2, 0.1).fill({ color: C.shadow, alpha: 0.35 });
+  // Şasi kirişleri (I profil) — tekerlerin arasından görünen
+  g.rect(d.arka + 0.4, -0.86, boy - 0.6, 0.3).fill(0x23272C);
+  g.rect(d.arka + 0.4, -0.86, boy - 0.6, 0.05).fill(0x3A4046);
+  // Destek ayakları: çekiciye bağlıyken kalkık
+  const ayakX = d.on - 3.3;
+  g.rect(ayakX - 0.08, avlu + 0.42, 0.16, 0.5).fill(0x3A4046);
+  g.rect(ayakX - 0.2, avlu + 0.38, 0.4, 0.06).fill(0x23272C);
+  g.rect(ayakX + 0.08, avlu + 0.75, 0.22, 0.05).fill(0x59636A);
+  // Tekerler: tandem aks, arkaya yakın
+  const akslar = [d.arka + 1.55, d.arka + 2.85];
+  // Çamurluk
+  g.roundRect(akslar[0]! - 0.72, tekerY + tekerR + 0.06, 2.74, 0.12, 0.05).fill(0x23272C);
+  // Arka koruma çıtası ve stop lambaları
+  g.rect(d.arka + 0.18, avlu + 0.38, 0.1, 0.5).fill(0x3A4046);
+  g.rect(d.arka + 0.1, avlu + 0.36, 0.5, 0.12).fill({ color: C.hazardY, alpha: 0.9 });
+  g.rect(d.arka + 0.02, -0.46, 0.12, 0.16).fill(0xC0282A);
+  // Yan kiriş (kenar profili) — firmanın adı burada
+  g.rect(d.arka, -0.52, boy + 0.14, 0.4).fill(0x2F3E4C);
+  g.rect(d.arka, -0.52, boy + 0.14, 0.05).fill(0x23303B);
+  // Taban tahtası ve çelik kenar
+  g.rect(d.arka, -0.12, boy + 0.14, 0.12).fill(C.deck);
+  g.rect(d.arka, -0.03, boy + 0.14, 0.03).fill(0x8B959B);
+  // Kazık cepleri
+  for (let x = d.arka + 0.35; x < d.on - 0.1; x += 0.62) {
+    g.rect(x, -0.3, 0.12, 0.18).fill({ color: 0x1B2530, alpha: 0.85 });
+  }
+  // Ön duvar: çelik çerçeve, ızgara dolgu
+  const dh = ON_DUVAR.yukseklik;
+  const dk = ON_DUVAR.kalinlik;
+  g.rect(d.on, 0, dk, dh).fill({ color: 0x59636A, alpha: 0.35 });
+  for (const x of [d.on, d.on + dk - 0.05]) {
+    g.rect(x, 0, 0.05, dh).fill(0x3A4046);
+  }
+  for (let y = 0.3; y <= dh; y += 0.52) {
+    g.rect(d.on, Math.min(y, dh - 0.08), dk, 0.08).fill(0x3A4046);
+  }
+  g.rect(d.on - 0.02, dh - 0.1, dk + 0.04, 0.12).fill(0x23272C);
+
+  // --- Çekici ---
+  const on = d.on;
+  // Şasi ve beşinci teker
+  g.rect(on - 2.3, -0.98, 5.3, 0.26).fill(0x23272C);
+  g.rect(on - 1.9, -0.72, 1.0, 0.2).fill(0x3A4046);
+  // Yakıt deposu
+  g.roundRect(on + 0.6, -0.92, 1.05, 0.5, 0.12).fill(0xB9C3C9);
+  g.rect(on + 0.6, -0.72, 1.05, 0.04).fill({ color: 0x8B959B, alpha: 0.8 });
+  // Egzoz — kabinin arkasında dikey
+  g.rect(on + 0.38, -0.3, 0.12, 3.35).fill(0x9AA4AA);
+  // Kabin (kabin-üstü motor): beyaz, kırmızı şerit
+  const k0 = on + 0.55;
+  const k1 = on + 3.0;
+  const kAlt = -0.55;
+  const kUst = 2.75;
+  const beyaz = 0xE9ECEE;
+  g.roundRect(k0, kAlt, k1 - k0, kUst - kAlt, 0.12).fill(beyaz);
+  g.rect(k0, kAlt, 0.22, kUst - kAlt).fill(0xC9CED2);
+  // Rüzgârlık
+  g.poly([k0 + 0.3, kUst, k1 - 0.1, kUst, k1 - 0.2, kUst + 0.45, k0 + 0.9, kUst + 0.6])
+    .fill(0xD6DADD);
+  // Yan cam ve ön camın kenarı
+  g.roundRect(k1 - 1.05, 1.35, 0.92, 0.95, 0.06).fill(C.glass);
+  g.rect(k1 - 1.0, 2.05, 0.8, 0.14).fill({ color: C.glassLight, alpha: 0.6 });
+  g.rect(k1 - 0.1, 1.2, 0.1, 1.25).fill(C.glassLight);
+  // Kapı, kolu, basamaklar
+  g.roundRect(k1 - 1.2, -0.12, 1.12, 2.5, 0.06).stroke({ width: 0.03, color: 0x9AA2A7 });
+  g.rect(k1 - 0.5, 1.05, 0.22, 0.05).fill(0x59636A);
+  for (const y of [-0.62, -0.32]) g.rect(k1 - 1.05, y, 0.55, 0.06).fill(0x3A4046);
+  // Şerit ve ayna
+  g.rect(k0, 0.12, k1 - k0, 0.22).fill(C.liveryRed);
+  g.rect(k1, 1.9, 0.26, 0.05).fill(0x23272C);
+  g.roundRect(k1 + 0.16, 1.55, 0.12, 0.5, 0.04).fill(0x23272C);
+  // Tampon ve far
+  g.rect(k1 - 0.1, -0.98, 0.28, 0.5).fill(0x3A4046);
+  g.rect(k1 + 0.02, -0.28, 0.12, 0.16).fill(0xF6EFC8);
+  const cekiciAks = [on - 1.4, on + 2.3];
+  // Çamurluklar
+  for (const ax of cekiciAks) {
+    g.roundRect(ax - 0.66, tekerY + tekerR + 0.04, 1.32, 0.12, 0.05).fill(0x23272C);
+  }
+  c.addChild(g);
+
+  for (const ax of [...akslar, ...cekiciAks]) {
+    const t = drawWheel(tekerR);
+    t.position.set(ax, tekerY);
+    c.addChild(t);
+  }
+
+  // Firma adı: dorsenin yan kirişinde ve kabin kapısında. Giydirme
+  // çevrilmiyor — kamyondaki "YILMAZ VİNÇ" gibi.
+  const yazi = worldText('YILMAZ LOJİSTİK', 0.26, { fill: 0xE9ECEE, letterSpacing: 2 });
+  yazi.position.set(d.arka + boy * 0.58, -0.32);
+  const kapi = worldText('YILMAZ', 0.2, { fill: C.liveryRed, letterSpacing: 1 });
+  kapi.position.set(k1 - 0.64, 0.62);
+  c.addChild(yazi, kapi);
   return c;
 }
 
@@ -351,24 +627,26 @@ export function drawDepoIci(left: number, right: number): Container {
  */
 export function drawKonveyor(b: ForkliftBolum): Container {
   const c = new Container();
+  const mk = b.malKabul;
+  if (!mk) return c;
   const g = new Graphics();
-  const y = b.teslimKotu + 0.5;
+  const y = mk.teslimKotu + 0.5;
   // Tavandan sarkan askılar
-  for (const x of [b.girisX - 1.5, b.girisX + 1.5]) {
+  for (const x of [mk.x - 1.5, mk.x + 1.5]) {
     g.rect(x - 0.05, y + 0.3, 0.1, 2.6).fill(C.roof);
   }
   // Konveyör gövdesi ve rulolar
-  g.rect(b.girisX - 1.7, y, 3.4, 0.34).fill(C.mast);
-  g.rect(b.girisX - 1.7, y + 0.28, 3.4, 0.06).fill(C.mastLight);
-  for (let x = b.girisX - 1.5; x < b.girisX + 1.5; x += 0.34) {
+  g.rect(mk.x - 1.7, y, 3.4, 0.34).fill(C.mast);
+  g.rect(mk.x - 1.7, y + 0.28, 3.4, 0.06).fill(C.mastLight);
+  for (let x = mk.x - 1.5; x < mk.x + 1.5; x += 0.34) {
     g.circle(x, y + 0.14, 0.1).fill(C.mastLight);
     g.circle(x, y + 0.14, 0.04).fill(C.mast);
   }
   // Ağız: paletin çıktığı boşluk
-  g.rect(b.girisX - 0.75, y - 0.12, 1.5, 0.12).fill(C.rackDark);
+  g.rect(mk.x - 0.75, y - 0.12, 1.5, 0.12).fill(C.rackDark);
 
   const et = worldText(M.dekor.malKabul, 0.3, { fill: C.hazardY });
-  et.position.set(b.girisX - 1.55, y + 0.45);
+  et.position.set(mk.x - 1.55, y + 0.45);
   c.addChild(et);
   c.addChildAt(g, 0);
   return c;

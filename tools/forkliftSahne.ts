@@ -13,11 +13,13 @@
 import { ForkliftSahnesi } from '../src/sim/forkliftSahne';
 import { FORKLIFT, forkliftKapasitesi } from '../src/sim/forklift';
 import {
-  PALET_AYAK, RAF_DERINLIK, SEVKIYAT_KORIDORU,
+  PALET_AYAK, RAF_DERINLIK, SEVKIYAT_KORIDORU, SEVKIYAT_RAMPASI,
 } from '../src/game/forkliftTasks';
-import { adresKotu, adresX, katAdi } from '../src/game/forkliftBolum';
+import {
+  adresKotu, adresX, katAdi, type ForkliftBolum, type ForkliftGorevi,
+} from '../src/game/forkliftBolum';
 
-/** Rig tek bir bolumu olcuyor: varsayilan depo. */
+/** Birinci bolum: konveyorden rafa. */
 const B = SEVKIYAT_KORIDORU;
 import { Mission } from '../src/game/mission';
 import { IDLE, type SceneInput } from '../src/sim/scene';
@@ -26,8 +28,12 @@ import { SIM } from '../src/sim/world';
 const DT = 1 / SIM.hz;
 
 class Rig {
-  readonly sahne = new ForkliftSahnesi();
-  readonly mission = new Mission(this.sahne);
+  readonly sahne: ForkliftSahnesi;
+  readonly mission: Mission;
+  constructor(bolum: ForkliftBolum = B) {
+    this.sahne = new ForkliftSahnesi(bolum);
+    this.mission = new Mission(this.sahne);
+  }
   t = 0;
   enAzArka = 1.5;
   enCokEgim = 0;
@@ -105,13 +111,243 @@ class Rig {
     return { crane: { uzat: 0, luff: e > 0 ? 1 : -1, telescope: 0, winch: 0 } };
   }
 
+  /**
+   * Direği hedef eğime götüren komut (derece, + geriye).
+   *
+   * Önce "iki saniye öne bas" yazıyordu ve direk +10'dan −2'ye, yani ÖNE
+   * yatık kalıyordu. Bunu yıllarca raf kirişinin kaldırma kilidi örtüyordu:
+   * kilit yükü 30 santim yüksek sanıyor, göze girerken devreye girip direği
+   * sıfıra zorluyordu. Kilit düzeltilince rig öne yatık direkle yerleştirmeye
+   * başladı. Dikkatli bir operatör direği tam düşeye getirir; rig de artık.
+   */
+  yatir(hedefDeg: number): Partial<SceneInput> {
+    const e = hedefDeg - this.sahne.forklift.tiltDeg;
+    if (Math.abs(e) < 0.25) return {};
+    return { crane: { uzat: 0, luff: 0, telescope: e > 0 ? 1 : -1, winch: 0 } };
+  }
+
   dur(): Partial<SceneInput> { return { drive: { throttle: 0, handbrake: true } }; }
+
+  /**
+   * Catali hedef kota getir ve orada OTURT.
+   *
+   * `kaldir` tek basina yetmiyor: silindir komutu kovalayan bir servo ve
+   * inerken 8 santim geriden geliyor. "3 santim yaklasinca dur" diyen bir
+   * dongu komutu hedefin 5 santim altinda birakiyordu: tasima kotu 0.35
+   * iken catal 0.30'a oturdu, paletin ayaklari yere degdi ve makine 1.3
+   * tonluk paleti sirtlikla itemeyip dorsenin iki metre gerisinde kaldi.
+   */
+  kota(h: number, sure = 14): void {
+    this.runUntil(sure, (x) => Math.abs(x.sahne.forklift.liftM - h) < 0.02,
+      (x) => ({ ...x.kaldir(h), ...x.dur() }));
+    this.run(0.6, (x) => ({ ...x.kaldir(h), ...x.dur() }));
+  }
 }
 
 const out: string[] = [];
 const say = (s: string): void => { out.push(s); };
 
-function main(): number {
+/** Bolum sonu ozeti — iki bolumde de ayni satirlar. */
+function sonuc(r: Rig, b: ForkliftBolum): boolean {
+  const s = r.mission.score;
+  const res = r.mission.result;
+  say('--- sonuc ---');
+  say(`  tamamlanan ${s.sapmalar.length}/${b.gorevler.length}`
+    + `  sure ${s.sure.toFixed(0)}s  puan ${s.puan}`
+    + `  maxLMI %${s.maxLmi.toFixed(0)}  kirmizi ${s.kirmiziSn.toFixed(1)}s`
+    + `  carpma ${s.carpma}`);
+  say(`  devrilme payi: en az arka aks %${(r.enAzArka * 100).toFixed(0)}`
+    + `  en cok egim ${r.enCokEgim.toFixed(2)}°`
+    + `  en cok LMI %${Math.min(999, r.enCokLmi).toFixed(0)}`);
+  say(`  DEVRILME: ${r.devrilmeRaporu || 'yok'}`);
+  say(`  her an en buyuk egim ${r.enCokEgimHer.toFixed(2)}° (t=${r.egimAni.toFixed(1)}s)`);
+  if (res) {
+    // Ara sureler: speedrun karsilastirmasinin ham verisi.
+    const bit = s.bitisler;
+    say(`  ara sureler ${bit.map((x, i) => `${(x - (bit[i - 1] ?? 0)).toFixed(0)}s`).join(' · ')}`);
+    say(`  not ${res.not} (${res.puan.toFixed(0)})  usta ${res.usta ? 'E' : 'H'}`
+      + `  devrildi ${res.devrildi ? 'E' : 'H'}`);
+  }
+  return s.sapmalar.length === b.gorevler.length;
+}
+
+/**
+ * Ikinci bolum: raftan dorseye.
+ *
+ * Birinci bolumun tersi ve iki yeni hareket var: palete RAFTAN yaklasmak
+ * (makine hep dogudan, dorseden geliyor; palet ancak makine adanin
+ * batisina gecince gozun onune cikiyor) ve paleti kiristen birkac santim
+ * kaldirip GERI CEKEREK almak. Dorsede hedef, ondeki paletin gercek
+ * yerinden hesaplaniyor; rig de oyuncu gibi hedefi her gorevde
+ * `mission.target`tan okuyor.
+ */
+/**
+ * Dorseye giden yukun tasima kotu (m).
+ *
+ * Birinci bolumde 0.35 yetiyordu cunku palet oradan hep rafa kaldiriliyordu.
+ * Burada butun yol zeminde: 0.35'te paletin ayaklari yerden 5 santim
+ * yukarida ve servo 3-4 santim sarkinca palet surtunmeye basliyor.
+ */
+const TASIMA = 0.45;
+
+function rampa(): boolean {
+  const b = SEVKIYAT_RAMPASI;
+  const r = new Rig(b);
+  say('');
+  say('=== FORKLIFT: Sevkiyat rampasi ===');
+  say('--- calisma zarfi: hangi yuk hangi gozden ne okuyor? ---');
+  for (const g of b.gorevler) {
+    if (g.kaynak.tur !== 'raf') continue;
+    const kot = adresKotu(b, g.kaynak.adres) ?? 0;
+    // Kiristen ancak kaldirilmis haliyle cikiyor: bicak kot + 0.42'de.
+    const alma = kot + 0.42;
+    const oran = g.tonnes / forkliftKapasitesi(g.halfWidth, alma);
+    say(`  ${g.kod}  ${g.ad.padEnd(16)} ${g.tonnes.toFixed(2)}t`
+      + `  ${katAdi(b, g.kaynak.adres)} (${kot.toFixed(2)}m)`
+      + `  alirken %${(oran * 100).toFixed(0)}  -> sira ${g.varis.tur === 'dorse' ? g.varis.sira + 1 : '?'}`);
+  }
+
+  for (let n = 0; n < b.gorevler.length; n++) {
+    const task = r.mission.task as ForkliftGorevi | null;
+    if (!task || task.kaynak.tur !== 'raf') break;
+    const kot = adresKotu(b, task.kaynak.adres) ?? 0;
+    const on = adresX(b, task.kaynak.adres) ?? 0;
+    const hw = task.halfWidth;
+    const paletBatisi = on + 0.06;
+    const f = (): typeof r.sahne.forklift => r.sahne.forklift;
+
+    // --- 1) Adanin batisina gec: palet gozun onune ciksin ---
+    // Catal tasima kotunda; bicak bir onceki paletin cebindeyse o palet
+    // artik statik ve catala degmiyor.
+    // **Hedefte DUR, gecip durma.** Once "catalin ucu paletin batisina
+    // gecince dur" yaziyordu ve 20 metrelik geri donuste makine iki metre
+    // fazla gidip bir onceki adanin altinda durdu; catali cep kotuna
+    // kaldirmak orada kirise dayaniyor ve kilit (dogru olarak) devreye
+    // giriyordu. Koridor 3.40 metre, bicak 1.35: pay dar.
+    r.asama = 'rafa-don';
+    const bekleX = paletBatisi - 0.4 - FORKLIFT.forkLengthM;
+    // Makine zaten batidaysa (ilk gorev) bu adim yok: catal tasima kotunda
+    // katı palete dogru surulurse bicak kutunun on yuzune carpip onu iter.
+    if (f().forkWorld.x > bekleX) r.runUntil(150, (x) => !x.sahne.paletRafta
+      && Math.abs(x.sahne.forklift.forkWorld.x - bekleX) < 0.4
+      && x.sahne.forklift.speedKmh < 0.4,
+    (x) => ({ ...x.kaldir(TASIMA), ...x.suru(bekleX, 3.0) }));
+    if (f().forkWorld.x > bekleX - 0.4) {
+      r.runUntil(20, (x) => Math.abs(x.sahne.forklift.forkWorld.x - bekleX) < 0.08
+        && x.sahne.forklift.speedKmh < 0.2,
+      (x) => ({ ...x.kaldir(TASIMA), ...x.suru(bekleX, 1.2) }));
+    }
+    r.run(0.6, (x) => x.dur());
+    if (r.sahne.paletRafta) { say(`${task.kod} PALET GOZUN ONUNE CIKMADI`); break; }
+
+    // --- 2) Catali cebin hizasina getir: adanin DISINDA, koridorda ---
+    const cep = kot + PALET_AYAK / 2;
+    r.asama = 'cep-kotu';
+    r.kota(cep, 20);
+    r.runUntil(4, (x) => Math.abs(x.sahne.forklift.tiltDeg) < 0.25,
+      (x) => ({ ...x.yatir(0), ...x.dur() }));
+
+    // --- 3) Yanas ve bicagi cebe sok ---
+    // **Iki kademede.** Birinci bolumde yaklasma hep bir bucuk metreden
+    // oluyordu; burada ilk palet 16 metre otede ve rig tek hamlede
+    // yaklasinca fren mesafesini asip paleti sirtlikla 58 santim itti.
+    // Dikkatli operator de once paletin onunde durur, sonra sokulur.
+    const yaklas = paletBatisi - 0.75;
+    r.runUntil(60, (x) => Math.abs(x.sahne.forklift.forkWorld.x - (yaklas - 1.5)) < 0.1
+      && x.sahne.forklift.speedKmh < 0.4,
+    (x) => x.suru(yaklas - 1.5, 4.0));
+    r.runUntil(30, (x) => Math.abs(x.sahne.forklift.forkWorld.x - yaklas) < 0.05
+      && x.sahne.forklift.speedKmh < 0.25,
+    (x) => x.suru(yaklas, 1.2));
+    r.run(0.6, (x) => x.dur());
+    if (process.env['IZ']) {
+      say(`   iz yaklasti topuk ${f().forkWorld.x.toFixed(2)} uc ${f().forkTip.x.toFixed(2)}`
+        + ` kot ${f().liftM.toFixed(2)} palet ${r.sahne.load.getPosition().x.toFixed(2)},`
+        + `${r.sahne.load.getPosition().y.toFixed(2)} t=${r.t.toFixed(1)}`);
+    }
+    r.asama = 'cebe-sokma';
+    r.runUntil(30, (x) => x.sahne.forklift.forkWorld.x >= paletBatisi - 0.04,
+      (x) => x.suru(paletBatisi - 0.02, 0.6));
+    r.run(0.8, (x) => x.dur());
+    say(`${task.kod} AL   ${katAdi(b, task.kaynak.adres)}  durum ${f().durum(r.sahne.grabbables)}`
+      + `  topuk ${f().forkWorld.x.toFixed(2)}  palet ${r.sahne.load.getPosition().x.toFixed(2)}`);
+
+    // --- 4) Kiristen kaldir, geri cekil, tasima kotuna in ---
+    // Zemin gozunde kiris yok: tasima kotuna kaldirmak yetiyor ve palet
+    // adanin icinden doguya surulebiliyor (arka dayanagi yok).
+    const kaldirKot = kot > 0.001 ? kot + 0.42 : TASIMA;
+    r.asama = 'kaldirma';
+    r.kota(kaldirKot);
+    if (!r.sahne.hasLoad) { say(`${task.kod} ALINAMADI  (catalda yuk yok)`); break; }
+    say(`      catalda ${r.sahne.olcum.loadTonnes.toFixed(2)}t  kot ${f().liftM.toFixed(2)}m`
+      + `  yuk merkezi ${f().loadCentreM.toFixed(2)}m  LMI %${Math.min(999, r.sahne.olcum.percent).toFixed(0)}`);
+    if (kot > 0.001) {
+      r.asama = 'geri-cekil';
+      r.runUntil(40, (x) => x.sahne.load.getPosition().x + hw < on - 0.15
+        && x.sahne.forklift.speedKmh < 0.4,
+      (x) => x.suru(on - 0.5 - 2 * hw, 1.2));
+      r.run(0.5, (x) => x.dur());
+    }
+    r.asama = 'tasima-kotu';
+    r.kota(TASIMA);
+    r.runUntil(3, (x) => x.sahne.forklift.tiltDeg > 9.5,
+      (x) => ({ ...x.yatir(10), ...x.dur() }));
+    if (!r.sahne.hasLoad) { say(`${task.kod} YUK DUSTU`); break; }
+
+    // --- 5) Dorseye: hedefin 2 m gerisinde dur, diregi dikle, yanas ---
+    r.asama = 'dorseye';
+    const hedef0 = r.mission.target;
+    if (!hedef0) break;
+    const merkez = f().loadCentreM;
+    const konumX = hedef0.x - merkez;
+    r.runUntil(120, (x) => Math.abs(x.sahne.forklift.forkWorld.x - (konumX - 2.0)) < 0.08
+      && x.sahne.forklift.speedKmh < 0.8,
+    (x) => x.suru(konumX - 2.0, 4.0));
+    r.run(1.0, (x) => x.dur());
+    r.runUntil(4, (x) => Math.abs(x.sahne.forklift.tiltDeg) < 0.25,
+      (x) => ({ ...x.yatir(0), ...x.dur() }));
+    const izle = (e: string): void => {
+      if (!process.env['IZ']) return;
+      const l = r.sahne.load.getPosition();
+      say(`   iz ${e.padEnd(10)} topuk ${f().forkWorld.x.toFixed(2)} uc ${f().forkTip.x.toFixed(2)}`
+        + ` kot ${f().liftM.toFixed(2)} direk ${f().tiltDeg.toFixed(1)} yuk ${l.x.toFixed(2)},${l.y.toFixed(2)}`
+        + ` catalda ${r.sahne.hasLoad ? 'E' : 'H'} konumX ${konumX.toFixed(2)} v ${f().speedKmh.toFixed(2)}`
+        + ` t=${r.t.toFixed(1)}`);
+    };
+    izle('durdu');
+    r.asama = 'yanasma';
+    r.runUntil(40, (x) => Math.abs(x.sahne.forklift.forkWorld.x - konumX) < 0.06
+      || (x.sahne.forklift.speedKmh < 0.05 && x.sahne.forklift.forkWorld.x > konumX - 0.5),
+    (x) => x.suru(konumX, 1.6));
+    r.run(1.0, (x) => x.dur());
+
+    izle('yanasti');
+    // --- 6) Indir: palet ayaklariyla dorseye otursun, bicak cebin ortasinda ---
+    r.asama = 'birakma';
+    r.runUntil(14, (x) => x.sahne.forklift.liftM <= 0.2,
+      (x) => ({ ...x.kaldir(0.18), ...x.dur() }));
+    const p0 = r.sahne.load.getPosition();
+    const hedef = r.mission.target ?? hedef0;
+    const kondu = { x: p0.x, y: p0.y, hx: hedef.x, hy: hedef.y + task.halfHeight };
+    r.run(1.2, (x) => x.dur());
+
+    const ok = r.mission.sonTamamlanan?.sira === n + 1;
+    say(`${task.kod} KOY  sira ${task.varis.tur === 'dorse' ? task.varis.sira + 1 : '?'}`
+      + `  yuk ${kondu.x.toFixed(2)},${kondu.y.toFixed(2)}`
+      + `  hedef ${kondu.hx.toFixed(2)},${kondu.hy.toFixed(2)}  ${ok ? 'KONDU' : 'KONMADI'}`
+      + (ok ? '' : `  [catalda ${r.sahne.hasLoad ? 'E' : 'H'}`
+        + ` tol ${JSON.stringify(r.sahne.yerlestirmeToleransi(task))}]`));
+    const t = r.mission.sonTamamlanan;
+    if (ok && t) {
+      say(`      +${t.puan.toplam} puan · sapma ${t.sapmaCm.toFixed(0)} cm`
+        + ` · sure ${t.sure.toFixed(0)}s · maxLMI %${t.maxLmi.toFixed(0)}`);
+    }
+    if (!ok) break;
+  }
+  return sonuc(r, b);
+}
+
+function koridor(): boolean {
   const r = new Rig();
 
   say('=== FORKLIFT: Depo, sevkiyat koridoru ===');
@@ -157,7 +393,7 @@ function main(): number {
     // ve gorev "alinamadi" sayildi. Gercek operator de mal kabulun onunu
     // acar, sonra yanasir.
     if (!r.sahne.paletHazir) {
-      const bekle = B.beklemeCizgisi - FORKLIFT.forkLengthM - 0.25;
+      const bekle = (B.malKabul?.beklemeCizgisi ?? 0) - FORKLIFT.forkLengthM - 0.25;
       r.runUntil(130, (x) => x.sahne.paletHazir, (x) => x.suru(bekle, 3.0));
       r.runUntil(12, (x) => x.sahne.paletHazir, (x) => x.dur());
     }
@@ -237,7 +473,9 @@ function main(): number {
       + `  egim ${r.sahne.tiltDeg.toFixed(2)}°`);
 
     // --- 5) Direği düzle, yükü gözün üstüne sür, indir, geri çek ---
-    r.run(2.0, (x) => ({ crane: { uzat: 0, luff: 0, telescope: -1, winch: 0 }, ...x.dur() }));
+    r.runUntil(4, (x) => Math.abs(x.sahne.forklift.tiltDeg) < 0.25,
+      (x) => ({ ...x.yatir(0), ...x.dur() }));
+    r.run(0.3, (x) => x.dur());
     r.runUntil(40, (x) => Math.abs(x.sahne.forklift.forkWorld.x - konumX) < 0.06,
       (x) => x.suru(konumX, 1.6));
     r.run(1.0, (x) => x.dur());
@@ -319,35 +557,19 @@ function main(): number {
     if (!ok) break;
   }
 
-  const s = r.mission.score;
-  const res = r.mission.result;
-  say('--- sonuc ---');
-  say(`  tamamlanan ${s.sapmalar.length}/${B.gorevler.length}`
-    + `  sure ${s.sure.toFixed(0)}s  puan ${s.puan}`
-    + `  maxLMI %${s.maxLmi.toFixed(0)}  kirmizi ${s.kirmiziSn.toFixed(1)}s`
-    + `  carpma ${s.carpma}`);
-  say(`  devrilme payi: en az arka aks %${(r.enAzArka * 100).toFixed(0)}`
-    + `  en cok egim ${r.enCokEgim.toFixed(2)}°`
-    + `  en cok LMI %${Math.min(999, r.enCokLmi).toFixed(0)}`);
-  say(`  DEVRILME: ${r.devrilmeRaporu || 'yok'}`);
-  say(`  her an en buyuk egim ${r.enCokEgimHer.toFixed(2)}° (t=${r.egimAni.toFixed(1)}s)`);
-  if (res) {
-    // Ara sureler: speedrun karsilastirmasinin ham verisi.
-  {
-    const b = r.mission.score.bitisler;
-    say(`  ara sureler ${b.map((x, i) => `${(x - (b[i - 1] ?? 0)).toFixed(0)}s`).join(' · ')}`);
-  }
-  say(`  not ${res.not} (${res.puan.toFixed(0)})  usta ${res.usta ? 'E' : 'H'}`
-      + `  devrildi ${res.devrildi ? 'E' : 'H'}`);
-  }
-  void B.girisX; void FORKLIFT;
-
-  console.log(out.join('\n'));
-  return s.sapmalar.length === B.gorevler.length ? 0 : 1;
+  return sonuc(r, B);
 }
 
-const kod = main();
-if (kod !== 0) {
-  console.error('\nFORKLIFT BOLUMU BITIRILEMEDI');
-  process.exit(kod);
+// **Iki bolum de her seferinde kosuyor**: biri bitemezse CI kirmizi. Ikinci
+// bolum birincinin tersi oldugu icin birinin duzeltmesi otekini bozabiliyor
+// (ornek: kiris kilidinin formulu, bkz. `kirisAltinda`).
+const sadece = process.env['BOLUM'];
+const sonuclar: Array<[string, boolean]> = [];
+if (!sadece || sadece === 'depo') sonuclar.push(['depo', koridor()]);
+if (!sadece || sadece === 'rampa') sonuclar.push(['rampa', rampa()]);
+console.log(out.join('\n'));
+const kalan = sonuclar.filter(([, ok]) => !ok).map(([id]) => id);
+if (kalan.length > 0) {
+  console.error(`\nFORKLIFT BOLUMU BITIRILEMEDI: ${kalan.join(', ')}`);
+  process.exit(1);
 }
