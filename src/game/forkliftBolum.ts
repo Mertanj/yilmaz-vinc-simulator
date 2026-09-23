@@ -16,6 +16,44 @@ import type { Task } from './tasks';
  * hızı, palet cebi hepsi `forklift.ts`'te kalıyor. Paletin ayak yüksekliği
  * de burada değil — o paletin özelliği, deponun değil, ve her depoda aynı.
  */
+/**
+ * Bir paletin geldiği ya da gittiği yer.
+ *
+ * Birinci bölümde her görev aynı yoldan geçiyordu (konveyörden rafa) ve
+ * bu yüzden `Task.hedef` bir raf adresi olabiliyordu. İkinci bölüm yolu
+ * TERSİNE çeviriyor — raftan kamyona — ve iki uç da artık bölümden bölüme
+ * değişiyor. Ucun ne olduğunu tipte söylemek, sahnenin her yerde "bu hedef
+ * bir raf mı yoksa dorse mi" diye tahmin etmesinden iyi.
+ */
+export type Nokta =
+  /** Mal kabul konveyörü — palet oraya iniyor. */
+  | { tur: 'konveyor' }
+  /** Bir raf gözü (`adresIndeksi` değeri). */
+  | { tur: 'raf'; adres: number }
+  /** Dorsenin bir sırası — 0 en dipte, ön duvara dayalı. */
+  | { tur: 'dorse'; sira: number };
+
+/** Forklift görevi: ortak `Task` artı paletin nereden nereye gittiği. */
+export interface ForkliftGorevi extends Task {
+  kaynak: Nokta;
+  varis: Nokta;
+}
+
+/**
+ * Sevkiyat kapısına yanaşmış tır dorsesi.
+ *
+ * **Tabanı depo zeminiyle aynı kotta** ve bu gerçek bir depo düzeni:
+ * rampalı depolarda zemin dorse tabanı yüksekliğindedir, arada bir rampa
+ * köprüsü vardır ve forklift doğrudan dorsenin içine girer. Yan görünümde
+ * bu, zeminin kapıdan dışarı uzaması demek — ek bir fizik gerekmiyor.
+ */
+export interface Dorse {
+  /** Arka kapağın (batı ucu, depoya bakan) x'i. */
+  arka: number;
+  /** Ön duvarın (doğu ucu, çekiciye bakan) x'i. */
+  on: number;
+}
+
 export interface ForkliftBolum {
   /** En iyi derece kaydının anahtarı. Araç değil BÖLÜM başına tutuluyor. */
   readonly id: string;
@@ -55,7 +93,9 @@ export interface ForkliftBolum {
   readonly bati: number;
   readonly dogu: number;
 
-  readonly gorevler: readonly Task[];
+  readonly gorevler: readonly ForkliftGorevi[];
+  /** Yükleme yapılan dorse — yalnız dorse bölümlerinde. */
+  readonly dorse?: Dorse;
   /** Bölüm başlamadan önce raflarda duran mal. Tamamen dekor. */
   readonly stok: readonly RafStogu[];
 
@@ -124,4 +164,43 @@ export function adresKotu(b: ForkliftBolum, i: number): number | undefined {
 export function adresX(b: ForkliftBolum, i: number): number | undefined {
   const a = adres(b, i);
   return a === undefined ? undefined : b.adaX[a.ada];
+}
+
+/**
+ * Dorse sırası ile ön duvar arasındaki pay ve iki sıra arasındaki boşluk (m).
+ *
+ * Gerçek yüklemede paletler birbirine DEĞDİRİLEREK konur; aradaki boşluk
+ * yolda yükün kaymasına yer açar. Sıfır değil, çünkü tam temas fizikte
+ * iki paleti birbirine bastırıyor ve biri kıpırdıyor.
+ */
+export const DORSE_PAYI = 0.06;
+export const DORSE_ARALIGI = 0.08;
+
+/**
+ * Dorse sırasının merkezi (m).
+ *
+ * **Sıralar SABİT değil, paletlerin genişliğinden hesaplanıyor**: ön duvardan
+ * başlayıp geriye doğru her paletin yarı eni kadar. Dar bir paletin arkasına
+ * geniş biri gelince sıra daha geride kalıyor — gerçek bir dorsede de öyle.
+ */
+export function dorseSiraMerkezi(b: ForkliftBolum, sira: number): number | undefined {
+  const d = b.dorse;
+  if (!d) return undefined;
+  const sirali = b.gorevler
+    .filter((g): g is ForkliftGorevi & { varis: { tur: 'dorse'; sira: number } } =>
+      g.varis.tur === 'dorse')
+    .sort((a, c) => a.varis.sira - c.varis.sira);
+  let bati = d.on - DORSE_PAYI;
+  for (const g of sirali) {
+    const merkez = bati - g.halfWidth;
+    if (g.varis.sira === sira) return merkez;
+    bati = merkez - g.halfWidth - DORSE_ARALIGI;
+  }
+  return undefined;
+}
+
+/** Görevin varış noktasının kotu (m): rafta kat, dorse ve konveyörde zemin. */
+export function varisKotu(b: ForkliftBolum, n: Nokta): number | undefined {
+  if (n.tur === 'raf') return adresKotu(b, n.adres);
+  return 0;
 }

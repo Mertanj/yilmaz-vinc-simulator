@@ -6,7 +6,10 @@ import { LmiZone, type LmiReading } from './loadChart';
 import {
   PALET_AYAK, RAF_DERINLIK, SEVKIYAT_KORIDORU, TESLIM_HIZI, ZEMIN_BANDI,
 } from '../game/forkliftTasks';
-import { adresKotu, adresX, type ForkliftBolum } from '../game/forkliftBolum';
+import {
+  DORSE_ARALIGI, DORSE_PAYI, adresKotu, adresX, dorseSiraMerkezi,
+  type ForkliftBolum, type ForkliftGorevi,
+} from '../game/forkliftBolum';
 import type { Task } from '../game/tasks';
 import type { SceneInput } from './scene';
 import type { Gosterge, OyunSahnesi, PanelSatiri, Uyari } from './sahne';
@@ -239,30 +242,90 @@ export class ForkliftSahnesi implements OyunSahnesi {
    * sürüşün kalitesini değil, sadece mesafeyi ölçüyordu.
    */
   get hizEsikleri(): { tam: number; sifir: number } { return this.bolum.hizEsikleri; }
-  hedefNoktasi(t: Task): { x: number; y: number } | null {
-    const kot = adresKotu(this.bolum, t.hedef);
-    const on = adresX(this.bolum, t.hedef);
-    if (kot === undefined || on === undefined) return null;
-    // **Adanın ORTASI değil, ÖN KENARI.** Paleti dibine kadar sokmak çatalı
-    // bir buçuk metre rafın içine sokmak demek; geri çekilirken bıçak kirişe
-    // takılıyor ve makine şahlanıyordu. Sahada da palet gözün ön kenarına
-    // konur — çatal ancak paletin boyu kadar içeri girer.
-    // Palet rafa AYAKLARIYLA oturuyor: tabanı kirişin `PALET_AYAK` üstünde.
-    // Zemin gözünde kot 0, yani palet doğrudan betona oturuyor — formül aynı.
-    return { x: on + t.halfWidth + 0.06, y: kot + PALET_AYAK };
+  /**
+   * Görevin forkliftteki hâli: nereden, nereye.
+   *
+   * `Mission` görevleri ortak `Task` olarak tanıyor; bu sahne yalnız kendi
+   * bölümünün görevlerini alıyor, dolayısıyla elindeki her `Task` aslında bir
+   * `ForkliftGorevi`. Yine de alanlar eksikse (eski veri, başka bir çağıran)
+   * birinci bölümün yolunu varsayıyor: konveyörden `hedef` adresine.
+   */
+  private gorev(t: Task): ForkliftGorevi {
+    const g = t as Partial<ForkliftGorevi> & Task;
+    return {
+      ...t,
+      kaynak: g.kaynak ?? { tur: 'konveyor' },
+      varis: g.varis ?? { tur: 'raf', adres: t.hedef },
+    };
   }
+
+  hedefNoktasi(t: Task): { x: number; y: number } | null {
+    const v = this.gorev(t).varis;
+    if (v.tur === 'raf') {
+      const kot = adresKotu(this.bolum, v.adres);
+      const on = adresX(this.bolum, v.adres);
+      if (kot === undefined || on === undefined) return null;
+      // **Adanın ORTASI değil, ÖN KENARI.** Paleti dibine kadar sokmak çatalı
+      // bir buçuk metre rafın içine sokmak demek; geri çekilirken bıçak kirişe
+      // takılıyor ve makine şahlanıyordu. Sahada da palet gözün ön kenarına
+      // konur — çatal ancak paletin boyu kadar içeri girer.
+      // Palet rafa AYAKLARIYLA oturuyor: tabanı kirişin `PALET_AYAK` üstünde.
+      // Zemin gözünde kot 0, yani palet doğrudan betona oturuyor — formül aynı.
+      return { x: on + t.halfWidth + 0.06, y: kot + PALET_AYAK };
+    }
+    if (v.tur === 'dorse') {
+      const x = this.dorseHedefX(t, v.sira);
+      // Dorse tabanı zeminle aynı kotta: palet ayaklarıyla tabana oturuyor.
+      return x === undefined ? null : { x, y: PALET_AYAK };
+    }
+    // Konveyör bir varış noktası değil, yalnız kaynak.
+    return null;
+  }
+
+  /**
+   * Dorse sırasının hedefi — **bir önceki paletin GERÇEK yerine göre.**
+   *
+   * Sabit sıralar kötü bir kuralı cezalandırırdı: ilk palet 15 santim geride
+   * kalırsa her sonraki palet de 15 santim geride kalmak ZORUNDA (öndeki
+   * palet katı ve yolu kapatıyor), ve hata beş palet boyunca birikip son
+   * paleti dorseden taşırırdı. Gerçek yüklemede de her palet bir öncekine
+   * dayanarak konur. Hedef bu yüzden kayıyor — ama her palet KENDİ
+   * komşusuna sıkı oturmak zorunda; ders bu.
+   */
+  private dorseHedefX(t: Task, sira: number): number | undefined {
+    const d = this.bolum.dorse;
+    if (!d) return undefined;
+    if (sira > 0) {
+      const onceki = this.stok.find((s) => {
+        const v = this.gorev(s.task).varis;
+        return v.tur === 'dorse' && v.sira === sira - 1;
+      });
+      if (onceki) {
+        return onceki.x - onceki.task.halfWidth - DORSE_ARALIGI - t.halfWidth;
+      }
+    }
+    return dorseSiraMerkezi(this.bolum, sira) ?? d.on - DORSE_PAYI - t.halfWidth;
+  }
+
   /** Hedef işareti kirişin ÜSTÜNDE dursun, paletin tabanında değil. */
   isaretNoktasi(t: Task): { x: number; y: number } | null {
-    const kot = adresKotu(this.bolum, t.hedef);
-    const on = adresX(this.bolum, t.hedef);
-    return kot === undefined || on === undefined
-      ? null : { x: on + t.halfWidth + 0.06, y: kot };
+    const h = this.hedefNoktasi(t);
+    if (!h) return null;
+    const v = this.gorev(t).varis;
+    const kot = v.tur === 'raf' ? adresKotu(this.bolum, v.adres) ?? 0 : 0;
+    return { x: h.x, y: kot };
   }
   /**
    * Gözün içine oturmalı. Vinçteki 2 metrelik pencere burada anlamsız olurdu
    * — teras geniş bir düzlem, raf gözü ise paletten birkaç on santim büyük.
    */
   yerlestirmeToleransi(t: Task): { x: number; y: number } {
+    if (this.gorev(t).varis.tur === 'dorse') {
+      // Dorsede pencere DAR ve bilerek: hedef zaten bir önceki paletin
+      // gerçek yerinden hesaplanıyor, yani bu pay yalnız "komşuna sıkı
+      // otur" dersinin toleransı. Gevşek bırakılsa sıkı istif öğretilmezdi.
+      return { x: 0.22, y: 0.32 };
+    }
     // Yük adanın derinliğine sığmalı: geniş palette hata payı 30 cm'e iniyor.
     return { x: Math.max(0.2, (RAF_DERINLIK - t.halfWidth * 2) / 2), y: 0.32 };
   }

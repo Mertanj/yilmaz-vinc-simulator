@@ -1,5 +1,4 @@
-import type { Task } from './tasks';
-import type { ForkliftBolum } from './forkliftBolum';
+import type { ForkliftBolum, ForkliftGorevi } from './forkliftBolum';
 
 /**
  * Forklift bölümü — "Depo, sevkiyat koridoru".
@@ -113,6 +112,20 @@ const B1_KATLAR = [0.00, 2.80, 4.90];
 const b1 = (ada: number, kat: number): number => ada * B1_KATLAR.length + kat;
 
 /**
+ * Birinci bölümün her görevi aynı yoldan geçiyor: konveyörden rafa.
+ *
+ * `hedef` ortak `Task` alanı ve raf adresini taşımaya devam ediyor — genel
+ * `Task` okuyan kod (dil dosyası, sonuç ekranı) değişmesin diye. Forklift
+ * sahnesi ise artık `varis`e bakıyor.
+ */
+const konveyordenRafa = (ada: number, kat: number): Pick<ForkliftGorevi,
+  'hedef' | 'kaynak' | 'varis'> => ({
+  hedef: b1(ada, kat),
+  kaynak: { tur: 'konveyor' },
+  varis: { tur: 'raf', adres: b1(ada, kat) },
+});
+
+/**
  * Mal kabul — koridorun BATI ucunda, rafların önünde.
  *
  * Sıra sahadan gelen tarife göre: **makine → palet → raf.** Çatal doğuya
@@ -137,30 +150,30 @@ const B1_GIRIS_X = 17.0;
  * ölçülen yük merkezi 0.95 m'ye çıkıyor, yükseklik çarpanı düşüyor ve ibre
  * %101 okuyordu — yani ideal bir operatör bile kırmızıya giriyordu.
  */
-export const FORKLIFT_TASKS: readonly Task[] = [
+export const FORKLIFT_TASKS: readonly ForkliftGorevi[] = [
   {
     kod: 'D1', ad: 'Çimento paleti', tonnes: 1.29,
-    halfWidth: 0.58, halfHeight: 0.42, kind: 'cimento', hedef: b1(0, 0),
+    halfWidth: 0.58, halfHeight: 0.42, kind: 'cimento', ...konveyordenRafa(0, 0),
     brif: 'A-Z, zemin gözü — ısınma turu: çatalı paletin cebine dibine kadar sok',
   },
   {
     kod: 'D2', ad: 'Fayans paleti', tonnes: 1.45,
-    halfWidth: 0.60, halfHeight: 0.38, kind: 'fayans', hedef: b1(1, 1),
+    halfWidth: 0.60, halfHeight: 0.38, kind: 'fayans', ...konveyordenRafa(1, 1),
     brif: 'B1 — ikinci ada: kapasite tam burada erimeye başlıyor',
   },
   {
     kod: 'D3', ad: 'Boya varilleri', tonnes: 1.20,
-    halfWidth: 0.88, halfHeight: 0.45, kind: 'varil', hedef: b1(2, 1),
+    halfWidth: 0.88, halfHeight: 0.45, kind: 'varil', ...konveyordenRafa(2, 1),
     brif: 'C1 — geniş palet: çatal az girerse yük merkezi uzar, ibre tırmanır',
   },
   {
     kod: 'D4', ad: 'Yalıtım balyası', tonnes: 1.02,
-    halfWidth: 0.95, halfHeight: 0.45, kind: 'balya', hedef: b1(0, 2),
+    halfWidth: 0.95, halfHeight: 0.45, kind: 'balya', ...konveyordenRafa(0, 2),
     brif: 'A2 — bölümün en hafifi ama en genişi: ilk adaya geri dön',
   },
   {
     kod: 'D5', ad: 'Çelik profil', tonnes: 1.70,
-    halfWidth: 0.52, halfHeight: 0.30, kind: 'profil', hedef: b1(2, 2),
+    halfWidth: 0.52, halfHeight: 0.30, kind: 'profil', ...konveyordenRafa(2, 2),
     brif: 'C2 — bölümün en ağırı, en uzak adanın en üst katı',
   },
 ];
@@ -173,7 +186,7 @@ export const SEVKIYAT_KORIDORU: ForkliftBolum = {
   girisX: B1_GIRIS_X,
   teslimKotu: 3.6,
   // En geniş paletin (yarı en 0.95) batı yüzü 16.05'te; çizgi 15.75'te,
-  // 30 cm pay. Görevden görevе değişmiyor ki zeminde boyanabilsin.
+  // 30 cm pay. Görevden göreve değişmiyor ki zeminde boyanabilsin.
   beklemeCizgisi: B1_GIRIS_X - 1.25,
   bati: -12,
   dogu: 44,
