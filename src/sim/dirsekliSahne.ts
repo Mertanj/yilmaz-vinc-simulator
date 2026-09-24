@@ -1,5 +1,5 @@
 import { Box, Vec2, WeldJoint, type Body, type Contact } from 'planck';
-import { createWorld, createGround, Snapshotter, SIM, TRUCK_GROUP } from './world';
+import { createWorld, createGround, Snapshotter, SIM, TRUCK_GROUP, MASKE } from './world';
 import { Truck, TRUCK } from './truck';
 import { Outriggers } from './outriggers';
 import { Dirsekli, DIRSEKLI, DIRSEKLI_NEUTRAL, type DirsekliInput } from './dirsekli';
@@ -205,7 +205,9 @@ export class DirsekliSahne implements OyunSahnesi {
     const x = yerel === undefined ? this.bolum.malzemeX
       : this.truck.chassis.getWorldPoint(new Vec2(yerel, 0)).x;
     this.load.setType('dynamic');
-    for (let f = this.load.getFixtureList(); f; f = f.getNext()) f.setFilterMaskBits(0xFFFF);
+    for (let f = this.load.getFixtureList(); f; f = f.getNext()) {
+      f.setFilterMaskBits(MASKE.kasaPaleti);
+    }
     this.load.setTransform({ x, y: spec.halfHeight + 0.02 }, 0);
     this.load.setLinearVelocity({ x: 0, y: 0 });
     this.load.setAngularVelocity(0);

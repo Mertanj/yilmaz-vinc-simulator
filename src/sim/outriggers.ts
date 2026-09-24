@@ -1,6 +1,6 @@
 import { Circle, PrismaticJoint, Vec2,
   type Body, type World, type PrismaticJoint as PJ } from 'planck';
-import { TRUCK_GROUP, type Snapshotter } from './world';
+import { KATEGORI, TRUCK_GROUP, type Snapshotter } from './world';
 import { OutriggerState } from './loadChart';
 
 /**
@@ -159,6 +159,7 @@ export class Outriggers {
       const foot = world.createDynamicBody(padPos);
       foot.createFixture(new Circle(OUTRIGGER.padRadius), {
         density: 1, friction: 1.4, filterGroupIndex: TRUCK_GROUP,
+        filterCategoryBits: KATEGORI.ayak,
       });
       foot.setMassData({ mass: 900, center: { x: 0, y: 0 }, I: 120 });
       // setFixedRotation YOK. Denendi ve sistemi bozdu: prismatic pabuğun

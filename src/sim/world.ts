@@ -48,6 +48,8 @@ export const KATEGORI = {
   direk: 0x0040,
   /** Gözüne konmuş, artık stok olan palet. */
   stok: 0x0080,
+  /** Vinç ayağının pabucu — gerçekte kamyonun YANINA açılıyor. */
+  ayak: 0x0100,
 } as const;
 
 export const MASKE = {
@@ -90,6 +92,16 @@ export const MASKE = {
    * bedeli rafın kendisini yalan yapmaktı.
    */
   stok: 0,
+  /**
+   * Dirsekli kasa bölümünün paleti ayak pabucuna değmiyor.
+   *
+   * Pabuç sahada kamyonun YANINA açılır; forkliftin kuyruğun bir metre
+   * arkasına bıraktığı palet onunla aynı yerde değil. 2B kesitte ikisi aynı
+   * x'e düşüyor (arka pabuç kuyruğun 63 cm arkasında) ve çarpışsalar palet
+   * pabucun üstüne binerdi. Çizim de aynı şeyi söylüyor: ayak paletin
+   * ÖNÜNDE çiziliyor.
+   */
+  kasaPaleti: 0xFFFF & ~KATEGORI.ayak,
 } as const;
 
 export const SIM = {

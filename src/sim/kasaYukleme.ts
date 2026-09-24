@@ -18,8 +18,8 @@ import { M, kumandaAdi } from '../ui/dil';
  * kalır. Kendi kasasını yükleyen kırma bomlu kamyonun en yaygın hâli de
  * kabin arkası montaj — bom kasanın üstünden kuyruğa ve ötesine uzanıyor.
  *
- * **Kritik an yine ALMA.** Palet kuyruğun 1.9 metre arkasında, kolona 8.4
- * metre: orada kapasite 1.07 ton ve ibre %80-95. Kasaya giden yük kolona
+ * **Kritik an yine ALMA.** Palet kuyruğun 1 metre arkasında, kolona 7.5
+ * metre: orada kapasite 1.2 ton ve ibre %60–81. Kasaya giden yük kolona
  * yaklaşıyor; ilk sıra kolonun hemen arkasında, 1.3 metrede — bomu dibine
  * kadar katlamayı gerektiren yer orası.
  */
@@ -41,11 +41,19 @@ export const YUKLEME = {
   kasaArka: -TRUCK.chassisHalfLength,
 
   /**
-   * Yükleme karesi, şasi yerel x'i: kolondan 8.4 m, kuyruktan 1.9 m geride.
-   * Arka pabuç (-5.43) ile arası 1.3 m: en geniş palet (yarı en 0.5) iki
-   * yanında 80 santim payla duruyor.
+   * Yükleme karesi, şasi yerel x'i: kuyruktan 1 m, kolondan 7.5 m geride.
+   *
+   * **8.4 metreydi ve fazla uzaktı.** Sahadan gelen soru *"bomun uzamasını
+   * arttırmalı mıyız?"* oldu. Ölçüldü: erişim yetiyordu — uç o yarıçapta
+   * teleskopsuz 5.65 m'ye çıkıyor, paleti kasaya aşırmak için 4.5 m yeter.
+   * Zorlayan MOMENTTİ: 9 t·m / 8.4 m = 1.07 t ve ibre %91'e vuruyordu; bom
+   * uzasa da aynı yarıçapta kapasite aynı kalırdı. Palet yaklaştı, ibre
+   * %81'e indi.
+   *
+   * Palet arka pabucun (-5.43) x'ine taşıyor. Pabuç sahada kamyonun yanına
+   * açılıyor, palet ise arkada — çarpışmıyorlar (`MASKE.kasaPaleti`).
    */
-  malzemeYerel: 1.7 - 8.4,
+  malzemeYerel: -TRUCK.chassisHalfLength - 1.0,
 
   /** Depo cephesi ve bekleme sırası (dünya x). */
   depoCephe: 1.0,
@@ -150,11 +158,11 @@ export const KASA_YUKLEME: DirsekliBolum = {
    */
   yerlestirmeToleransi() { return { x: 0.22, y: 0.3 }; },
   /**
-   * Başsız tur görev başına 38–73 s (ortalama 53): bölüm kısa ve yükler hep
+   * Başsız tur görev başına 31–61 s (ortalama 43): bölüm kısa ve yükler hep
    * aynı yerden kalkıyor. Öbür bölümlerin oranı korunuyor — rig tam bonus
    * eşiğinin biraz üstünde, yani onu geçen oyuncu tam puanı hak ediyor.
    */
-  hizEsikleri: { tam: 50, sifir: 170 },
+  hizEsikleri: { tam: 40, sifir: 140 },
   kameraOlcegi: { yakin: 46, uzak: 26 },
 
   surusIpucu(sasiX) {
