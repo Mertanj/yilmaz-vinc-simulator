@@ -1,5 +1,5 @@
 import { araclar, bolumAdi, type AracTanimi } from '../game/araclar';
-import { acikBolumSayisi, bolumAnahtari } from '../game/ilerleme';
+import { TEST_SURUMU, acikBolumSayisi, bolumAnahtari } from '../game/ilerleme';
 import { enIyiOku, turEnIyiOku } from '../game/enIyi';
 import { sureyiYaz } from './sure';
 import { DILLER, M, dilSec, sozluk, type Dil } from './dil';
@@ -96,6 +96,7 @@ function govde(): string {
     <div class="secim-ic">
       <header>
         <div class="diller">${DILLER.map(dilDugmesi).join('')}</div>
+        ${TEST_SURUMU ? testRozeti() : ''}
         <h1>${M.secim.baslik}</h1>
         <p>${M.secim.soru}</p>
       </header>
@@ -104,6 +105,20 @@ function govde(): string {
       ${kipSecimi()}
       <footer>${M.secim.altBilgi}</footer>
     </div>`;
+}
+
+/**
+ * Test sürümünün rozeti — oyunun kendisiyle karıştırılmasın.
+ *
+ * Stil satır içinde: rozet yalnız test derlemesinde basılıyor ve oyunun
+ * stil sayfasına ona ait bir kural koymak, oyuncunun sürümüne ölü bir kural
+ * taşımak olurdu.
+ */
+function testRozeti(): string {
+  return `<div class="test-rozet" style="display:inline-block;margin:0 0 10px;`
+    + `padding:4px 12px;border-radius:999px;background:#F2C21A;color:#16191B;`
+    + `font:600 13px/1.4 'IBM Plex Mono',monospace;letter-spacing:.06em">`
+    + `${M.secim.testRozeti}</div>`;
 }
 
 /**

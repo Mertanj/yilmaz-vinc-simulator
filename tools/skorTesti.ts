@@ -313,6 +313,9 @@ enIyiKaydet(bolumAnahtari({ aracId: 'deneme', bolumId: 'uc', indeks: 2 }),
   sonuc(8000, 'B'));
 esit('acik bolum sayisi bolum sayisini ASMIYOR', acikBolumSayisi('deneme', uc), 3);
 esit('tek bolumlu makine hep 1', acikBolumSayisi('tek', ['yalniz']), 1);
+// Test surumu (VITE_TEST=1): hic oynanmamis makinede de butun bolumler acik.
+esit('test surumunde butun bolumler acik', acikBolumSayisi('hic-oynanmadi', uc, true), 3);
+esit('test surumunde tek bolumlu makine yine 1', acikBolumSayisi('tek', ['yalniz'], true), 1);
 // Bolumler gelmeden once birinci bolumu bitirmis oyuncu: kaydi eski
 // anahtarda duruyor ve ikinci bolum kendiliginden acik geliyor.
 esit('eski arac kaydi olan oyuncuda ikinci bolum acik',

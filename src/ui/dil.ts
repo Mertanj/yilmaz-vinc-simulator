@@ -61,6 +61,8 @@ export interface Metinler {
 
   secim: {
     baslik: string; soru: string; altBilgi: string;
+    /** Test sürümünün seçim ekranındaki rozeti (bkz. `TEST_SURUMU`). */
+    testRozeti: string;
     zorluk: string; yakinda: string; sonOynadigin: string;
     /** Karttaki en iyi derece satırı; hiç oynanmamışsa basılmıyor. */
     enIyi: (puan: string, not_: string) => string;
@@ -404,6 +406,7 @@ const TR: Metinler = {
       + ' teleskobu açarken aynı anda salman gerekir.',
     baslik: 'YILMAZ VİNÇ',
     soru: 'Hangi makineyle çalışacaksın?',
+    testRozeti: 'TEST SÜRÜMÜ · bütün bölümler açık',
     altBilgi: 'Her makinenin kendi bölümü, kendi yük tablosu ve kendi tehlikesi var.'
       + ' Oyunun içinde <kbd>R</kbd> bölümü sıfırlar, <kbd>Esc</kbd> buraya döner.',
     zorluk: 'zorluk', yakinda: 'yakında', sonOynadigin: 'son oynadığın',
@@ -763,6 +766,7 @@ const EN: Metinler = {
   secim: {
     baslik: 'YILMAZ VİNÇ',
     soru: 'Which machine are you running today?',
+    testRozeti: 'TEST BUILD · every level unlocked',
     altBilgi: 'Each machine has its own level, its own load chart and its own way'
       + ' of going wrong. In game, <kbd>R</kbd> restarts the level and'
       + ' <kbd>Esc</kbd> brings you back here.',
