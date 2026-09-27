@@ -1,5 +1,6 @@
 import { araclar, bolumAdi, type AracTanimi } from '../game/araclar';
-import { TEST_SURUMU, acikBolumSayisi, bolumAnahtari } from '../game/ilerleme';
+import { acikBolumSayisi, bolumAnahtari } from '../game/ilerleme';
+import { TEST_SURUMU } from '../surum';
 import { enIyiOku, turEnIyiOku } from '../game/enIyi';
 import { sureyiYaz } from './sure';
 import { DILLER, M, dilSec, sozluk, type Dil } from './dil';

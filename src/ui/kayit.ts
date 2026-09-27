@@ -1,3 +1,5 @@
+import { TEST_SURUMU } from '../surum';
+
 /**
  * `localStorage` sarmalayıcısı.
  *
@@ -7,12 +9,19 @@
  * oyunun çalışması için gerekli değil, o yüzden hata sessizce yutuluyor:
  * kaydedilemeyen bir tercih, açılmayan bir oyundan iyidir.
  */
+
+/**
+ * Test sürümünün kayıtları ayrı önekte: oyunla aynı sitede yayınlanıyor ve
+ * `localStorage` site başına ortak (bkz. `TEST_SURUMU`).
+ */
+const ONEK = TEST_SURUMU ? 'test.' : '';
+
 export function oku(anahtar: string): string | null {
-  try { return localStorage.getItem(anahtar); } catch { return null; }
+  try { return localStorage.getItem(ONEK + anahtar); } catch { return null; }
 }
 
 export function yaz(anahtar: string, deger: string): void {
-  try { localStorage.setItem(anahtar, deger); } catch { /* gizli sekme */ }
+  try { localStorage.setItem(ONEK + anahtar, deger); } catch { /* gizli sekme */ }
 }
 
 /** Bozuk/eski kayıt null döner — yarım JSON yüzünden oyun açılmasın. */

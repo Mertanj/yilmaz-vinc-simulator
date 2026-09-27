@@ -62,6 +62,14 @@ jobs:
           # Proje sayfası alt dizinde servis ediliyor.
           VITE_BASE: /yilmaz-vinc-simulator/
 
+      # Test sürümü: bütün bölümler açık, kayıtları ayrı (bkz. src/surum.ts).
+      # Aynı sitenin /test/ alt adresinde — linki alan hesap açmadan oynuyor.
+      - name: Test sürümünü derle
+        run: npx vite build --outDir dist/test
+        env:
+          VITE_BASE: /yilmaz-vinc-simulator/test/
+          VITE_TEST: '1'
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

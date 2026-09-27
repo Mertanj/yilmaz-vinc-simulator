@@ -1,4 +1,5 @@
 import { enIyiOku } from './enIyi';
+import { TEST_SURUMU } from '../surum';
 
 /**
  * Bölüm ilerlemesi — hangi bölüm açık, hangi rekor hangi anahtarda.
@@ -25,20 +26,6 @@ export function bolumAnahtari(k: BolumKimligi): string {
 }
 
 /**
- * Test sürümü: `VITE_TEST=1` ile derlenen AYRI sayfa, bütün bölümler açık.
- *
- * Sahadan gelen istek: *"birinci bölümü oynamadan 2. bölümleri
- * deneyebileyim."* Oyuncunun oynadığı sürümde kilit duruyor — sıralı açılma
- * bir oyun kararı — ama yeni bölümü deneyen kişi her seferinde birinciyi
- * bitirmek zorunda kalmasın. Ayrı derleme, ayrı adres: oyundaki kilide bir
- * arka kapı açılmıyor. Kartlar zaten EN SON açık bölümü başlattığı için test
- * sayfasında kart ikinci bölüme, Tam Tur da üç ikinci bölüme gidiyor.
- *
- * `import.meta.env` Vite'ın; başsız testlerde (esbuild) tanımsız, `?.` ondan.
- */
-export const TEST_SURUMU = import.meta.env?.VITE_TEST === '1';
-
-/**
  * Makinenin kaç bölümü açık — **rekorlardan TÜRETİLİYOR, ayrıca saklanmıyor.**
  *
  * Rekor yalnız bitirilmiş, devrilmemiş turda yazılıyor (`enIyiKaydet`) ve
@@ -47,6 +34,12 @@ export const TEST_SURUMU = import.meta.env?.VITE_TEST === '1';
  * kaynağı birbirinden koparabilirdi; türetince kopamıyor. Bir yan faydası
  * da var: bölümler gelmeden önce birinci bölümü bitirmiş oyuncuda ikinci
  * bölüm kendiliğinden açık geliyor.
+ *
+ * `hepsiAcik`: test sürümünde (bkz. `TEST_SURUMU`) bütün bölümler açık.
+ * Sahadan gelen istek: *"birinci bölümü oynamadan 2. bölümleri
+ * deneyebileyim."* Oyuncunun sürümünde kilit duruyor — sıralı açılma bir oyun
+ * kararı. Kartlar zaten EN SON açık bölümü başlattığı için test sayfasında
+ * kart ikinci bölüme, Tam Tur da üç ikinci bölüme gidiyor.
  */
 export function acikBolumSayisi(
   aracId: string, bolumIdleri: readonly string[], hepsiAcik = TEST_SURUMU,
