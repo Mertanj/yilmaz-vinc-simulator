@@ -151,8 +151,10 @@ export class Camera {
 
     const w = maxX - minX + this.padX * 2;
     const h = maxY - minY + this.padY * 2;
+    // Yatayda sığdırılan alan göstergenin SAĞINDAKİ boş şerit (bkz. `solPayi`).
+    const bosW = Math.max(1, screenW - this.solPx);
     const fit = Math.min(
-      screenW > 0 ? screenW / Math.max(w, 1) : this.maxPpm,
+      screenW > 0 ? bosW / Math.max(w, 1) : this.maxPpm,
       screenH > 0 ? screenH / Math.max(h, 1) : this.maxPpm,
     );
     const hedefPpm = clamp(fit, this.minPpm, this.maxPpm);
@@ -181,7 +183,10 @@ export class Camera {
     const ustSinir = maxY - yariEkranM + payM;
     const hedefY = Math.max(alta, ustSinir);
 
-    this.x = approach(this.x, hedefX + look, this.tauX, dt);
+    // Kutunun ortası boş şeridin ortasına: ekran merkezi göstergenin yarısı
+    // kadar sola kayıyor ki kutu sağa, göstergenin dışına otursun.
+    const kayma = this.ppm > 0 ? this.solPx / 2 / this.ppm : 0;
+    this.x = approach(this.x, hedefX + look - kayma, this.tauX, dt);
     this.x = clamp(this.x, hedefX - this.maxOffset, hedefX + this.maxOffset);
     if (this.sinir) {
       // Yarım ekran sığmıyorsa (çok dar bölüm) ortalamak en az kötü sonuç.
@@ -213,6 +218,24 @@ export class Camera {
    */
   altPayi(px: number): void {
     this.zeminPayiPx = Camera.TABAN_PAYI_PX + Math.max(0, px);
+  }
+
+  /** Soldaki göstergenin örttüğü şerit (px); 0 = örtmüyor. */
+  private solPx = 0;
+
+  /**
+   * Soldaki göstergenin ÖRTTÜĞÜ şeridi kameraya bildirir (piksel).
+   *
+   * Sahadan (kardeşin ilk testi): *"kamera takibi biraz geç."* Ölçüldü:
+   * yatay telefonda (839×412) rampa bölümü başlarken kamera forkliftle
+   * raftaki paleti aynı kutuya sığdırıyor ve forklift kutunun sol kenarına,
+   * göstergenin tam altına düşüyordu (ekranda 107 px; göstergenin sağ
+   * kenarı 174). Gaz verince 4.5 saniye orada kaldı — oyuncu makinesini
+   * görmeden sürüyordu. Alttaki kumanda için `altPayi` neyse bu da soldaki
+   * gösterge için o: kutu göstergenin sağındaki boş alana sığdırılıyor.
+   */
+  solPayi(px: number): void {
+    this.solPx = Math.max(0, px);
   }
 
   snapTo(x: number, y: number): void {

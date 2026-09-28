@@ -547,6 +547,17 @@ function oyna(
       ? tusSerit.offsetHeight : 0;
     const dolu = Math.max(yukseklik, seritYuk);
     camera.altPayi(dolu > 0 ? dolu + 22 : 0);
+    // Yatay yerleşimde (telefon, tablet, masaüstü) soldaki gösterge
+    // ekranın yan şeridini kaplıyor: kadraj onun sağına otursun. Dikeyde
+    // gösterge üst uçta kalıyor ve en zaten dar: pay yok.
+    //
+    // Ölçüt ekranın BİÇİMİ, göstergenin yüksekliği değil: bu ölçüm bölüm
+    // kurulurken çalışıyor ve gösterge o an henüz boş — yüksekliğine bakan
+    // ilk hâli payı hep sıfır buluyordu. Genişlik CSS'ten sabit. `offset*`
+    // dönüşümden etkilenmiyor (zorlanmış yatayda kap dönük).
+    const panel = document.getElementById('panel');
+    const yatayYerlesim = !!sahneKabi && sahneKabi.offsetWidth > sahneKabi.offsetHeight;
+    camera.solPayi(panel && yatayYerlesim ? panel.offsetLeft + panel.offsetWidth + 8 : 0);
     const yardimci = padHost?.querySelector<HTMLElement>('.pad.yardimci');
     if (sahneKabi && yardimci) {
       sahneKabi.style.setProperty('--yardimci-en', `${yardimci.offsetWidth + 22}px`);

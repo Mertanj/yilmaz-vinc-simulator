@@ -301,7 +301,12 @@ export class Scene implements OyunSahnesi {
     // Kasadaki yük kadrajda olsun: kamyon çitin ardında, vince 25 metre.
     // Tepesi DE tabanı da: yalnız tepeye bakınca yükün alt yarısı ekranın
     // altındaki tuş şeridinin arkasına düşüyordu (masaüstünde ölçüldü).
-    if (this.isaretKaynakta) {
+    //
+    // **Ama yalnız vinç kurulunca.** Sürüş fazında kutu vinçten kasaya 70
+    // metreyi aşıyordu; yatay telefonda (839 px) en uzak ölçekte bile
+    // sığmıyor ve vinç kamyonu ekranın sol kenarından taşıyordu. Sürerken
+    // bakılacak yer kurulum alanı; yük, ayaklar açılınca kadraja giriyor.
+    if (this.isaretKaynakta && this.calismaModunda) {
       const p = this.load.getPosition();
       const hh = this.loadSpec?.halfHeight ?? 0.5;
       noktalar.push({ x: p.x, y: p.y + hh + 0.8 }, { x: p.x, y: p.y - hh - 0.6 });
