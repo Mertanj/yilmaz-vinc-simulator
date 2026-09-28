@@ -475,7 +475,7 @@ function oyna(
       return {
         ...d,
         yardimci: [...d.yardimci, {
-          isaret: '⟳', ad: M.dokunma.cevir,
+          isaret: '⟳', ad: M.dokunma.cevir, sinif: 'cevir',
           eylem: (): void => {
             yatayZorla(!document.body.classList.contains('yatay-zorla'));
             olculeriYaz();
@@ -1045,6 +1045,19 @@ function yatayCagrisiniKur(): void {
   if (!cevir) return;
   if (oku(YATAY_ANAHTARI) === 'kapali') document.body.classList.add('cevir-kapali');
   if (oku(ZORLA_ANAHTARI) === '1') document.body.classList.add('yatay-zorla');
+  // **Ekran gerçekten yataya geçtiyse zorlamaya gerek yok — kapat.** Bu,
+  // telefonun dönebildiğinin kanıtı; tercih açık kalsa oyuncu dikeye
+  // döndüğünde sahne yine yan yatardı ve "dikey oyna" imkânsızlaşırdı
+  // (sahadan: "yatayı tekrar dikeye değiştiremiyorum"). Döndürme kilidi
+  // açık bir telefon yatayı hiç bildirmiyor, onun tercihi korunuyor.
+  const yatayEkran = window.matchMedia('(orientation: landscape)');
+  const gercekYatay = (): void => {
+    if (yatayEkran.matches && document.body.classList.contains('yatay-zorla')) {
+      yatayZorla(false);
+    }
+  };
+  gercekYatay();
+  yatayEkran.addEventListener('change', gercekYatay);
   // Simge Unicode değil çizim: `▯` gibi bir karakter telefonun kendi fontunda
   // yoksa boş kutu olarak çıkıyor — hem de tam "telefonunu çevir" derken.
   cevir.innerHTML = '<svg class="simge" viewBox="0 0 40 64" aria-hidden="true">'

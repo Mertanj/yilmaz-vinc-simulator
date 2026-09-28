@@ -41,12 +41,25 @@
      .lock()` ise tam ekran istiyor ve iOS'ta hiç yok. Kalan dürüst yol oyunu
      KENDİMİZİN çevirmesi: kap 90° dönüyor, en ve boy yer değiştiriyor,
      oyuncu telefonu fiziksel olarak çeviriyor. Her tarayıcıda çalışıyor,
-     izin istemiyor, tek kod yolu. */
-  body.yatay-zorla #sahne {
-    inset: auto; top: 0; left: 0;
-    width: 100vh; height: 100vw;
-    transform-origin: 0 0;
-    transform: translateX(100vw) rotate(90deg);
+     izin istemiyor, tek kod yolu.
+
+     **Yalnız ekran GERÇEKTEN dikeyken.** Sahadan: "yatay oynamada da hâlâ
+     kumanda sıkıntısı var... yatayı tekrar dikeye değiştiremiyorum."
+     Döndürme kilidi KAPALI bir telefonda oyuncu "yatay oyna"ya basıp sonra
+     telefonu çevirince tarayıcı zaten yataya geçiyor ve kap İKİNCİ kez
+     dönüyordu: sahne de kumanda da yan yatık. Gerçek yatayda tercih ayrıca
+     kendiliğinden kapanıyor (bkz. `yatayCagrisiniKur`). */
+  @media (orientation: portrait) {
+    body.yatay-zorla #sahne {
+      inset: auto; top: 0; left: 0;
+      width: 100vh; height: 100vw;
+      transform-origin: 0 0;
+      transform: translateX(100vw) rotate(90deg);
+    }
+  }
+  /* Çevir düğmesi gerçek yatayda anlamsız: ekran zaten yatay. */
+  @media (orientation: landscape) {
+    #dokunmatik button.cevir { display: none; }
   }
   #game { position: absolute; inset: 0; }
   /* --- üst şerit: kim, hangi görev, ne kadar süre, kaç puan --- */

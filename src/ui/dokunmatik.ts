@@ -29,6 +29,8 @@ export interface DokunmatikDugme {
   isaret: string;
   /** İşaretin altındaki kısa ad. */
   ad: string;
+  /** Ek CSS sınıfı — düğmeyi duruma göre gizlemek için (ör. `cevir`). */
+  sinif?: string;
 }
 
 /**
@@ -201,7 +203,8 @@ function bagla(
 }
 
 function dugme(d: DokunmatikDugme): string {
-  const sinif = d.tetik || d.eylem ? ' class="tetik"' : '';
+  const siniflar = [d.tetik || d.eylem ? 'tetik' : '', d.sinif ?? ''].filter(Boolean);
+  const sinif = siniflar.length > 0 ? ` class="${siniflar.join(' ')}"` : '';
   return `<button type="button"${sinif} aria-label="${d.ad}">`
     + `<span class="isaret" aria-hidden="true">${d.isaret}</span>`
     + `<span class="ad">${d.ad}</span></button>`;

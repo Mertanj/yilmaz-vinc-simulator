@@ -719,9 +719,9 @@ const TR: Metinler = {
   },
   cevir: {
     bas: 'YATAY TUTUNCA DAHA İYİ',
-    govde: 'Bölüm uzun bir koridorda geçiyor. Yatay tutunca makineyi ve '
-      + 'hedefi aynı kadrajda görüyorsun; kumanda da iki başparmağın altına '
-      + 'geliyor. Çeviremiyorsan dikeyde de oynanıyor.',
+    govde: 'Telefonu yan çevir: makineyi ve hedefi aynı kadrajda görürsün, '
+      + 'kumanda da iki başparmağının altına gelir. Ekran dönmüyorsa (döndürme '
+      + 'kilidi açıksa) "yatay oyna" ile oyunu biz çevirelim. Dikeyde de oynanıyor.',
     yineOyna: 'dikey oyna',
     yatayOyna: 'yatay oyna',
   },
@@ -1093,9 +1093,10 @@ const EN: Metinler = {
   },
   cevir: {
     bas: 'BETTER IN LANDSCAPE',
-    govde: 'The level runs down a long aisle. Landscape keeps the machine and '
-      + 'the target in the same frame, and puts the controls under both thumbs. '
-      + 'If you cannot turn it, portrait works too.',
+    govde: 'Turn your phone sideways: landscape keeps the machine and the target '
+      + 'in the same frame, and puts the controls under both thumbs. If the screen '
+      + 'does not rotate (rotation lock is on), "play in landscape" turns the game '
+      + 'for you. Portrait works too.',
     yineOyna: 'play in portrait',
     yatayOyna: 'play in landscape',
   },
